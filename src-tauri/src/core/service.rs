@@ -5,8 +5,8 @@ use crate::{
 };
 use anyhow::{Context as _, Result, anyhow, bail};
 use backon::{ConstantBuilder, Retryable as _};
-use clash_verge_logging::{Type, logging, logging_error};
 use celestial_service_ipc::CoreConfig;
+use clash_verge_logging::{Type, logging, logging_error};
 use compact_str::CompactString;
 use once_cell::sync::Lazy;
 use std::{
