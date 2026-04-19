@@ -1,22 +1,47 @@
-## v2.4.8
+## v1.1.0
 
-> [!IMPORTANT]
-> 关于版本的说明：Clash Verge 版本号遵循 x.y.z：x 为重大架构变更，y 为功能新增，z 为 Bug 修复。
+### Новое
 
-- **Mihomo(Meta) 内核升级至 v1.19.23**
+- Добавлен центр уведомлений Celestial с загрузкой сообщений из удаленного `notify.json`.
+- Добавлен системный push для новых уведомлений со статусом `urgent`.
+- Если `notify.json` временно недоступен или пустой, центр уведомлений показывает состояние загрузки и продолжает проверку.
 
-### 🐞 修复问题
+### Формат notify.json
 
-- 修复系统代理关闭后在 PAC 模式下未完全关闭
-- 修复 macOS 开关代理时可能的卡死
-- 修复修改定时自动更新后记时未及时刷新
-- 修复 Linux 关闭 TUN 不立即生效
+```json
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-04-19T12:00:00Z",
+  "notifications": [
+    {
+      "id": "v1.1.0-release",
+      "status": "info",
+      "title": "Celestial v1.1.0",
+      "body": "Release notes or important message.",
+      "createdAt": "2026-04-19T12:00:00Z",
+      "updatedAt": "2026-04-19T12:00:00Z",
+      "expiresAt": null,
+      "link": "https://example.com",
+      "locale": {
+        "ru": {
+          "title": "Celestial v1.1.0",
+          "body": "Описание уведомления."
+        },
+        "en": {
+          "title": "Celestial v1.1.0",
+          "body": "Notification body."
+        }
+      }
+    }
+  ]
+}
+```
 
-### ✨ 新增功能
+Поддерживаемые статусы: `info`, `success`, `warning`, `urgent`.
 
-- 新增 macOS 托盘速率显示
-- 快捷键操作通知操作结果
+### Исправлено
 
-### 🚀 优化改进
-
-- 优化 macOS 读取系统代理性能
+- Версия приложения, Tauri-конфигурации и Cargo-пакета обновлена до `1.1.0`.
+- Windows installer/uninstaller теперь работает только с бинарниками Celestial: `celestial.exe`, `celestial-service.exe`, `celestial-mihomo.exe` и `celestial-mihomo-alpha.exe`.
+- Убрана очистка ярлыков, registry-ключей, автозапуска и процессов Clash Verge из установщика Celestial.
+- Изменен singleton-порт Celestial, чтобы запущенный или недавно закрытый Clash Verge не мешал запуску Celestial.

@@ -183,6 +183,7 @@ export interface TranslationResources {
             connections: string
             home: string
             logs: string
+            notifications: string
             profiles: string
             proxies: string
             rules: string
@@ -200,6 +201,23 @@ export interface TranslationResources {
       }
       page: {
         title: string
+      }
+    }
+    notifications: {
+      actions: {
+        openLink: string
+      }
+      page: {
+        empty: string
+        generatedAt: string
+        loading: string
+        title: string
+      }
+      status: {
+        info: string
+        success: string
+        urgent: string
+        warning: string
       }
     }
     profiles: {

@@ -184,6 +184,7 @@ mod app_init {
             cmd::copy_icon_file,
             cmd::download_icon_cache,
             cmd::get_process_icon,
+            cmd::show_remote_notification,
             cmd::open_devtools,
             cmd::exit_app,
             cmd::get_network_interfaces_info,

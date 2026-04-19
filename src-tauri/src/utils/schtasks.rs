@@ -97,10 +97,8 @@ fn get_startup_dir() -> Result<PathBuf> {
 
 async fn cleanup_legacy_shortcuts() -> Result<()> {
     let startup_dir = get_startup_dir()?;
-    let old_shortcut = startup_dir.join("Clash-Verge.lnk");
     let new_shortcut = startup_dir.join("Celestial.lnk");
 
-    old_shortcut.remove_if_exists().await?;
     new_shortcut.remove_if_exists().await?;
     Ok(())
 }

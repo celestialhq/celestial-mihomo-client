@@ -1,0 +1,17 @@
+{
+  "page": {
+    "title": "Notifications",
+    "loading": "Notifications are loading. Celestial will keep checking until notify.json is available.",
+    "empty": "No notifications yet",
+    "generatedAt": "Feed updated at {{time}}"
+  },
+  "status": {
+    "info": "Info",
+    "success": "Success",
+    "warning": "Warning",
+    "urgent": "Urgent"
+  },
+  "actions": {
+    "openLink": "Open link"
+  }
+}
