@@ -3,10 +3,11 @@ import ForkRightRoundedIcon from '@mui/icons-material/ForkRightRounded'
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded'
 import LanguageRoundedIcon from '@mui/icons-material/LanguageRounded'
 import ManageAccountsRoundedIcon from '@mui/icons-material/ManageAccountsRounded'
+import NotificationsRoundedIcon from '@mui/icons-material/NotificationsRounded'
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded'
 import SubjectRoundedIcon from '@mui/icons-material/SubjectRounded'
 import WifiRoundedIcon from '@mui/icons-material/WifiRounded'
-import { createBrowserRouter, RouteObject } from 'react-router'
+import { createBrowserRouter, type RouteObject } from 'react-router'
 
 import ConnectionsSvg from '@/assets/image/itemicon/connections.svg?react'
 import HomeSvg from '@/assets/image/itemicon/home.svg?react'
@@ -20,6 +21,7 @@ import { getSubscriptionManagementEligibility } from '@/services/subscription-ma
 import Layout from './_layout'
 import ConnectionsPage from './connections'
 import HomePage from './home'
+import NotificationsPage from './notifications'
 import ProfilesPage from './profiles'
 import ProxiesPage from './proxies'
 import RulesPage from './rules'
@@ -70,6 +72,15 @@ export const navItems = [
     path: '/logs',
     icon: [<SubjectRoundedIcon key="mui" />, <LogsSvg key="svg" />],
     Component: () => null /* KeepAlive: real LogsPage rendered in Layout */,
+  },
+  {
+    label: 'layout.components.navigation.tabs.notifications',
+    path: '/notifications',
+    icon: [
+      <NotificationsRoundedIcon key="mui" />,
+      <SubjectRoundedIcon key="svg" />,
+    ],
+    Component: NotificationsPage,
   },
   {
     label: 'layout.components.navigation.tabs.settings',

@@ -3,6 +3,7 @@ use crate::core::autostart;
 use crate::{cmd::StringifyErr as _, feat, utils::dirs};
 use smartstring::alias::String;
 use tauri::{AppHandle, Manager as _};
+use tauri_plugin_notification::NotificationExt as _;
 
 /// 打开应用程序所在目录
 #[tauri::command]
@@ -111,4 +112,15 @@ pub async fn copy_icon_file(path: String, icon_info: feat::IconInfo) -> CmdResul
 #[tauri::command]
 pub async fn get_process_icon(process_path: String) -> CmdResult<Option<String>> {
     feat::get_process_icon(process_path).await
+}
+
+#[tauri::command]
+pub fn show_remote_notification(app_handle: AppHandle, title: String, body: String) -> CmdResult<()> {
+    app_handle
+        .notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .stringify_err()
 }

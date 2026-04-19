@@ -2,6 +2,7 @@ import connections from './connections.json'
 import home from './home.json'
 import layout from './layout.json'
 import logs from './logs.json'
+import notifications from './notifications.json'
 import profiles from './profiles.json'
 import proxies from './proxies.json'
 import rules from './rules.json'
@@ -13,6 +14,7 @@ const resources = {
   home: home,
   layout: layout,
   logs: logs,
+  notifications: notifications,
   profiles: profiles,
   proxies: proxies,
   rules: rules,

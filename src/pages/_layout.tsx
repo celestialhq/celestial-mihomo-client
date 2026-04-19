@@ -13,6 +13,10 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
+  KeyboardDoubleArrowLeftRounded,
+  KeyboardDoubleArrowRightRounded,
+} from '@mui/icons-material'
+import {
   Box,
   IconButton,
   List,
@@ -22,10 +26,6 @@ import {
   ThemeProvider,
   Tooltip,
 } from '@mui/material'
-import {
-  KeyboardDoubleArrowLeftRounded,
-  KeyboardDoubleArrowRightRounded,
-} from '@mui/icons-material'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import type { CSSProperties } from 'react'
@@ -42,6 +42,7 @@ import { WindowControls } from '@/components/layout/window-controller'
 import { useI18n } from '@/hooks/use-i18n'
 import { useProfiles } from '@/hooks/use-profiles'
 import { useVerge } from '@/hooks/use-verge'
+import { ensureRemoteNotificationsPolling } from '@/services/remote-notifications'
 import getSystem from '@/utils/get-system'
 
 import {
@@ -129,7 +130,6 @@ const Layout = () => {
   const [menuContextPosition, setMenuContextPosition] =
     useState<MenuContextPosition | null>(null)
 
-  const windowControlsRef = useRef<any>(null)
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -220,13 +220,17 @@ const Layout = () => {
           </span>
           <span>Celestial</span>
         </div>
-        <WindowControls ref={windowControlsRef} />
+        <WindowControls />
       </div>
     ),
     [],
   )
 
   useLoadingOverlay(themeReady)
+
+  useEffect(() => {
+    ensureRemoteNotificationsPolling()
+  }, [])
 
   const handleNotice = useCallback(
     (payload: [string, string]) => {

@@ -534,7 +534,7 @@ Function CheckVCRuntime64
 FunctionEnd
 
 
-!macro CheckAllCelestialProcesses
+!macro CheckCelestialProcesses
   ; Check if celestial-service.exe is running
   !if "${INSTALLMODE}" == "currentUser"
     nsis_tauri_utils::FindProcessCurrentUser "celestial-service.exe"
@@ -583,72 +583,9 @@ FunctionEnd
     !endif
   ${EndIf}
 
-  ; Check if legacy verge-mihomo-alpha.exe is running
-  !if "${INSTALLMODE}" == "currentUser"
-    nsis_tauri_utils::FindProcessCurrentUser "verge-mihomo-alpha.exe"
-  !else
-    nsis_tauri_utils::FindProcess "verge-mihomo-alpha.exe"
-  !endif
-  Pop $R0
-  ${If} $R0 = 0
-    DetailPrint "Kill verge-mihomo-alpha.exe..."
-    !if "${INSTALLMODE}" == "currentUser"
-      nsis_tauri_utils::KillProcessCurrentUser "verge-mihomo-alpha.exe"
-    !else
-      nsis_tauri_utils::KillProcess "verge-mihomo-alpha.exe"
-    !endif
-  ${EndIf}
-
-  ; Check if legacy verge-mihomo.exe is running
-  !if "${INSTALLMODE}" == "currentUser"
-    nsis_tauri_utils::FindProcessCurrentUser "verge-mihomo.exe"
-  !else
-    nsis_tauri_utils::FindProcess "verge-mihomo.exe"
-  !endif
-  Pop $R0
-  ${If} $R0 = 0
-    DetailPrint "Kill verge-mihomo.exe..."
-    !if "${INSTALLMODE}" == "currentUser"
-      nsis_tauri_utils::KillProcessCurrentUser "verge-mihomo.exe"
-    !else
-      nsis_tauri_utils::KillProcess "verge-mihomo.exe"
-    !endif
-  ${EndIf}
-
-  ; Check if clash-meta-alpha.exe is running
-  !if "${INSTALLMODE}" == "currentUser"
-    nsis_tauri_utils::FindProcessCurrentUser "clash-meta-alpha.exe"
-  !else
-    nsis_tauri_utils::FindProcess "clash-meta-alpha.exe"
-  !endif
-  Pop $R0
-  ${If} $R0 = 0
-    DetailPrint "Kill clash-meta-alpha.exe..."
-    !if "${INSTALLMODE}" == "currentUser"
-      nsis_tauri_utils::KillProcessCurrentUser "clash-meta-alpha.exe"
-    !else
-      nsis_tauri_utils::KillProcess "clash-meta-alpha.exe"
-    !endif
-  ${EndIf}
-
-  ; Check if clash-meta.exe is running
-  !if "${INSTALLMODE}" == "currentUser"
-    nsis_tauri_utils::FindProcessCurrentUser "clash-meta.exe"
-  !else
-    nsis_tauri_utils::FindProcess "clash-meta.exe"
-  !endif
-  Pop $R0
-  ${If} $R0 = 0
-    DetailPrint "Kill clash-meta.exe..."
-    !if "${INSTALLMODE}" == "currentUser"
-      nsis_tauri_utils::KillProcessCurrentUser "clash-meta.exe"
-    !else
-      nsis_tauri_utils::KillProcess "clash-meta.exe"
-    !endif
-  ${EndIf}
 !macroend
 
-!macro StartVergeService
+!macro StartCelestialService
   ; Check if the service exists
   SimpleSC::ExistsService "celestial_service"
   Pop $0  ; 0: service exists; other: service not exists
@@ -674,7 +611,7 @@ FunctionEnd
   ${EndIf}
 !macroend
 
-!macro RemoveVergeService
+!macro RemoveCelestialService
   ; Check if the service exists
   SimpleSC::ExistsService "celestial_service"
   Pop $0  ; 0: service exists; other: service not exists
@@ -919,7 +856,7 @@ Section Install
   nsExec::Exec 'netsh int tcp res'
 
   !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
-  !insertmacro CheckAllCelestialProcesses
+  !insertmacro CheckCelestialProcesses
 
   ; Ensure startup folders exist
   CreateDirectory "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup"
@@ -934,31 +871,6 @@ Section Install
   DetailPrint "Removing window-state.json / .window-state.json"
   Delete "$APPDATA\${BUNDLEID}\window-state.json"
   Delete "$APPDATA\${BUNDLEID}\.window-state.json"
-
-  ; Clean legacy auto-launch registry entries
-  StrCpy $R1 "Software\Microsoft\Windows\CurrentVersion\Run"
-
-  SetRegView 64
-  ReadRegStr $R2 HKCU "$R1" "Clash Verge"
-  ${If} $R2 != ""
-    DeleteRegValue HKCU "$R1" "Clash Verge"
-  ${EndIf}
-  ReadRegStr $R2 HKLM "$R1" "Clash Verge"
-  ${If} $R2 != ""
-    DeleteRegValue HKLM "$R1" "Clash Verge"
-  ${EndIf}
-  ReadRegStr $R2 HKCU "$R1" "clash-verge"
-  ${If} $R2 != ""
-    DeleteRegValue HKCU "$R1" "clash-verge"
-  ${EndIf}
-  ReadRegStr $R2 HKLM "$R1" "clash-verge"
-  ${If} $R2 != ""
-    DeleteRegValue HKLM "$R1" "clash-verge"
-  ${EndIf}
-
-  ; Remove legacy executables
-  IfFileExists "$INSTDIR\Clash Verge.exe" 0 +2
-    Delete "$INSTDIR\Clash Verge.exe"
 
   !insertmacro SetContext
 
@@ -978,7 +890,7 @@ Section Install
     File /a "/oname={{this}}" "{{no-escape @key}}"
   {{/each}}
 
-  !insertmacro StartVergeService
+  !insertmacro StartCelestialService
 
   ; Create file associations
   {{#each file_associations as |association| ~}}
@@ -1100,39 +1012,14 @@ Section Uninstall
   !endif
 
   !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
-  !insertmacro CheckAllCelestialProcesses
-  !insertmacro RemoveVergeService
+  !insertmacro CheckCelestialProcesses
+  !insertmacro RemoveCelestialService
 
   ; Remove cached window state files
   DetailPrint "Removing window-state.json / .window-state.json"
   SetShellVarContext current
   Delete "$APPDATA\${BUNDLEID}\window-state.json"
   Delete "$APPDATA\${BUNDLEID}\.window-state.json"
-
-  ; Clean legacy auto-launch registry entries
-  StrCpy $R1 "Software\Microsoft\Windows\CurrentVersion\Run"
-
-  SetRegView 64
-  ReadRegStr $R2 HKCU "$R1" "Clash Verge"
-  ${If} $R2 != ""
-    DeleteRegValue HKCU "$R1" "Clash Verge"
-  ${EndIf}
-  ReadRegStr $R2 HKLM "$R1" "Clash Verge"
-  ${If} $R2 != ""
-    DeleteRegValue HKLM "$R1" "Clash Verge"
-  ${EndIf}
-  ReadRegStr $R2 HKCU "$R1" "clash-verge"
-  ${If} $R2 != ""
-    DeleteRegValue HKCU "$R1" "clash-verge"
-  ${EndIf}
-  ReadRegStr $R2 HKLM "$R1" "clash-verge"
-  ${If} $R2 != ""
-    DeleteRegValue HKLM "$R1" "clash-verge"
-  ${EndIf}
-
-  ; Remove legacy executables
-  IfFileExists "$INSTDIR\Clash Verge.exe" 0 +2
-    Delete "$INSTDIR\Clash Verge.exe"
 
   !insertmacro SetContext
 
@@ -1202,65 +1089,6 @@ Section Uninstall
       Delete "$DESKTOP\${PRODUCTNAME}.lnk"
     ${EndIf}
 
-    ; Remove legacy public desktop shortcuts
-    Delete "C:\Users\Public\Desktop\Clash Verge.lnk"
-    Delete "C:\Users\Public\Desktop\clash-verge.lnk"
-
-    ; Remove legacy shortcuts from all user desktops
-    DetailPrint "Removing ${PRODUCTNAME} shortcuts from all user desktops..."
-    SetRegView 64
-    StrCpy $R1 0
-    LegacyUserLoop:
-      EnumRegKey $R2 HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" $R1
-      ${If} $R2 == ""
-        Goto LegacyUserDone
-      ${EndIf}
-      ReadRegStr $R3 HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$R2" "ProfileImagePath"
-      ${If} $R3 != ""
-        StrCpy $R4 "$R3\Desktop"
-        Delete "$R4\Clash Verge.lnk"
-        Delete "$R4\clash-verge.lnk"
-      ${EndIf}
-      IntOp $R1 $R1 + 1
-      Goto LegacyUserLoop
-    LegacyUserDone:
-    !insertmacro SetContext
-
-    ; Remove legacy start menu folders
-    SetShellVarContext current
-    RMDir /r /REBOOTOK "$SMPROGRAMS\Clash Verge"
-    RMDir /r /REBOOTOK "$SMPROGRAMS\clash-verge"
-    !insertmacro SetContext
-    RMDir /r /REBOOTOK "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Clash Verge"
-    RMDir /r /REBOOTOK "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\clash-verge"
-
-    ; Clean legacy registry keys
-    SetRegView 64
-    DeleteRegKey HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\Clash Verge.exe"
-    DeleteRegKey HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\clash-verge.exe"
-    DeleteRegKey HKLM "Software\Clash Verge Rev"
-    DeleteRegKey HKLM "Software\Clash Verge"
-    DeleteRegKey HKCU "Software\Clash Verge Rev"
-    DeleteRegKey HKCU "Software\Clash Verge"
-    DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ClashVerge"
-    DeleteRegKey HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Clash Verge"
-
-    StrCpy $R1 0
-    LegacyUninstallLoop:
-      EnumRegKey $R2 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" $R1
-      ${If} $R2 == ""
-        Goto LegacyUninstallDone
-      ${EndIf}
-      ReadRegStr $R3 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$R2" "DisplayName"
-      ${If} $R3 != ""
-        StrCmp $R3 "Clash Verge" 0 +3
-        StrCmp $R3 "clash-verge" 0 +2
-        DeleteRegKey HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$R2"
-      ${EndIf}
-      IntOp $R1 $R1 + 1
-      Goto LegacyUninstallLoop
-    LegacyUninstallDone:
-    !insertmacro SetContext
   ${EndIf}
 
   ; Remove registry information for add/remove programs
