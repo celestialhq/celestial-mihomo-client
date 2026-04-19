@@ -4,8 +4,9 @@ import axios from 'axios'
 
 import { log_error, log_info, log_success } from './utils.mjs'
 
-const CHAT_ID_RELEASE = '@clash_verge_re' // 正式发布频道
-const CHAT_ID_TEST = '@vergetest' // 测试频道
+const CHAT_ID_RELEASE =
+  process.env.TELEGRAM_RELEASE_CHAT_ID || '@clash_verge_re'
+const CHAT_ID_TEST = process.env.TELEGRAM_TEST_CHAT_ID || '@vergetest'
 
 async function sendTelegramNotification() {
   if (!process.env.TELEGRAM_BOT_TOKEN) {
@@ -21,7 +22,7 @@ async function sendTelegramNotification() {
 
   const downloadUrl =
     process.env.DOWNLOAD_URL ||
-    `https://github.com/pius-pp/celestial-mihomo-client/releases/download/v${version}`
+    `https://github.com/${process.env.PUBLIC_RELEASE_REPO || 'pius-pp/celestial-mihomo-client-public'}/releases/download/v${version}`
 
   const isAutobuild =
     process.env.BUILD_TYPE === 'autobuild' || version.includes('autobuild')
@@ -33,7 +34,7 @@ async function sendTelegramNotification() {
   log_info(`Download URL: ${downloadUrl}`)
 
   // 读取发布说明和下载地址
-  let releaseContent = ''
+  let releaseContent
   try {
     releaseContent = readFileSync('release.txt', 'utf-8')
     log_info('成功读取 release.txt 文件')
@@ -112,7 +113,10 @@ async function sendTelegramNotification() {
   const releaseTitle = isAutobuild ? '滚动更新版发布' : '正式发布'
   const encodedVersion = encodeURIComponent(version)
   const releaseTag = isAutobuild ? 'autobuild' : `v${version}`
-  const content = `<b>🎉 <a href="https://github.com/pius-pp/celestial-mihomo-client/releases/tag/${releaseTag}">Celestial v${version}</a> ${releaseTitle}</b>\n\n${formattedContent}`
+  const publicReleaseRepo =
+    process.env.PUBLIC_RELEASE_REPO || 'pius-pp/celestial-mihomo-client-public'
+  const releasePageUrl = `https://github.com/${publicReleaseRepo}/releases/tag/${releaseTag}`
+  const content = `<b>🎉 <a href="${releasePageUrl}">Celestial v${version}</a> ${releaseTitle}</b>\n\n${formattedContent}`
 
   // 发送到 Telegram
   try {
@@ -123,7 +127,7 @@ async function sendTelegramNotification() {
         text: content,
         link_preview_options: {
           is_disabled: false,
-          url: `https://github.com/pius-pp/celestial-mihomo-client/releases/tag/v${encodedVersion}`,
+          url: `https://github.com/${publicReleaseRepo}/releases/tag/v${encodedVersion}`,
           prefer_large_media: true,
         },
         parse_mode: 'HTML',

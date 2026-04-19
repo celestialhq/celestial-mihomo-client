@@ -4,6 +4,7 @@ on: workflow_dispatch
 permissions: write-all
 env:
   HUSKY: 0
+  PUBLIC_RELEASE_REPO: pius-pp/celestial-mihomo-client-public
 
 jobs:
   release-update:
@@ -28,7 +29,8 @@ jobs:
       - name: Release updater file
         run: pnpm updater
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLIC_RELEASE_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
+          PUBLIC_RELEASE_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
 
   release-update-for-fixed-webview2:
     runs-on: ubuntu-latest
@@ -52,4 +54,5 @@ jobs:
       - name: Release updater file
         run: pnpm updater-fixed-webview2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLIC_RELEASE_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
+          PUBLIC_RELEASE_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}

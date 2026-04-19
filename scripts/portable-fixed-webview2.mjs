@@ -26,9 +26,15 @@ const arch = target ? ARCH_MAP[target] : PROCESS_MAP[process.arch]
 async function resolvePortable() {
   if (process.platform !== 'win32') return
 
-  const releaseDir = target
+  const workspaceReleaseDir = target
+    ? `./target/${target}/release`
+    : './target/release'
+  const tauriReleaseDir = target
     ? `./src-tauri/target/${target}/release`
-    : `./src-tauri/target/release`
+    : './src-tauri/target/release'
+  const releaseDir = fs.existsSync(workspaceReleaseDir)
+    ? workspaceReleaseDir
+    : tauriReleaseDir
 
   const configDir = path.join(releaseDir, '.config')
 
@@ -64,6 +70,10 @@ async function resolvePortable() {
   zip.writeZip(zipFile)
 
   console.log('[INFO]: create portable zip successfully')
+
+  if (process.env.PORTABLE_SKIP_RELEASE_UPLOAD === '1') {
+    return
+  }
 
   // push release assets
   if (process.env.GITHUB_TOKEN === undefined) {
