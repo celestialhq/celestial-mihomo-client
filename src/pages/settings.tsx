@@ -19,15 +19,19 @@ const SettingPage = () => {
   }
 
   const toGithubRepo = useLockFn(() => {
-    return openWebUrl('https://github.com/pius-pp/celestial-mihomo-client')
+    return openWebUrl(
+      'https://github.com/pius-pp/celestial-mihomo-client-public',
+    )
   })
 
   const toGithubDoc = useLockFn(() => {
-    return openWebUrl('https://github.com/pius-pp/celestial-mihomo-client#readme')
+    return openWebUrl(
+      'https://github.com/pius-pp/celestial-mihomo-client-public#readme',
+    )
   })
 
   const toTelegramChannel = useLockFn(() => {
-    return openWebUrl('https://github.com/pius-pp/celestial-mihomo-client/releases')
+    return openWebUrl('https://t.me/celestial_releases')
   })
 
   const panelSx = {
@@ -82,9 +86,7 @@ const SettingPage = () => {
           >
             <SettingSystem onError={onError} />
           </Box>
-          <Box
-            sx={panelSx}
-          >
+          <Box sx={panelSx}>
             <SettingClash onError={onError} />
           </Box>
         </Grid>
@@ -97,9 +99,7 @@ const SettingPage = () => {
           >
             <SettingVergeBasic onError={onError} />
           </Box>
-          <Box
-            sx={panelSx}
-          >
+          <Box sx={panelSx}>
             <SettingVergeAdvanced onError={onError} />
           </Box>
         </Grid>
