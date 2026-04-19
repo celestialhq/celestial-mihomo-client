@@ -8,20 +8,20 @@ use std::iter;
 use std::{fs, path::PathBuf};
 use tauri::Manager as _;
 
-#[cfg(not(feature = "verge-dev"))]
-pub static APP_ID: &str = "io.github.clash-verge-rev.clash-verge-rev";
-#[cfg(not(feature = "verge-dev"))]
-pub static BACKUP_DIR: &str = "clash-verge-rev-backup";
+#[cfg(not(feature = "celestial-dev"))]
+pub static APP_ID: &str = "io.github.pius-pp.celestial-mihomo-client";
+#[cfg(not(feature = "celestial-dev"))]
+pub static BACKUP_DIR: &str = "celestial-backup";
 
-#[cfg(feature = "verge-dev")]
-pub static APP_ID: &str = "io.github.clash-verge-rev.clash-verge-rev.dev";
-#[cfg(feature = "verge-dev")]
-pub static BACKUP_DIR: &str = "clash-verge-rev-backup-dev";
+#[cfg(feature = "celestial-dev")]
+pub static APP_ID: &str = "io.github.pius-pp.celestial-mihomo-client.dev";
+#[cfg(feature = "celestial-dev")]
+pub static BACKUP_DIR: &str = "celestial-backup-dev";
 
 pub static PORTABLE_FLAG: OnceCell<bool> = OnceCell::new();
 
 pub static CLASH_CONFIG: &str = "config.yaml";
-pub static VERGE_CONFIG: &str = "verge.yaml";
+pub static VERGE_CONFIG: &str = "celestial.yaml";
 pub static PROFILE_YAML: &str = "profiles.yaml";
 
 /// init portable flag
@@ -222,18 +222,18 @@ pub fn ensure_mihomo_safe_dir() -> Option<PathBuf> {
 #[cfg(unix)]
 pub fn ipc_path() -> Result<PathBuf> {
     ensure_mihomo_safe_dir()
-        .map(|base_dir| base_dir.join("verge").join("verge-mihomo.sock"))
+        .map(|base_dir| base_dir.join("celestial").join("celestial-mihomo.sock"))
         .or_else(|| {
             app_home_dir()
                 .ok()
-                .map(|dir| dir.join("verge").join("verge-mihomo.sock"))
+                .map(|dir| dir.join("celestial").join("celestial-mihomo.sock"))
         })
         .ok_or_else(|| anyhow::anyhow!("Failed to determine ipc path"))
 }
 
 #[cfg(target_os = "windows")]
 pub fn ipc_path() -> Result<PathBuf> {
-    Ok(PathBuf::from(r"\\.\pipe\verge-mihomo"))
+    Ok(PathBuf::from(r"\\.\pipe\celestial-mihomo"))
 }
 #[async_trait]
 pub trait PathBufExec {

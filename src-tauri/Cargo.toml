@@ -1,11 +1,11 @@
 [package]
-name = "clash-verge"
+name = "celestial"
 version = "2.4.8"
-description = "clash verge"
+description = "Celestial Mihomo Client"
 authors = ["zzzgydi", "Tunglies", "wonfen", "MystiPanda"]
 license = "GPL-3.0-only"
-repository = "https://github.com/clash-verge-rev/clash-verge-rev.git"
-default-run = "clash-verge"
+repository = "https://github.com/pius-pp/celestial-mihomo-client.git"
+default-run = "celestial"
 build = "build.rs"
 edition = "2024"
 rust-version = "1.91"
@@ -17,14 +17,14 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
-verge-dev = ["clash_verge_logger/color"]
+celestial-dev = ["clash_verge_logger/color"]
 tauri-dev = []
 tokio-trace = ["console-subscriber"]
 clippy = ["tauri/test"]
 tracing = []
 
 [package.metadata.bundle]
-identifier = "io.github.clash-verge-rev.clash-verge-rev"
+identifier = "io.github.pius-pp.celestial-mihomo-client"
 
 [build-dependencies]
 tauri-build = { version = "2.5.6", features = [] }

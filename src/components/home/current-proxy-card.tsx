@@ -42,9 +42,9 @@ import delayManager from '@/services/delay'
 import { debugLog } from '@/utils/debug'
 
 // 本地存储的键名
-const STORAGE_KEY_GROUP = 'clash-verge-selected-proxy-group'
-const STORAGE_KEY_PROXY = 'clash-verge-selected-proxy'
-const STORAGE_KEY_SORT_TYPE = 'clash-verge-proxy-sort-type'
+const STORAGE_KEY_GROUP = 'celestial-selected-proxy-group'
+const STORAGE_KEY_PROXY = 'celestial-selected-proxy'
+const STORAGE_KEY_SORT_TYPE = 'celestial-proxy-sort-type'
 
 const AUTO_CHECK_DEFAULT_INTERVAL_MINUTES = 5
 const AUTO_CHECK_INITIAL_DELAY_MS = 100

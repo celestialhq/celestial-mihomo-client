@@ -13,7 +13,7 @@
     ],
     "resources": ["resources"],
     "publisher": "Celestial",
-    "externalBin": ["sidecar/verge-mihomo", "sidecar/verge-mihomo-alpha"],
+    "externalBin": ["sidecar/celestial-mihomo", "sidecar/celestial-mihomo-alpha"],
     "copyright": "GNU General Public License v3.0",
     "category": "DeveloperTool",
     "shortDescription": "Celestial",
@@ -27,14 +27,14 @@
     "removeUnusedCommands": true
   },
   "productName": "Celestial",
-  "identifier": "io.github.clash-verge-rev.clash-verge-rev",
+  "identifier": "io.github.pius-pp.celestial-mihomo-client",
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQyOEMyRjBCQkVGOUJEREYKUldUZnZmbStDeStNMHU5Mmo1N24xQXZwSVRYbXA2NUpzZE5oVzlqeS9Bc0t6RVV4MmtwVjBZaHgK",
       "endpoints": [
-        "https://update.hwdns.net/https://github.com/clash-verge-rev/clash-verge-rev/releases/download/updater/update-proxy.json",
-        "https://gh-proxy.org/https://github.com/clash-verge-rev/clash-verge-rev/releases/download/updater/update-proxy.json",
-        "https://github.com/clash-verge-rev/clash-verge-rev/releases/download/updater/update.json"
+        "https://update.hwdns.net/https://github.com/pius-pp/celestial-mihomo-client/releases/download/updater/update-proxy.json",
+        "https://gh-proxy.org/https://github.com/pius-pp/celestial-mihomo-client/releases/download/updater/update-proxy.json",
+        "https://github.com/pius-pp/celestial-mihomo-client/releases/download/updater/update.json"
       ],
       "windows": {
         "installMode": "passive"
@@ -42,7 +42,7 @@
     },
     "deep-link": {
       "desktop": {
-        "schemes": ["clash", "clash-verge"]
+        "schemes": ["clash", "celestial"]
       }
     }
   },

@@ -12,13 +12,13 @@
   <a href="../README.md">English</a> · <strong>Русский</strong>
 </p>
 
-> Celestial - это форк [clash-verge-rev](https://github.com/clash-verge-rev/clash-verge-rev). Проект сохраняет основу Clash Verge Rev и адаптирует ее под клиент Celestial.
+> Celestial - это форк [celestial-mihomo-client](https://github.com/pius-pp/celestial-mihomo-client). Проект сохраняет основу Celestial и адаптирует ее под клиент Celestial.
 
 ## Что это
 
 Celestial - кроссплатформенный GUI для [Mihomo](https://github.com/MetaCubeX/mihomo), также известного как Clash Meta. Приложение управляет удаленными и локальными профилями, группами прокси, правилами, соединениями, логами, системным прокси, TUN-режимом, резервными копиями и интеграцией с рабочим столом.
 
-Кодовая база идет от Clash Verge Rev, но название продукта, заголовок окна и дополнительные функции управления подпиской оформлены под Celestial.
+Кодовая база идет от Celestial, но название продукта, заголовок окна и дополнительные функции управления подпиской оформлены под Celestial.
 
 ## Возможности
 
@@ -67,10 +67,10 @@ pnpm build
 
 ## Upstream
 
-Celestial наследует большую часть функциональности от Clash Verge Rev и связанных проектов:
+Celestial наследует большую часть функциональности от Celestial и связанных проектов:
 
-- [clash-verge-rev/clash-verge-rev](https://github.com/clash-verge-rev/clash-verge-rev) - upstream, от которого сделан этот форк.
-- [zzzgydi/clash-verge](https://github.com/zzzgydi/clash-verge) - оригинальный desktop GUI Clash Verge.
+- [pius-pp/celestial-mihomo-client](https://github.com/pius-pp/celestial-mihomo-client) - upstream, от которого сделан этот форк.
+- [zzzgydi/clash-verge](https://github.com/zzzgydi/clash-verge) - оригинальный desktop GUI Celestial.
 - [MetaCubeX/mihomo](https://github.com/MetaCubeX/mihomo) - rule-based proxy core.
 - [tauri-apps/tauri](https://github.com/tauri-apps/tauri) - фреймворк для desktop-приложений.
 - [vitejs/vite](https://github.com/vitejs/vite) - frontend tooling.

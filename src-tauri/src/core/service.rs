@@ -363,7 +363,7 @@ pub(super) async fn start_with_existing_service(config_file: &PathBuf) -> Result
 
     let response = clash_verge_service_ipc::start_clash(&payload)
         .await
-        .context("无法连接到Clash Verge Service")?;
+        .context("无法连接到Celestial Service")?;
 
     if response.code > 0 {
         let err_msg = response.message;
@@ -390,7 +390,7 @@ pub(super) async fn get_clash_logs_by_service() -> Result<Vec<CompactString>> {
 
     let response = clash_verge_service_ipc::get_clash_logs()
         .await
-        .context("无法连接到Clash Verge Service")?;
+        .context("无法连接到Celestial Service")?;
 
     if response.code > 0 {
         let err_msg = response.message;
@@ -408,7 +408,7 @@ pub(super) async fn stop_core_by_service() -> Result<()> {
 
     let response = clash_verge_service_ipc::stop_clash()
         .await
-        .context("无法连接到Clash Verge Service")?;
+        .context("无法连接到Celestial Service")?;
 
     if response.code > 0 {
         let err_msg = response.message;

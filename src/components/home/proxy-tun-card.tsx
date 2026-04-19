@@ -23,7 +23,7 @@ import { useSystemState } from '@/hooks/use-system-state'
 import { useVerge } from '@/hooks/use-verge'
 import { showNotice } from '@/services/notice-service'
 
-const LOCAL_STORAGE_TAB_KEY = 'clash-verge-proxy-active-tab'
+const LOCAL_STORAGE_TAB_KEY = 'celestial-proxy-active-tab'
 
 interface TabButtonProps {
   isActive: boolean

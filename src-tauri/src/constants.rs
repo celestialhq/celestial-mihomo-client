@@ -12,9 +12,9 @@ pub mod network {
         pub const DEFAULT_SOCKS: u16 = 7898;
         pub const DEFAULT_HTTP: u16 = 7899;
 
-        #[cfg(not(feature = "verge-dev"))]
+        #[cfg(not(feature = "celestial-dev"))]
         pub const SINGLETON_SERVER: u16 = 33331;
-        #[cfg(feature = "verge-dev")]
+        #[cfg(feature = "celestial-dev")]
         pub const SINGLETON_SERVER: u16 = 11233;
     }
 }
@@ -32,8 +32,8 @@ pub mod timing {
 }
 
 pub mod files {
-    pub const RUNTIME_CONFIG: &str = "clash-verge.yaml";
-    pub const CHECK_CONFIG: &str = "clash-verge-check.yaml";
+    pub const RUNTIME_CONFIG: &str = "celestial-runtime.yaml";
+    pub const CHECK_CONFIG: &str = "celestial-check.yaml";
     pub const DNS_CONFIG: &str = "dns_config.yaml";
     pub const WINDOW_STATE: &str = "window_state.json";
 }

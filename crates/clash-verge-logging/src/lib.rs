@@ -30,7 +30,7 @@ pub enum Type {
     Network,
     ProxyMode,
     Validate,
-    ClashVergeRev,
+    Celestial,
 }
 
 impl fmt::Display for Type {
@@ -55,7 +55,7 @@ impl fmt::Display for Type {
             Self::Network => write!(f, "[Network]"),
             Self::ProxyMode => write!(f, "[ProxMode]"),
             Self::Validate => write!(f, "[Validate]"),
-            Self::ClashVergeRev => write!(f, "[ClashVergeRev]"),
+            Self::Celestial => write!(f, "[Celestial]"),
         }
     }
 }

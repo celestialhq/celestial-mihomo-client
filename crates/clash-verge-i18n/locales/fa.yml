@@ -22,18 +22,18 @@ notifications:
     body: پروفایل دوباره فعال شد.
   appQuit:
     title: در آستانه خروج
-    body: Clash Verge در آستانه خروج است.
+    body: Celestial در آستانه خروج است.
   appHidden:
     title: برنامه پنهان شد
-    body: Clash Verge در پس‌زمینه در حال اجراست.
+    body: Celestial در پس‌زمینه در حال اجراست.
   updateReady:
-    title: Clash Verge Update
+    title: Celestial Update
     body: A new version (v{version}) has been downloaded and is ready to install.
     installNow: Install Now
     later: Later
 service:
-  adminInstallPrompt: نصب سرویس Clash Verge به دسترسی مدیر نیاز دارد.
-  adminUninstallPrompt: حذف سرویس Clash Verge به دسترسی مدیر نیاز دارد.
+  adminInstallPrompt: نصب سرویس Celestial به دسترسی مدیر نیاز دارد.
+  adminUninstallPrompt: حذف سرویس Celestial به دسترسی مدیر نیاز دارد.
 tray:
   dashboard: داشبورد
   ruleMode: حالت قوانین

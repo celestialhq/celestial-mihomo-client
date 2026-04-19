@@ -28,19 +28,19 @@
 
 ## نصب
 
-برای دانلود فایل نصبی متناسب با پلتفرم خود، به [صفحه انتشار](https://github.com/clash-verge-rev/clash-verge-rev/releases) مراجعه کنید.<br> ما بسته‌هایی برای ویندوز (x64/x86)، لینوکس (x64/arm64) و macOS 10.15+ (اینتل/اپل) ارائه می‌دهیم.
+برای دانلود فایل نصبی متناسب با پلتفرم خود، به [صفحه انتشار](https://github.com/pius-pp/celestial-mihomo-client/releases) مراجعه کنید.<br> ما بسته‌هایی برای ویندوز (x64/x86)، لینوکس (x64/arm64) و macOS 10.15+ (اینتل/اپل) ارائه می‌دهیم.
 
 #### انتخاب کانال انتشار
 
 | Channel     | توضیحات                                                                                           | Link                                                                                   |
 | :---------- | :------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------- |
-| Stable      | ساخت رسمی با قابلیت اطمینان بالا، ایده‌آل برای استفاده روزانه.                                    | [Release](https://github.com/clash-verge-rev/clash-verge-rev/releases)                 |
-| Alpha (EOL) | نسخه‌های قدیمی (Legacy builds) برای اعتبارسنجی خط لوله انتشار (publish pipeline) استفاده می‌شوند. | [Alpha](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/alpha)         |
-| AutoBuild   | نسخه‌های آزمایشی برای آزمایش و دریافت بازخورد. منتظر تغییرات آزمایشی باشید.                       | [AutoBuild](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/autobuild) |
+| Stable      | ساخت رسمی با قابلیت اطمینان بالا، ایده‌آل برای استفاده روزانه.                                    | [Release](https://github.com/pius-pp/celestial-mihomo-client/releases)                 |
+| Alpha (EOL) | نسخه‌های قدیمی (Legacy builds) برای اعتبارسنجی خط لوله انتشار (publish pipeline) استفاده می‌شوند. | [Alpha](https://github.com/pius-pp/celestial-mihomo-client/releases/tag/alpha)         |
+| AutoBuild   | نسخه‌های آزمایشی برای آزمایش و دریافت بازخورد. منتظر تغییرات آزمایشی باشید.                       | [AutoBuild](https://github.com/pius-pp/celestial-mihomo-client/releases/tag/autobuild) |
 
 #### راهنماهای نصب و سوالات متداول
 
-برای مراحل نصب، عیب‌یابی و سوالات متداول، [مستندات پروژه](https://clash-verge-rev.github.io/) را مطالعه کنید.
+برای مراحل نصب، عیب‌یابی و سوالات متداول، [مستندات پروژه](https://github.com/pius-pp/celestial-mihomo-client#readme) را مطالعه کنید.
 
 ### کانال تلگرام
 
@@ -53,12 +53,12 @@
 #### [Doggygo VPN — شتاب‌دهنده جهانی عملکردگرا](https://verge.dginv.click/#/register?code=oaxsAGo6)
 
 - سرویس شبکه برون مرزی با عملکرد بالا به همراه دوره‌های آزمایشی رایگان، طرح‌های تخفیف‌دار، امکان باز کردن قفل استریم و پشتیبانی درجه یک از پروتکل هیستریا.
-- از طریق لینک اختصاصی Clash Verge ثبت نام کنید تا یک دوره آزمایشی ۳ روزه با ۱ گیگابایت ترافیک در روز دریافت کنید: [ثبت نام](https://verge.dginv.click/#/register?code=oaxsAGo6)
-- کوپن تخفیف ۲۰٪ ویژه کاربران Clash Verge: `verge20` (محدود به ۵۰۰ بار استفاده)
+- از طریق لینک اختصاصی Celestial ثبت نام کنید تا یک دوره آزمایشی ۳ روزه با ۱ گیگابایت ترافیک در روز دریافت کنید: [ثبت نام](https://verge.dginv.click/#/register?code=oaxsAGo6)
+- کوپن تخفیف ۲۰٪ ویژه کاربران Celestial: `verge20` (محدود به ۵۰۰ بار استفاده)
 - بسته تخفیف‌دار از ۱۵.۸ ین در ماه برای ۱۶۰ گیگابایت، به علاوه ۲۰٪ تخفیف اضافی برای صورتحساب سالانه
 - توسط یک تیم خارجی با خدمات قابل اعتماد و تا 50٪ سهم درآمد اداره می‌شود
 - کلاسترهای متعادل بار با مسیرهای اختصاصی پرسرعت (سازگار با کلاینت‌های قدیمی)، تأخیر فوق‌العاده کم، پخش روان 4K
-- اولین ارائه‌دهنده جهانی با **پروتکل QUIC**، اکنون با پروتکل‌های سریع‌تر خانواده QUIC (بهترین ترکیب با کلاینت Clash Verge)
+- اولین ارائه‌دهنده جهانی با **پروتکل QUIC**، اکنون با پروتکل‌های سریع‌تر خانواده QUIC (بهترین ترکیب با کلاینت Celestial)
 - پشتیبانی از سرویس‌های استریم و دسترسی به ChatGPT
 - وبسایت رسمی: [https://狗狗加速.com](https://verge.dginv.click/#/register?code=oaxsAGo6)
 
@@ -85,11 +85,11 @@
 
 ### سوالات متداول
 
-برای راهنمایی‌های مربوط به هر پلتفرم، به [صفحه سوالات متداول](https://clash-verge-rev.github.io/faq/windows.html) مراجعه کنید.
+برای راهنمایی‌های مربوط به هر پلتفرم، به [صفحه سوالات متداول](https://github.com/pius-pp/celestial-mihomo-client#readme) مراجعه کنید.
 
 ### اهدا
 
-[پشتیبانی از توسعه Clash Verge Rev](https://github.com/sponsors/clash-verge-rev)
+[پشتیبانی از توسعه Celestial](https://github.com/sponsors/pius-pp)
 
 ## توسعه
 
@@ -109,7 +109,7 @@ pnpm dev
 
 ## تقدیر و تشکر
 
-Clash Verge Rev بر اساس این پروژه‌ها ساخته شده یا از آنها الهام گرفته است:
+Celestial بر اساس این پروژه‌ها ساخته شده یا از آنها الهام گرفته است:
 
 - [zzzgydi/clash-verge](https://github.com/zzzgydi/clash-verge): یک رابط کاربری گرافیکی Clash مبتنی بر Tauri برای ویندوز، macOS و لینوکس..
 - [tauri-apps/tauri](https://github.com/tauri-apps/tauri): ساخت برنامه‌های دسکتاپ کوچک‌تر، سریع‌تر و امن‌تر با رابط کاربری وب.

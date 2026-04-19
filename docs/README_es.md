@@ -28,20 +28,20 @@ Una interfaz gráfica para Clash Meta construida con <a href="https://github.com
 
 ## Instalación
 
-Visita la [página de lanzamientos](https://github.com/clash-verge-rev/clash-verge-rev/releases) y descarga el instalador que corresponda a tu plataforma.<br>
+Visita la [página de lanzamientos](https://github.com/pius-pp/celestial-mihomo-client/releases) y descarga el instalador que corresponda a tu plataforma.<br>
 Ofrecemos paquetes para Windows (x64/x86), Linux (x64/arm64) y macOS 10.15+ (Intel/Apple).
 
 #### Cómo elegir el canal de lanzamiento
 
 | Canal       | Descripción                                                                    | Enlace                                                                                 |
 | :---------- | :----------------------------------------------------------------------------- | :------------------------------------------------------------------------------------- |
-| Stable      | Compilaciones oficiales de alta fiabilidad; ideales para el uso diario.        | [Release](https://github.com/clash-verge-rev/clash-verge-rev/releases)                 |
-| Alpha (EOL) | Compilaciones heredadas usadas para validar el flujo de publicación.           | [Alpha](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/alpha)         |
-| AutoBuild   | Compilaciones continuas para pruebas y retroalimentación. Espera cambios beta. | [AutoBuild](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/autobuild) |
+| Stable      | Compilaciones oficiales de alta fiabilidad; ideales para el uso diario.        | [Release](https://github.com/pius-pp/celestial-mihomo-client/releases)                 |
+| Alpha (EOL) | Compilaciones heredadas usadas para validar el flujo de publicación.           | [Alpha](https://github.com/pius-pp/celestial-mihomo-client/releases/tag/alpha)         |
+| AutoBuild   | Compilaciones continuas para pruebas y retroalimentación. Espera cambios beta. | [AutoBuild](https://github.com/pius-pp/celestial-mihomo-client/releases/tag/autobuild) |
 
 #### Guías de instalación y preguntas frecuentes
 
-Consulta la [documentación del proyecto](https://clash-verge-rev.github.io/) para encontrar los pasos de instalación, solución de problemas y preguntas frecuentes.
+Consulta la [documentación del proyecto](https://github.com/pius-pp/celestial-mihomo-client#readme) para encontrar los pasos de instalación, solución de problemas y preguntas frecuentes.
 
 ### Canal de Telegram
 
@@ -54,12 +54,12 @@ Consulta la [documentación del proyecto](https://clash-verge-rev.github.io/) pa
 #### [Doggygo VPN — Acelerador global orientado al rendimiento](https://verge.dginv.click/#/register?code=oaxsAGo6)
 
 - Servicio internacional de alto rendimiento con prueba gratuita, planes con descuento, desbloqueo de streaming y soporte de protocolo Hysteria de primera clase.
-- Regístrate mediante el enlace exclusivo de Clash Verge y obtén una prueba de 3 días con 1 GB de tráfico diario: [Regístrate](https://verge.dginv.click/#/register?code=oaxsAGo6)
-- Cupón exclusivo de 20% de descuento para usuarios de Clash Verge: `verge20` (limitado a 500 usos)
+- Regístrate mediante el enlace exclusivo de Celestial y obtén una prueba de 3 días con 1 GB de tráfico diario: [Regístrate](https://verge.dginv.click/#/register?code=oaxsAGo6)
+- Cupón exclusivo de 20% de descuento para usuarios de Celestial: `verge20` (limitado a 500 usos)
 - Plan promocional desde ¥15.8 al mes con 160 GB, más 20% de descuento adicional por pago anual
 - Equipo ubicado en el extranjero para un servicio confiable, con hasta 50% de comisión compartida
 - Clústeres balanceados con rutas dedicadas de alta velocidad (compatibles con clientes antiguos), latencia extremadamente baja, reproducción 4K sin interrupciones
-- Primer proveedor global con **protocolo QUIC**, ahora con protocolos de la familia QUIC más rápidos (ideal para el cliente Clash Verge)
+- Primer proveedor global con **protocolo QUIC**, ahora con protocolos de la familia QUIC más rápidos (ideal para el cliente Celestial)
 - Desbloquea servicios de streaming y acceso a ChatGPT
 - Sitio oficial: [https://狗狗加速.com](https://verge.dginv.click/#/register?code=oaxsAGo6)
 
@@ -86,11 +86,11 @@ Consulta la [documentación del proyecto](https://clash-verge-rev.github.io/) pa
 
 ### Preguntas frecuentes
 
-Visita la [página de FAQ](https://clash-verge-rev.github.io/faq/windows.html) para obtener instrucciones específicas por plataforma.
+Visita la [página de FAQ](https://github.com/pius-pp/celestial-mihomo-client#readme) para obtener instrucciones específicas por plataforma.
 
 ### Donaciones
 
-[Apoya el desarrollo de Clash Verge Rev](https://github.com/sponsors/clash-verge-rev)
+[Apoya el desarrollo de Celestial](https://github.com/sponsors/pius-pp)
 
 ## Desarrollo
 
@@ -110,7 +110,7 @@ Se agradecen los issues y pull requests.
 
 ## Agradecimientos
 
-Clash Verge Rev se basa en, o se inspira en, los siguientes proyectos:
+Celestial se basa en, o se inspira en, los siguientes proyectos:
 
 - [zzzgydi/clash-verge](https://github.com/zzzgydi/clash-verge): Interfaz gráfica para Clash basada en Tauri. Compatible con Windows, macOS y Linux.
 - [tauri-apps/tauri](https://github.com/tauri-apps/tauri): Construye aplicaciones de escritorio más pequeñas, rápidas y seguras con un frontend web.

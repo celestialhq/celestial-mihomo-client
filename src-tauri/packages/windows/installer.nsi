@@ -534,7 +534,7 @@ Function CheckVCRuntime64
 FunctionEnd
 
 
-!macro CheckAllVergeProcesses
+!macro CheckAllCelestialProcesses
   ; Check if clash-verge-service.exe is running
   !if "${INSTALLMODE}" == "currentUser"
     nsis_tauri_utils::FindProcessCurrentUser "clash-verge-service.exe"
@@ -551,7 +551,39 @@ FunctionEnd
     !endif
   ${EndIf}
 
-  ; Check if verge-mihomo-alpha.exe is running
+  ; Check if celestial-mihomo-alpha.exe is running
+  !if "${INSTALLMODE}" == "currentUser"
+    nsis_tauri_utils::FindProcessCurrentUser "celestial-mihomo-alpha.exe"
+  !else
+    nsis_tauri_utils::FindProcess "celestial-mihomo-alpha.exe"
+  !endif
+  Pop $R0
+  ${If} $R0 = 0
+    DetailPrint "Kill celestial-mihomo-alpha.exe..."
+    !if "${INSTALLMODE}" == "currentUser"
+      nsis_tauri_utils::KillProcessCurrentUser "celestial-mihomo-alpha.exe"
+    !else
+      nsis_tauri_utils::KillProcess "celestial-mihomo-alpha.exe"
+    !endif
+  ${EndIf}
+
+  ; Check if celestial-mihomo.exe is running
+  !if "${INSTALLMODE}" == "currentUser"
+    nsis_tauri_utils::FindProcessCurrentUser "celestial-mihomo.exe"
+  !else
+    nsis_tauri_utils::FindProcess "celestial-mihomo.exe"
+  !endif
+  Pop $R0
+  ${If} $R0 = 0
+    DetailPrint "Kill celestial-mihomo.exe..."
+    !if "${INSTALLMODE}" == "currentUser"
+      nsis_tauri_utils::KillProcessCurrentUser "celestial-mihomo.exe"
+    !else
+      nsis_tauri_utils::KillProcess "celestial-mihomo.exe"
+    !endif
+  ${EndIf}
+
+  ; Check if legacy verge-mihomo-alpha.exe is running
   !if "${INSTALLMODE}" == "currentUser"
     nsis_tauri_utils::FindProcessCurrentUser "verge-mihomo-alpha.exe"
   !else
@@ -567,7 +599,7 @@ FunctionEnd
     !endif
   ${EndIf}
 
-  ; Check if verge-mihomo.exe is running
+  ; Check if legacy verge-mihomo.exe is running
   !if "${INSTALLMODE}" == "currentUser"
     nsis_tauri_utils::FindProcessCurrentUser "verge-mihomo.exe"
   !else
@@ -887,7 +919,7 @@ Section Install
   nsExec::Exec 'netsh int tcp res'
 
   !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
-  !insertmacro CheckAllVergeProcesses
+  !insertmacro CheckAllCelestialProcesses
 
   ; Ensure startup folders exist
   CreateDirectory "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup"
@@ -900,8 +932,8 @@ Section Install
 
   ; Remove stale window-state files
   DetailPrint "Removing window-state.json / .window-state.json"
-  Delete "$APPDATA\io.github.clash-verge-rev.clash-verge-rev\window-state.json"
-  Delete "$APPDATA\io.github.clash-verge-rev.clash-verge-rev\.window-state.json"
+  Delete "$APPDATA\${BUNDLEID}\window-state.json"
+  Delete "$APPDATA\${BUNDLEID}\.window-state.json"
 
   ; Clean legacy auto-launch registry entries
   StrCpy $R1 "Software\Microsoft\Windows\CurrentVersion\Run"
@@ -1068,14 +1100,14 @@ Section Uninstall
   !endif
 
   !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
-  !insertmacro CheckAllVergeProcesses
+  !insertmacro CheckAllCelestialProcesses
   !insertmacro RemoveVergeService
 
   ; Remove cached window state files
   DetailPrint "Removing window-state.json / .window-state.json"
   SetShellVarContext current
-  Delete "$APPDATA\io.github.clash-verge-rev.clash-verge-rev\window-state.json"
-  Delete "$APPDATA\io.github.clash-verge-rev.clash-verge-rev\.window-state.json"
+  Delete "$APPDATA\${BUNDLEID}\window-state.json"
+  Delete "$APPDATA\${BUNDLEID}\.window-state.json"
 
   ; Clean legacy auto-launch registry entries
   StrCpy $R1 "Software\Microsoft\Windows\CurrentVersion\Run"

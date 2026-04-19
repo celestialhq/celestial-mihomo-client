@@ -22,12 +22,12 @@ notifications:
     body: Profil reaktiviert.
   appQuit:
     title: Beenden steht bevor
-    body: Clash Verge wird gleich beendet.
+    body: Celestial wird gleich beendet.
   appHidden:
     title: Anwendung ausgeblendet
-    body: Clash Verge läuft im Hintergrund.
+    body: Celestial läuft im Hintergrund.
   updateReady:
-    title: Clash Verge Update
+    title: Celestial Update
     body: A new version (v{version}) has been downloaded and is ready to install.
     installNow: Install Now
     later: Later
