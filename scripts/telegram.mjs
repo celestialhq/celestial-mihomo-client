@@ -7,7 +7,7 @@ import { log_error, log_info, log_success } from './utils.mjs'
 // Set these to your own Telegram channel usernames or chat IDs.
 // Stable releases go to CHANNEL_RELEASE, autobuild (dev) builds go to CHANNEL_DEV.
 const CHANNEL_RELEASE = process.env.TG_CHANNEL_RELEASE || '@celestial_releases'
-const CHANNEL_DEV = process.env.TG_CHANNEL_DEV || '@celestial_dev'
+const CHANNEL_DEV = process.env.TG_CHANNEL_DEV || '@celestial_ddev'
 
 async function sendTelegramNotification() {
   if (!process.env.TELEGRAM_BOT_TOKEN) {
