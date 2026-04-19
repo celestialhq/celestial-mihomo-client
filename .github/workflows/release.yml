@@ -18,7 +18,7 @@ env:
   HUSKY: 0
   RUST_TOOLCHAIN: '1.91.0'
   NODE_VERSION: '24.15.0'
-  RELEASE_SOURCE_BRANCH: dev
+  RELEASE_SOURCE_BRANCH: main
   PUBLIC_RELEASE_REPO: pius-pp/celestial-mihomo-client-public
 
 concurrency:
