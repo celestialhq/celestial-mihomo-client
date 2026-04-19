@@ -204,14 +204,14 @@ fn valid_local_icon_path(path: &Path) -> bool {
 fn export_platform_process_icon(source: &Path, target: &Path) -> bool {
     const CREATE_NO_WINDOW: u32 = 0x08000000;
     let script = r"
-    Add-Type -AssemblyName System.Drawing
-    $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($env:CVR_ICON_SOURCE)
-    if ($null -eq $icon) { exit 2 }
-    $bitmap = $icon.ToBitmap()
-    $bitmap.Save($env:CVR_ICON_TARGET, [System.Drawing.Imaging.ImageFormat]::Png)
-    $bitmap.Dispose()
-    $icon.Dispose()
-    ";
+Add-Type -AssemblyName System.Drawing
+$icon = [System.Drawing.Icon]::ExtractAssociatedIcon($env:CVR_ICON_SOURCE)
+if ($null -eq $icon) { exit 2 }
+$bitmap = $icon.ToBitmap()
+$bitmap.Save($env:CVR_ICON_TARGET, [System.Drawing.Imaging.ImageFormat]::Png)
+$bitmap.Dispose()
+$icon.Dispose()
+";
 
     let mut command = Command::new("powershell");
     command

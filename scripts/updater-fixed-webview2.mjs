@@ -10,12 +10,21 @@ const UPDATE_JSON_PROXY = 'update-fixed-webview2-proxy.json'
 /// generate update.json
 /// upload to update tag's release asset
 async function resolveUpdater() {
-  if (process.env.GITHUB_TOKEN === undefined) {
-    throw new Error('GITHUB_TOKEN is required')
+  const token = process.env.PUBLIC_RELEASE_TOKEN || process.env.GITHUB_TOKEN
+  if (token === undefined) {
+    throw new Error('GITHUB_TOKEN or PUBLIC_RELEASE_TOKEN is required')
   }
 
-  const options = { owner: context.repo.owner, repo: context.repo.repo }
-  const github = getOctokit(process.env.GITHUB_TOKEN)
+  const repoFullName =
+    process.env.PUBLIC_RELEASE_REPO ||
+    `${context.repo.owner}/${context.repo.repo}`
+  const [owner, repo] = repoFullName.split('/')
+  if (!owner || !repo) {
+    throw new Error(`Invalid repository name: ${repoFullName}`)
+  }
+
+  const options = { owner, repo }
+  const github = getOctokit(token)
 
   const { data: tags } = await github.rest.repos.listTags({
     ...options,
@@ -36,6 +45,7 @@ async function resolveUpdater() {
 
   const updateData = {
     name: tag.name,
+    version: tag.name,
     notes: await resolveUpdateLog(tag.name), // use Changelog.md
     pub_date: new Date().toISOString(),
     platforms: {
