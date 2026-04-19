@@ -6,7 +6,7 @@ use crate::{
 use anyhow::{Context as _, Result, anyhow, bail};
 use backon::{ConstantBuilder, Retryable as _};
 use celestial_service_ipc::CoreConfig;
-use clash_verge_logging::{Type, logging, logging_error};
+use clash_verge_logging::{Type, logging};
 use compact_str::CompactString;
 use once_cell::sync::Lazy;
 use std::{
@@ -379,7 +379,15 @@ pub(super) async fn start_with_existing_service(config_file: &PathBuf) -> Result
 pub(super) async fn run_core_by_service(config_file: &PathBuf) -> Result<()> {
     logging!(info, Type::Service, "正在尝试通过服务启动核心");
 
-    SERVICE_MANAGER.lock().await.refresh().await?;
+    let mut manager = SERVICE_MANAGER.lock().await;
+    manager.refresh().await?;
+    let status = manager.current();
+    drop(manager);
+
+    if !matches!(status, ServiceStatus::Ready) {
+        logging!(warn, Type::Service, "service is not ready for core start: {:?}", status);
+        bail!("service is not ready for core start: {:?}", status);
+    }
 
     logging!(info, Type::Service, "服务已运行且版本匹配，直接使用");
     start_with_existing_service(config_file).await
@@ -432,11 +440,32 @@ pub async fn is_service_available() -> Result<()> {
         return Err(e.into());
     }
     celestial_service_ipc::connect().await?;
+    if celestial_service_ipc::is_reinstall_service_needed().await {
+        bail!("service needs reinstall");
+    }
     Ok(())
 }
 
 pub async fn wait_and_check_service_available(status: &mut ServiceManager) -> Result<()> {
     wait_for_service_ipc(status, "Waiting for service to be available").await
+}
+
+async fn is_reinstall_service_needed_with_retry() -> bool {
+    let config = ServiceManager::config();
+    let backoff = ConstantBuilder::default()
+        .with_delay(config.retry_delay)
+        .with_max_times(config.max_retries);
+
+    (|| async {
+        if celestial_service_ipc::is_reinstall_service_needed().await {
+            Err(anyhow!("service needs reinstall"))
+        } else {
+            Ok(())
+        }
+    })
+    .retry(backoff)
+    .await
+    .is_err()
 }
 
 async fn wait_for_service_ipc(status: &mut ServiceManager, reason: &str) -> Result<()> {
@@ -496,8 +525,7 @@ impl ServiceManager {
 
     pub async fn refresh(&mut self) -> Result<()> {
         let status = self.check_service_comprehensive().await;
-        self.0 = status.clone();
-        logging_error!(Type::Service, self.handle_service_status(&status).await);
+        self.0 = status;
         Ok(())
     }
 
@@ -529,8 +557,26 @@ impl ServiceManager {
             }
             ServiceStatus::InstallRequired => {
                 logging!(info, Type::Service, "需要安装服务，执行安装流程");
-                install_service()?;
+                if celestial_service_ipc::is_reinstall_service_needed().await {
+                    logging!(info, Type::Service, "existing service version is stale, reinstalling");
+                    reinstall_service()?;
+                } else {
+                    install_service()?;
+                }
                 wait_and_check_service_available(self).await?;
+                if is_reinstall_service_needed_with_retry().await {
+                    logging!(
+                        warn,
+                        Type::Service,
+                        "service version is still stale after install, retrying reinstall once"
+                    );
+                    reinstall_service()?;
+                    wait_and_check_service_available(self).await?;
+                    if is_reinstall_service_needed_with_retry().await {
+                        self.0 = ServiceStatus::NeedsReinstall;
+                        bail!("service version mismatch after reinstall");
+                    }
+                }
             }
             ServiceStatus::UninstallRequired => {
                 logging!(info, Type::Service, "服务需要卸载，执行卸载流程");

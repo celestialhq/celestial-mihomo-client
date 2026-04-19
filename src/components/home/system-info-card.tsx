@@ -92,11 +92,11 @@ export const SystemInfoCard = () => {
   }, [verge, patchVerge])
 
   // 点击运行模式处理,Sidecar或纯管理员模式允许安装服务
-  const handleRunningModeClick = useCallback(() => {
+  const handleRunningModeClick = useLockFn(async () => {
     if (isSidecarMode || (isAdminMode && isSidecarMode)) {
-      installServiceAndRestartCore()
+      await installServiceAndRestartCore()
     }
-  }, [isSidecarMode, isAdminMode, installServiceAndRestartCore])
+  })
 
   // 检查更新
   const onCheckUpdate = useLockFn(async () => {
