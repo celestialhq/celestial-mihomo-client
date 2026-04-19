@@ -1,0 +1,131 @@
+{
+    "page":  {
+                 "tooltips":  {
+                                  "lightweightMode":  "Hafif Mod",
+                                  "manual":  "KД±lavuz",
+                                  "settings":  "Ana Sayfa AyarlarД±"
+                              },
+                 "cards":  {
+                               "trafficStats":  "Trafik Д°statistikleri",
+                               "networkSettings":  "AДџ AyarlarД±",
+                               "proxyMode":  "Vekil Modu"
+                           },
+                 "settings":  {
+                                  "cards":  {
+                                                "profile":  "Profil KartД±",
+                                                "currentProxy":  "GeГ§erli Vekil KartД±",
+                                                "network":  "AДџ AyarlarД± KartД±",
+                                                "proxyMode":  "Vekil Modu KartД±",
+                                                "traffic":  "Trafik Д°statistikleri KartД±",
+                                                "ip":  "IP Bilgi KartД±",
+                                                "clashInfo":  "Clash Bilgi KartlarД±",
+                                                "systemInfo":  "Sistem Bilgi KartlarД±"
+                                            },
+                                  "title":  "Ana Sayfa AyarlarД±"
+                              },
+                 "title":  "Ana Sayfa"
+             },
+    "components":  {
+                       "proxyTun":  {
+                                        "status":  {
+                                                       "systemProxyEnabled":  "Sistem vekil\u0027i etkinleЕџtirildi, uygulamalarД±nД±z vekil Гјzerinden aДџa eriЕџecek",
+                                                       "systemProxyDisabled":  "Sistem vekil\u0027i devre dД±ЕџД±, Г§oДџu kullanД±cД± iГ§in bu seГ§eneДџi aГ§manД±z Г¶nerilir",
+                                                       "tunModeServiceRequired":  "TUN modu hizmet modu gerektirir, lГјtfen Г¶nce hizmeti kurun",
+                                                       "tunModeEnabled":  "TUN modu etkinleЕџtirildi, uygulamalar sanal aДџ kartД± Гјzerinden aДџa eriЕџecek",
+                                                       "tunModeDisabled":  "TUN modu devre dД±ЕџД±, Г¶zel uygulamalar iГ§in uygundur"
+                                                   },
+                                        "tooltips":  {
+                                                         "systemProxy":  "Д°Еџletim sisteminin vekil ayarlarД±nД± deДџiЕџtirmek iГ§in etkinleЕџtirin. EtkinleЕџtirme baЕџarД±sД±z olursa, iЕџletim sisteminin proxy ayarlarД±nД± manuel olarak deДџiЕџtirin",
+                                                         "tunMode":  "TUN modu tГјm uygulama trafiДџini ele alabilir, sistem vekil ayarlarД±nД± takip etmeyen Г¶zel uygulamalar iГ§in uygundur"
+                                                     }
+                                    },
+                       "clashInfo":  {
+                                         "title":  "Clash Bilgisi",
+                                         "fields":  {
+                                                        "coreVersion":  "Г‡ekirdek SГјrГјmГј",
+                                                        "systemProxyAddress":  "Sistem Vekil Adresi",
+                                                        "mixedPort":  "Mixed Port",
+                                                        "uptime":  "Г‡alД±Еџma SГјresi",
+                                                        "rulesCount":  "Kural SayД±sД±"
+                                                    }
+                                     },
+                       "systemInfo":  {
+                                          "title":  "Sistem Bilgisi",
+                                          "fields":  {
+                                                         "osInfo":  "Д°Еџletim Sistemi Bilgisi",
+                                                         "autoLaunch":  "Otomatik BaЕџlatma",
+                                                         "runningMode":  "Г‡alД±Еџma Modu",
+                                                         "lastCheckUpdate":  "Son GГјncelleme KontrolГј",
+                                                         "vergeVersion":  "Verge SГјrГјmГј"
+                                                     },
+                                          "actions":  {
+                                                          "settings":  "Ayarlar"
+                                                      },
+                                          "badges":  {
+                                                         "adminMode":  "YГ¶netici Modu",
+                                                         "serviceMode":  "Hizmet Modu",
+                                                         "sidecarMode":  "KullanД±cД± Modu",
+                                                         "adminServiceMode":  "YГ¶netici + Hizmet Modu"
+                                                     }
+                                      },
+                       "ipInfo":  {
+                                      "title":  "IP Bilgisi",
+                                      "labels":  {
+                                                     "ip":  "IP",
+                                                     "asn":  "ASN",
+                                                     "isp":  "ISP",
+                                                     "org":  "KuruluЕџ",
+                                                     "location":  "Konum",
+                                                     "timezone":  "Saat Dilimi",
+                                                     "autoRefresh":  "Otomatik yenile",
+                                                     "unknown":  "Bilinmiyor"
+                                                 },
+                                      "errors":  {
+                                                     "load":  "IP bilgisi alД±namadД±"
+                                                 }
+                                  },
+                       "currentProxy":  {
+                                            "title":  "GeГ§erli DГјДџГјm",
+                                            "actions":  {
+                                                            "refreshDelay":  "Gecikme kontrolГј"
+                                                        },
+                                            "labels":  {
+                                                           "globalMode":  "KГјresel Mod",
+                                                           "directMode":  "DoДџrudan Mod",
+                                                           "group":  "Grup",
+                                                           "proxy":  "Vekil",
+                                                           "noActiveNode":  "Aktif vekil dГјДџГјmГј yok"
+                                                       }
+                                        },
+                       "traffic":  {
+                                       "metrics":  {
+                                                       "uploadSpeed":  "YГјkleme HД±zД±",
+                                                       "downloadSpeed":  "Д°ndirme HД±zД±",
+                                                       "activeConnections":  "Aktif BaДџlantД±lar",
+                                                       "memoryUsage":  "Г‡ekirdek KullanД±mД±"
+                                                   },
+                                       "legends":  {
+                                                       "upload":  "YГјkleme",
+                                                       "download":  "Д°ndirme"
+                                                   },
+                                       "patterns":  {
+                                                        "minutes":  "{{time}} Minutes"
+                                                    }
+                                   },
+                       "clashMode":  {
+                                         "errors":  {
+                                                        "communication":  "Core communication error"
+                                                    },
+                                         "labels":  {
+                                                        "rule":  "Kural Modu",
+                                                        "global":  "KГјresel Mod",
+                                                        "direct":  "DoДџrudan Mod"
+                                                    },
+                                         "descriptions":  {
+                                                              "rule":  "Automatically choose proxies according to the rule set.",
+                                                              "global":  "Forward all network requests through the selected proxy.",
+                                                              "direct":  "Bypass the proxy and connect to the internet directly."
+                                                          }
+                                     }
+                   }
+}

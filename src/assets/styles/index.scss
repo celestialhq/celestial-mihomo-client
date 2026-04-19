@@ -1,0 +1,63 @@
+@use './layout.scss';
+@use './page.scss';
+@use './font.scss';
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+    'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+:root {
+  --primary-main: #3478c6;
+  --text-primary: #152235;
+  --selection-color: #e0f2fe;
+  --scroller-color: rgba(52, 120, 198, 0.3);
+  --background-color: #f3f7fb;
+  --surface-color: #fafcff;
+  --surface-color-elevated: #f6f9fc;
+  --background-color-alpha: rgba(52, 120, 198, 0.08);
+  --border-radius: 8px;
+}
+
+::selection {
+  color: var(--selection-color);
+  background-color: var(--primary-main);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  border-radius: 6px;
+  background-color: var(--scroller-color);
+}
+*::-webkit-scrollbar-corner {
+  background-color: transparent;
+}
+
+body {
+  overflow: hidden;
+}
+
+// @media (prefers-color-scheme: dark) {
+//   :root {
+//     background-color: rgba(18, 18, 18, 1);
+//   }
+// }
+
+.user-none {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}

@@ -1,0 +1,131 @@
+{
+    "page":  {
+                 "tooltips":  {
+                                  "lightweightMode":  "Modo ligero",
+                                  "manual":  "Manual de uso",
+                                  "settings":  "ConfiguraciГіn de la pГЎgina de inicio"
+                              },
+                 "cards":  {
+                               "trafficStats":  "EstadГ­sticas de trГЎfico",
+                               "networkSettings":  "ConfiguraciГіn de red",
+                               "proxyMode":  "Modo de proxy"
+                           },
+                 "settings":  {
+                                  "cards":  {
+                                                "profile":  "Tarjeta de suscripciГіn",
+                                                "currentProxy":  "Tarjeta de proxy actual",
+                                                "network":  "Tarjeta de configuraciГіn de red",
+                                                "proxyMode":  "Tarjeta de modo de proxy",
+                                                "traffic":  "Tarjeta de estadГ­sticas de trГЎfico",
+                                                "ip":  "Tarjeta de informaciГіn de IP",
+                                                "clashInfo":  "Tarjetas de informaciГіn de Clash",
+                                                "systemInfo":  "Tarjetas de informaciГіn del sistema"
+                                            },
+                                  "title":  "ConfiguraciГіn de la pГЎgina de inicio"
+                              },
+                 "title":  "Hogar"
+             },
+    "components":  {
+                       "proxyTun":  {
+                                        "status":  {
+                                                       "systemProxyEnabled":  "El proxy del sistema estГЎ habilitado. Sus aplicaciones accederГЎn a Internet a travГ©s del proxy.",
+                                                       "systemProxyDisabled":  "El proxy del sistema estГЎ deshabilitado. Se recomienda a la mayorГ­a de los usuarios habilitar esta opciГіn.",
+                                                       "tunModeServiceRequired":  "El modo TUN requiere el modo de servicio. Instale el servicio primero.",
+                                                       "tunModeEnabled":  "El modo TUN estГЎ habilitado. Las aplicaciones accederГЎn a Internet a travГ©s de la interfaz virtual.",
+                                                       "tunModeDisabled":  "El modo TUN estГЎ deshabilitado. Este modo es adecuado para aplicaciones especiales."
+                                                   },
+                                        "tooltips":  {
+                                                         "systemProxy":  "Modifica la configuraciГіn del proxy del sistema operativo. Si no se puede habilitar, puede modificar manualmente la configuraciГіn del proxy del sistema operativo.",
+                                                         "tunMode":  "El modo TUN puede gestionar todo el trГЎfico de las aplicaciones. Es adecuado para aplicaciones que no siguen la configuraciГіn del proxy del sistema."
+                                                     }
+                                    },
+                       "clashInfo":  {
+                                         "title":  "InformaciГіn de Clash",
+                                         "fields":  {
+                                                        "coreVersion":  "VersiГіn del nГєcleo",
+                                                        "systemProxyAddress":  "DirecciГіn del proxy del sistema",
+                                                        "mixedPort":  "Mixed Port",
+                                                        "uptime":  "Tiempo de actividad",
+                                                        "rulesCount":  "NГєmero de reglas"
+                                                    }
+                                     },
+                       "systemInfo":  {
+                                          "title":  "InformaciГіn del sistema",
+                                          "fields":  {
+                                                         "osInfo":  "InformaciГіn del sistema operativo",
+                                                         "autoLaunch":  "Inicio automГЎtico al arrancar el sistema",
+                                                         "runningMode":  "Modo de ejecuciГіn",
+                                                         "lastCheckUpdate":  "Гљltima comprobaciГіn de actualizaciones",
+                                                         "vergeVersion":  "VersiГіn de Verge"
+                                                     },
+                                          "actions":  {
+                                                          "settings":  "Ajustes"
+                                                      },
+                                          "badges":  {
+                                                         "adminMode":  "Modo de administrador",
+                                                         "serviceMode":  "Modo de servicio",
+                                                         "sidecarMode":  "Modo de usuario",
+                                                         "adminServiceMode":  "Admin + Service Mode"
+                                                     }
+                                      },
+                       "ipInfo":  {
+                                      "title":  "InformaciГіn de IP",
+                                      "labels":  {
+                                                     "ip":  "IP",
+                                                     "asn":  "NГєmero de sistema autГіnomo",
+                                                     "isp":  "Proveedor de servicios de Internet",
+                                                     "org":  "OrganizaciГіn",
+                                                     "location":  "UbicaciГіn",
+                                                     "timezone":  "Zona horaria",
+                                                     "autoRefresh":  "ActualizaciГіn automГЎtica",
+                                                     "unknown":  "Desconocido"
+                                                 },
+                                      "errors":  {
+                                                     "load":  "Error al obtener la informaciГіn de IP"
+                                                 }
+                                  },
+                       "currentProxy":  {
+                                            "title":  "Nodo actual",
+                                            "actions":  {
+                                                            "refreshDelay":  "Prueba de latencia"
+                                                        },
+                                            "labels":  {
+                                                           "globalMode":  "Global Mode",
+                                                           "directMode":  "Direct Mode",
+                                                           "group":  "Grupo de proxy",
+                                                           "proxy":  "Nodo",
+                                                           "noActiveNode":  "No hay nodos de proxy activos"
+                                                       }
+                                        },
+                       "traffic":  {
+                                       "metrics":  {
+                                                       "uploadSpeed":  "Velocidad de subida",
+                                                       "downloadSpeed":  "Velocidad de descarga",
+                                                       "activeConnections":  "Conexiones activas",
+                                                       "memoryUsage":  "Uso de memoria del nГєcleo"
+                                                   },
+                                       "legends":  {
+                                                       "upload":  "Subir",
+                                                       "download":  "Descargar"
+                                                   },
+                                       "patterns":  {
+                                                        "minutes":  "{{time}} Minutes"
+                                                    }
+                                   },
+                       "clashMode":  {
+                                         "errors":  {
+                                                        "communication":  "Core communication error"
+                                                    },
+                                         "labels":  {
+                                                        "rule":  "Modo de reglas",
+                                                        "global":  "Modo global",
+                                                        "direct":  "Modo de conexiГіn directa"
+                                                    },
+                                         "descriptions":  {
+                                                              "rule":  "Automatically choose proxies according to the rule set.",
+                                                              "global":  "Forward all network requests through the selected proxy.",
+                                                              "direct":  "Bypass the proxy and connect to the internet directly."
+                                                          }
+                                     }
+                   }
+}

@@ -1,0 +1,131 @@
+{
+    "page":  {
+                 "tooltips":  {
+                                  "lightweightMode":  "Т–РёТЈРµР» Р РµР¶РёРј",
+                                  "manual":  "Р”РѕРєСѓРјРµРЅС‚Р°С†РёСЏ",
+                                  "settings":  "Home Settings"
+                              },
+                 "cards":  {
+                               "trafficStats":  "Traffic Stats",
+                               "networkSettings":  "Network Settings",
+                               "proxyMode":  "Proxy Mode"
+                           },
+                 "settings":  {
+                                  "cards":  {
+                                                "profile":  "Profile Card",
+                                                "currentProxy":  "Current Proxy Card",
+                                                "network":  "Network Settings Card",
+                                                "proxyMode":  "Proxy Mode Card",
+                                                "traffic":  "Traffic Stats Card",
+                                                "ip":  "IP Information Card",
+                                                "clashInfo":  "Clash Info Cards",
+                                                "systemInfo":  "System Info Cards"
+                                            },
+                                  "title":  "Home Settings"
+                              },
+                 "title":  "Home"
+             },
+    "components":  {
+                       "proxyTun":  {
+                                        "status":  {
+                                                       "systemProxyEnabled":  "System proxy is enabled, your applications will access the network through the proxy",
+                                                       "systemProxyDisabled":  "System proxy is disabled, it is recommended for most users to turn on this option",
+                                                       "tunModeServiceRequired":  "TUN mode requires service mode, please install the service first",
+                                                       "tunModeEnabled":  "TUN mode is enabled, applications will access the network through the virtual network card",
+                                                       "tunModeDisabled":  "TUN mode is disabled, suitable for special applications"
+                                                   },
+                                        "tooltips":  {
+                                                         "systemProxy":  "РЎРёСЃС‚РµРјР°Р»С‹ РїСЂРѕРєСЃРё РєУ©Р№Р»У™ТЇР»У™СЂРµРЅ ТЇР·РіУ™СЂС‚ТЇ СЂУ©С…СЃУ™С‚РµРЅ Р±РёСЂРµРіРµР·. УРіУ™СЂ СЂУ©С…СЃУ™С‚ Р°Р»Сѓ РјУ©РјРєРёРЅ С‚ТЇРіРµР» РёРєУ™РЅ, РїСЂРѕРєСЃРё РєУ©Р№Р»У™ТЇР»У™СЂРµРЅ РєСѓР»РґР°РЅ ТЇР·РіУ™СЂС‚РµРіРµР·",
+                                                         "tunMode":  "TUN mode can take over all application traffic, suitable for special applications that do not follow the system proxy settings"
+                                                     }
+                                    },
+                       "clashInfo":  {
+                                         "title":  "Clash Info",
+                                         "fields":  {
+                                                        "coreVersion":  "Core Version",
+                                                        "systemProxyAddress":  "System Proxy Address",
+                                                        "mixedPort":  "Mixed Port",
+                                                        "uptime":  "Uptime",
+                                                        "rulesCount":  "Rules Count"
+                                                    }
+                                     },
+                       "systemInfo":  {
+                                          "title":  "System Info",
+                                          "fields":  {
+                                                         "osInfo":  "OS Info",
+                                                         "autoLaunch":  "РђРІС‚РѕСЃС‚Р°СЂС‚",
+                                                         "runningMode":  "Running Mode",
+                                                         "lastCheckUpdate":  "Last Check Update",
+                                                         "vergeVersion":  "Verge РІРµСЂСЃРёСЏСЃРµ"
+                                                     },
+                                          "actions":  {
+                                                          "settings":  "РљУ©Р№Р»У™ТЇР»У™СЂ"
+                                                      },
+                                          "badges":  {
+                                                         "adminMode":  "Administrator Mode",
+                                                         "serviceMode":  "РЎРµСЂРІРёСЃ СЂРµР¶РёРјС‹",
+                                                         "sidecarMode":  "User Mode",
+                                                         "adminServiceMode":  "Admin + Service Mode"
+                                                     }
+                                      },
+                       "ipInfo":  {
+                                      "title":  "IP Information",
+                                      "labels":  {
+                                                     "ip":  "IP",
+                                                     "asn":  "ASN",
+                                                     "isp":  "ISP",
+                                                     "org":  "ORG",
+                                                     "location":  "Location",
+                                                     "timezone":  "Timezone",
+                                                     "autoRefresh":  "Auto refresh",
+                                                     "unknown":  "Unknown"
+                                                 },
+                                      "errors":  {
+                                                     "load":  "IP РјУ™РіСЉР»ТЇРјР°С‚С‹РЅ Р°Р»Сѓ РјУ©РјРєРёРЅ Р±СѓР»РјР°РґС‹"
+                                                 }
+                                  },
+                       "currentProxy":  {
+                                            "title":  "Current Node",
+                                            "actions":  {
+                                                            "refreshDelay":  "Р—Р°РґРµСЂР¶РєР°РЅС‹ С‚РёРєС€РµСЂТЇ"
+                                                        },
+                                            "labels":  {
+                                                           "globalMode":  "Р“Р»РѕР±Р°Р»СЊ СЂРµР¶РёРј",
+                                                           "directMode":  "РўСѓСЂС‹ СЂРµР¶РёРј",
+                                                           "group":  "Group",
+                                                           "proxy":  "Proxy",
+                                                           "noActiveNode":  "No active proxy node"
+                                                       }
+                                        },
+                       "traffic":  {
+                                       "metrics":  {
+                                                       "uploadSpeed":  "Р™У©РєР»У™ТЇ (С‡С‹РіР°СЂСѓ) С‚РёР·Р»РµРіРµ",
+                                                       "downloadSpeed":  "Р™У©РєР»У™ТЇ С‚РёР·Р»РµРіРµ",
+                                                       "activeConnections":  "Active Connections",
+                                                       "memoryUsage":  "РҐУ™С‚РµСЂ РєСѓР»Р»Р°РЅСѓ"
+                                                   },
+                                       "legends":  {
+                                                       "upload":  "Upload",
+                                                       "download":  "Download"
+                                                   },
+                                       "patterns":  {
+                                                        "minutes":  "{{time}} Minutes"
+                                                    }
+                                   },
+                       "clashMode":  {
+                                         "errors":  {
+                                                        "communication":  "Core communication error"
+                                                    },
+                                         "labels":  {
+                                                        "rule":  "РљР°РіС‹Р№РґУ™Р»У™СЂ СЂРµР¶РёРјС‹",
+                                                        "global":  "Р“Р»РѕР±Р°Р»СЊ СЂРµР¶РёРј",
+                                                        "direct":  "РўСѓСЂС‹ СЂРµР¶РёРј"
+                                                    },
+                                         "descriptions":  {
+                                                              "rule":  "Automatically choose proxies according to the rule set.",
+                                                              "global":  "Forward all network requests through the selected proxy.",
+                                                              "direct":  "Bypass the proxy and connect to the internet directly."
+                                                          }
+                                     }
+                   }
+}
