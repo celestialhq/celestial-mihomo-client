@@ -44,16 +44,10 @@ async function resolveUpdater() {
   })
 
   const updateData = {
-    name: tag.name,
     version: tag.name,
     notes: await resolveUpdateLog(tag.name), // use Changelog.md
     pub_date: new Date().toISOString(),
-    platforms: {
-      'windows-x86_64': { signature: '', url: '' },
-      'windows-aarch64': { signature: '', url: '' },
-      'windows-x86': { signature: '', url: '' },
-      'windows-i686': { signature: '', url: '' },
-    },
+    platforms: {},
   }
 
   const promises = latestRelease.assets.map(async (asset) => {
@@ -61,48 +55,55 @@ async function resolveUpdater() {
 
     // win64 url
     if (name.endsWith('x64_fixed_webview2-setup.exe')) {
-      updateData.platforms['windows-x86_64'].url = browser_download_url
+      setPlatforms(updateData.platforms, ['windows-x86_64'], {
+        url: browser_download_url,
+      })
     }
     // win64 signature
     if (name.endsWith('x64_fixed_webview2-setup.exe.sig')) {
       const sig = await getSignature(browser_download_url)
-      updateData.platforms['windows-x86_64'].signature = sig
+      setPlatforms(updateData.platforms, ['windows-x86_64'], {
+        signature: sig,
+      })
     }
 
     // win32 url
     if (name.endsWith('x86_fixed_webview2-setup.exe')) {
-      updateData.platforms['windows-x86'].url = browser_download_url
-      updateData.platforms['windows-i686'].url = browser_download_url
+      setPlatforms(updateData.platforms, ['windows-x86', 'windows-i686'], {
+        url: browser_download_url,
+      })
     }
     // win32 signature
     if (name.endsWith('x86_fixed_webview2-setup.exe.sig')) {
       const sig = await getSignature(browser_download_url)
-      updateData.platforms['windows-x86'].signature = sig
-      updateData.platforms['windows-i686'].signature = sig
+      setPlatforms(updateData.platforms, ['windows-x86', 'windows-i686'], {
+        signature: sig,
+      })
     }
 
     // win arm url
     if (name.endsWith('arm64_fixed_webview2-setup.exe')) {
-      updateData.platforms['windows-aarch64'].url = browser_download_url
+      setPlatforms(updateData.platforms, ['windows-aarch64'], {
+        url: browser_download_url,
+      })
     }
     // win arm signature
     if (name.endsWith('arm64_fixed_webview2-setup.exe.sig')) {
       const sig = await getSignature(browser_download_url)
-      updateData.platforms['windows-aarch64'].signature = sig
+      setPlatforms(updateData.platforms, ['windows-aarch64'], {
+        signature: sig,
+      })
     }
   })
 
   await Promise.allSettled(promises)
-  console.log(updateData)
+  pruneIncompletePlatforms(updateData.platforms)
 
-  // maybe should test the signature as well
-  // delete the null field
-  Object.entries(updateData.platforms).forEach(([key, value]) => {
-    if (!value.url) {
-      console.log(`[Error]: failed to parse release for "${key}"`)
-      delete updateData.platforms[key]
-    }
-  })
+  if (Object.keys(updateData.platforms).length === 0) {
+    throw new Error(`No complete updater platforms found for ${tag.name}`)
+  }
+
+  console.log(updateData)
 
   // 生成一个代理github的更新文件
   // 使用 https://hub.fastgit.xyz/ 做github资源的加速
@@ -162,6 +163,21 @@ async function getSignature(url) {
   })
 
   return response.text()
+}
+
+function setPlatforms(platforms, keys, value) {
+  for (const key of keys) {
+    platforms[key] = { ...(platforms[key] ?? {}), ...value }
+  }
+}
+
+function pruneIncompletePlatforms(platforms) {
+  Object.entries(platforms).forEach(([key, value]) => {
+    if (!value.url || !value.signature) {
+      console.log(`[Warning]: skipped incomplete release data for "${key}"`)
+      delete platforms[key]
+    }
+  })
 }
 
 resolveUpdater().catch(console.error)

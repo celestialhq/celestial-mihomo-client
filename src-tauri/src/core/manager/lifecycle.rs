@@ -4,7 +4,7 @@ use crate::config::{Config, IVerge};
 use crate::core::handle::Handle;
 use crate::core::manager::CLASH_LOGGER;
 use crate::core::service::{SERVICE_MANAGER, ServiceStatus};
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use clash_verge_logging::{Type, logging};
 use scopeguard::defer;
 use smartstring::alias::String;
@@ -18,7 +18,21 @@ impl CoreManager {
         }
 
         match *self.get_running_mode() {
-            RunningMode::Service => self.start_core_by_service().await,
+            RunningMode::Service => {
+                if let Err(err) = self.start_core_by_service().await {
+                    logging!(
+                        warn,
+                        Type::Core,
+                        "failed to start core by service, falling back to sidecar: {err}"
+                    );
+                    self.set_running_mode(RunningMode::Sidecar);
+                    self.start_core_by_sidecar().await.map_err(|fallback_err| {
+                        anyhow!("failed to start core by service: {err}; sidecar fallback failed: {fallback_err}")
+                    })
+                } else {
+                    Ok(())
+                }
+            }
             RunningMode::NotRunning | RunningMode::Sidecar => self.start_core_by_sidecar().await,
         }
     }
