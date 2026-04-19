@@ -1,0 +1,452 @@
+name: Release Windows (private -> public)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'testv*.*.*'
+
+permissions:
+  contents: read
+  actions: read
+  attestations: write
+  id-token: write
+
+env:
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+  HUSKY: 0
+  RUST_TOOLCHAIN: '1.91.0'
+  NODE_VERSION: '24.15.0'
+  RELEASE_SOURCE_BRANCH: main
+  PUBLIC_RELEASE_REPO: pius-pp/celestial-mihomo-client-public
+
+concurrency:
+  group: '${{ github.workflow }}-${{ github.ref }}'
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Validate tag and prepare metadata
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.meta.outputs.tag_name }}
+      pkg_version: ${{ steps.meta.outputs.pkg_version }}
+      version: ${{ steps.meta.outputs.version }}
+      release_name: ${{ steps.meta.outputs.release_name }}
+      is_test: ${{ steps.meta.outputs.is_test }}
+      is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
+      public_download_url: ${{ steps.meta.outputs.public_download_url }}
+      asset_prefix: ${{ steps.meta.outputs.asset_prefix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag is from release branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_COMMIT="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          git fetch origin "$RELEASE_SOURCE_BRANCH" --depth=1
+          if git merge-base --is-ancestor "$TAG_COMMIT" "origin/$RELEASE_SOURCE_BRANCH"; then
+            echo "Tag $GITHUB_REF_NAME is reachable from $RELEASE_SOURCE_BRANCH"
+          else
+            echo "Tag $GITHUB_REF_NAME is not on $RELEASE_SOURCE_BRANCH"
+            exit 1
+          fi
+
+      - name: Validate tag format against package.json
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_REF="${GITHUB_REF_NAME}"
+          PKG_VERSION="$(jq -r .version package.json)"
+
+          if [[ "$TAG_REF" =~ ^testv[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            IS_TEST=true
+            EXPECTED_TAG="testv${PKG_VERSION}"
+            RELEASE_NAME="Celestial TEST ${TAG_REF}"
+            IS_PRERELEASE=true
+          elif [[ "$TAG_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            IS_TEST=false
+            EXPECTED_TAG="v${PKG_VERSION}"
+            RELEASE_NAME="Celestial ${TAG_REF}"
+            IS_PRERELEASE=false
+          else
+            echo "Unsupported tag format: $TAG_REF"
+            exit 1
+          fi
+
+          if [[ "$TAG_REF" != "$EXPECTED_TAG" ]]; then
+            echo "Version mismatch: git tag ($TAG_REF) does not match package.json ($EXPECTED_TAG)"
+            exit 1
+          fi
+
+          echo "tag_name=$TAG_REF" >> "$GITHUB_OUTPUT"
+          echo "pkg_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+          echo "is_test=$IS_TEST" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "public_download_url=https://github.com/${PUBLIC_RELEASE_REPO}/releases/download/${TAG_REF}" >> "$GITHUB_OUTPUT"
+          echo "asset_prefix=Celestial_${PKG_VERSION}" >> "$GITHUB_OUTPUT"
+
+  build-windows:
+    name: Build Windows x64
+    needs: [prepare]
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: x86_64-pc-windows-msvc
+
+      - name: Add Rust target
+        shell: bash
+        run: |
+          rustup target add x86_64-pc-windows-msvc --toolchain ${{ env.RUST_TOOLCHAIN }} || rustup target add x86_64-pc-windows-msvc
+          rustup target list --installed
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-rust
+          key: rust-shared-stable-windows-latest-x86_64-pc-windows-msvc
+          workspaces: |
+            . -> target
+          cache-all-crates: true
+          cache-workspace-crates: true
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies and prebuild
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run prebuild x86_64-pc-windows-msvc
+
+      - name: Tauri build
+        shell: bash
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        run: pnpm tauri build --target x86_64-pc-windows-msvc
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: target/x86_64-pc-windows-msvc/release/bundle/nsis/*setup*
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-x86_64-pc-windows-msvc
+          if-no-files-found: error
+          path: |
+            target/x86_64-pc-windows-msvc/release/bundle/**/*.exe
+            target/x86_64-pc-windows-msvc/release/bundle/**/*.msi
+            target/x86_64-pc-windows-msvc/release/bundle/**/*.zip
+            target/x86_64-pc-windows-msvc/release/bundle/**/*.sig
+
+  publish-public-release:
+    name: Publish Windows assets to public repository
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - build-windows
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./dist
+
+      - name: Flatten artifact tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ./release-assets
+          find ./dist -type f -exec cp {} ./release-assets/ \;
+          echo "Collected files:"
+          ls -lah ./release-assets
+
+      - name: Fetch update logs
+        shell: bash
+        run: bash ./scripts/extract_update_logs.sh || true
+
+      - name: Generate release body
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          DOWNLOAD_URL: ${{ needs.prepare.outputs.public_download_url }}
+          IS_TEST: ${{ needs.prepare.outputs.is_test }}
+        run: |
+          set -euo pipefail
+          BUILDTIME="$(date -u '+%Y-%m-%d %H:%M UTC')"
+
+          if [ -z "${UPDATE_LOGS:-}" ]; then
+            UPDATE_LOGS="No changelog entry found for this release."
+          fi
+
+          TEST_NOTE=""
+          if [ "$IS_TEST" = "true" ]; then
+            TEST_NOTE=$'\n> This is a TEST release published from the private repository pipeline.\n'
+          fi
+
+          cat > release.txt << EOF
+          ${TEST_NOTE}
+          ${UPDATE_LOGS}
+
+          ## Downloads
+
+          ### Windows
+          #### Standard installer (recommended)
+          - [x64 (most common)](${DOWNLOAD_URL}/Celestial_${VERSION}_x64-setup.exe)
+
+          ### Linux
+          #### DEB package (Debian / Ubuntu)
+          - [x64](${DOWNLOAD_URL}/Celestial_${VERSION}_amd64.deb)
+
+          #### RPM package (Fedora / RHEL)
+          - [x64](${DOWNLOAD_URL}/Celestial-${VERSION}-1.x86_64.rpm)
+
+          ---
+
+          Built at ${BUILDTIME}.
+          EOF
+
+      - name: Create or update release in public repo
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          PUBLIC_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
+          TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+          RELEASE_NAME: ${{ needs.prepare.outputs.release_name }}
+          IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
+        run: |
+          set -euo pipefail
+
+          PRERELEASE_FLAG=""
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          if gh release view "$TAG_NAME" --repo "$PUBLIC_REPO" >/dev/null 2>&1; then
+            gh release edit "$TAG_NAME" \
+              --repo "$PUBLIC_REPO" \
+              --title "$RELEASE_NAME" \
+              --notes-file release.txt
+          else
+            gh release create "$TAG_NAME" \
+              --repo "$PUBLIC_REPO" \
+              --title "$RELEASE_NAME" \
+              --notes-file release.txt \
+              $PRERELEASE_FLAG || gh release edit "$TAG_NAME" \
+                --repo "$PUBLIC_REPO" \
+                --title "$RELEASE_NAME" \
+                --notes-file release.txt
+          fi
+
+      - name: Upload assets to public release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          PUBLIC_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
+          TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(./release-assets/*)
+
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No release assets found"
+            exit 1
+          fi
+
+          gh release upload "$TAG_NAME" "${files[@]}" \
+            --repo "$PUBLIC_REPO" \
+            --clobber
+
+  release-update:
+    if: ${{ !startsWith(github.ref_name, 'testv') && !contains(github.ref_name, '-rc') }}
+    name: Publish updater manifest
+    runs-on: ubuntu-latest
+    needs: [publish-public-release]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish updater file
+        run: pnpm updater
+        env:
+          PUBLIC_RELEASE_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
+          PUBLIC_RELEASE_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+
+  # submit-to-winget:
+  #   if: ${{ !startsWith(github.ref_name, 'testv') && !contains(github.ref_name, '-rc') }}
+  #   name: Submit to Winget
+  #   runs-on: ubuntu-latest
+  #   needs: [prepare, publish-public-release, release-update]
+  #   continue-on-error: true
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
+  #
+  #     - name: Submit to Winget
+  #       uses: vedantmgoyal9/winget-releaser@main
+  #       env:
+  #         GITHUB_REPOSITORY: ${{ env.PUBLIC_RELEASE_REPO }}
+  #       with:
+  #         identifier: PiusPP.Celestial
+  #         version: ${{ needs.prepare.outputs.version }}
+  #         release-tag: ${{ needs.prepare.outputs.tag_name }}
+  #         release-notes-url: https://github.com/${{ env.PUBLIC_RELEASE_REPO }}/releases/tag/${{ needs.prepare.outputs.tag_name }}
+  #         installers-regex: '_x64-setup\.exe$'
+  #         token: ${{ secrets.WINGET_TOKEN }}
+
+  print-winget-manifest:
+    if: ${{ !startsWith(github.ref_name, 'testv') && !contains(github.ref_name, '-rc') }}
+    name: Print Winget manifest
+    runs-on: ubuntu-latest
+    needs: [prepare, publish-public-release, release-update]
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./dist
+
+      - name: Print Winget manifest
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          DOWNLOAD_URL: ${{ needs.prepare.outputs.public_download_url }}
+          RELEASE_NOTES_URL: https://github.com/${{ env.PUBLIC_RELEASE_REPO }}/releases/tag/${{ needs.prepare.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+
+          X64_INSTALLER="$(find ./dist -type f -name "Celestial_${VERSION}_x64-setup.exe" | head -n 1)"
+
+          if [ -z "$X64_INSTALLER" ]; then
+            echo "Expected Windows installer artifact was not found."
+            find ./dist -type f | sort
+            exit 1
+          fi
+
+          X64_SHA256="$(sha256sum "$X64_INSTALLER" | awk '{print toupper($1)}')"
+
+          echo "::group::Winget manifest"
+          cat << EOF
+          # PiusPP.Celestial.yaml
+          PackageIdentifier: PiusPP.Celestial
+          PackageVersion: ${VERSION}
+          DefaultLocale: en-US
+          ManifestType: version
+          ManifestVersion: 1.10.0
+          ---
+          # PiusPP.Celestial.locale.en-US.yaml
+          PackageIdentifier: PiusPP.Celestial
+          PackageVersion: ${VERSION}
+          PackageLocale: en-US
+          Publisher: Celestial
+          PackageName: Celestial
+          License: GPL-3.0-only
+          ShortDescription: Celestial
+          Description: Celestial Mihomo Client
+          PackageUrl: https://github.com/pius-pp/celestial-mihomo-client-public
+          ReleaseNotesUrl: ${RELEASE_NOTES_URL}
+          ManifestType: defaultLocale
+          ManifestVersion: 1.10.0
+          ---
+          # PiusPP.Celestial.installer.yaml
+          PackageIdentifier: PiusPP.Celestial
+          PackageVersion: ${VERSION}
+          InstallerLocale: en-US
+          InstallerType: nullsoft
+          Scope: user
+          UpgradeBehavior: install
+          Protocols:
+            - celestial
+            - clash
+          Installers:
+            - Architecture: x64
+              InstallerUrl: ${DOWNLOAD_URL}/Celestial_${VERSION}_x64-setup.exe
+              InstallerSha256: ${X64_SHA256}
+          ManifestType: installer
+          ManifestVersion: 1.10.0
+          EOF
+          echo "::endgroup::"
+
+  notify-telegram:
+    if: ${{ !startsWith(github.ref_name, 'testv') && !contains(github.ref_name, '-rc') }}
+    name: Notify Telegram
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - publish-public-release
+      - release-update
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch update logs
+        shell: bash
+        run: bash ./scripts/extract_update_logs.sh || true
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Send Telegram notification
+        run: node scripts/telegram.mjs
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_RELEASE_CHAT_ID: '@celestial_releases'
+          BUILD_TYPE: release
+          VERSION: ${{ needs.prepare.outputs.version }}
+          DOWNLOAD_URL: ${{ needs.prepare.outputs.public_download_url }}
+          PUBLIC_RELEASE_REPO: ${{ env.PUBLIC_RELEASE_REPO }}

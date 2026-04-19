@@ -1,0 +1,214 @@
+name: Release Apple (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag to build
+        required: true
+        default: v1.0.0
+
+permissions:
+  contents: read
+  actions: read
+  attestations: write
+  id-token: write
+
+env:
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+  HUSKY: 0
+  RUST_TOOLCHAIN: '1.91.0'
+  NODE_VERSION: '24.15.0'
+  PUBLIC_RELEASE_REPO: pius-pp/celestial-mihomo-client-public
+
+concurrency:
+  group: '${{ github.workflow }}-${{ github.event.inputs.tag_name }}'
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Validate tag and prepare metadata
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.meta.outputs.tag_name }}
+      pkg_version: ${{ steps.meta.outputs.pkg_version }}
+      version: ${{ steps.meta.outputs.version }}
+      release_name: ${{ steps.meta.outputs.release_name }}
+      public_download_url: ${{ steps.meta.outputs.public_download_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name }}
+          fetch-depth: 0
+
+      - name: Validate tag format against package.json
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_REF="${{ inputs.tag_name }}"
+          PKG_VERSION="$(jq -r .version package.json)"
+
+          if [[ "$TAG_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            EXPECTED_TAG="v${PKG_VERSION}"
+            RELEASE_NAME="Celestial ${TAG_REF}"
+          else
+            echo "Unsupported tag format for manual Apple release: $TAG_REF"
+            exit 1
+          fi
+
+          if [[ "$TAG_REF" != "$EXPECTED_TAG" ]]; then
+            echo "Version mismatch: git tag ($TAG_REF) does not match package.json ($EXPECTED_TAG)"
+            exit 1
+          fi
+
+          echo "tag_name=$TAG_REF" >> "$GITHUB_OUTPUT"
+          echo "pkg_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+          echo "public_download_url=https://github.com/${PUBLIC_RELEASE_REPO}/releases/download/${TAG_REF}" >> "$GITHUB_OUTPUT"
+
+  build-apple:
+    name: Build Apple - ${{ matrix.target }}
+    needs: [prepare]
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+          - target: x86_64-apple-darwin
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag_name }}
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - name: Add Rust target
+        shell: bash
+        run: |
+          rustup target add ${{ matrix.target }} --toolchain ${{ env.RUST_TOOLCHAIN }} || rustup target add ${{ matrix.target }}
+          rustup target list --installed
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-rust
+          key: rust-shared-stable-macos-latest-${{ matrix.target }}
+          workspaces: |
+            . -> target
+          cache-all-crates: true
+          cache-workspace-crates: true
+
+      - name: Install x86 OpenSSL
+        if: matrix.target == 'x86_64-apple-darwin'
+        shell: bash
+        run: |
+          arch -x86_64 brew install openssl@3
+          echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+          echo "OPENSSL_INCLUDE_DIR=$(brew --prefix openssl@3)/include" >> "$GITHUB_ENV"
+          echo "OPENSSL_LIB_DIR=$(brew --prefix openssl@3)/lib" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies and prebuild
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run prebuild ${{ matrix.target }}
+
+      - name: Tauri build
+        shell: bash
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm tauri build --target ${{ matrix.target }}
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          if-no-files-found: error
+          path: |
+            target/${{ matrix.target }}/release/bundle/**/*.dmg
+            target/${{ matrix.target }}/release/bundle/**/*.app.tar.gz
+            target/${{ matrix.target }}/release/bundle/**/*.sig
+
+  publish-public-release:
+    name: Publish Apple assets to public repository
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - build-apple
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./dist
+
+      - name: Flatten artifact tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ./release-assets
+          find ./dist -type f -exec cp {} ./release-assets/ \;
+          echo "Collected files:"
+          ls -lah ./release-assets
+
+      - name: Upload assets to public release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          PUBLIC_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
+          TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+          RELEASE_NAME: ${{ needs.prepare.outputs.release_name }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(./release-assets/*)
+
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No release assets found"
+            exit 1
+          fi
+
+          if ! gh release view "$TAG_NAME" --repo "$PUBLIC_REPO" >/dev/null 2>&1; then
+            gh release create "$TAG_NAME" \
+              --repo "$PUBLIC_REPO" \
+              --title "$RELEASE_NAME" \
+              --notes "Manual Apple release assets."
+          fi
+
+          gh release upload "$TAG_NAME" "${files[@]}" \
+            --repo "$PUBLIC_REPO" \
+            --clobber
