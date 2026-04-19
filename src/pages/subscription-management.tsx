@@ -1,6 +1,5 @@
 import {
   CalendarMonthRounded,
-  ContentCopyRounded,
   DeleteSweepRounded,
   DevicesRounded,
   EventAvailableRounded,
@@ -13,9 +12,9 @@ import { LoadingButton } from '@mui/lab'
 import {
   Alert,
   Box,
-  Button,
   Chip,
   type ChipProps,
+  CircularProgress,
   Divider,
   Grid,
   IconButton,
@@ -25,7 +24,6 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import type { ReactNode } from 'react'
@@ -51,15 +49,19 @@ const SubscriptionManagementPage = () => {
     [current],
   )
 
-  const { data, isFetching, error, refetch } = useQuery({
+  const { data, isFetching, isPending, refetch } = useQuery({
     queryKey: ['subscriptionManagement', eligibility?.shortUuid],
     queryFn: () => getSubscriptionManagement(eligibility!),
     enabled: Boolean(eligibility),
     refetchOnWindowFocus: false,
+    retry: true,
+    retryDelay: 3000,
+    refetchInterval: (query) => (query.state.data ? false : 5000),
   })
 
   const deleteDevice = useMutation({
-    mutationFn: (hwid: string) => deleteSubscriptionDevice(eligibility!, hwid),
+    mutationFn: (deviceId: string) =>
+      deleteSubscriptionDevice(eligibility!, deviceId),
     onSuccess: async () => {
       showNotice.success('Устройство удалено')
       await refetch()
@@ -93,21 +95,46 @@ const SubscriptionManagementPage = () => {
     )
   }
 
-  const user = data?.user
-  const devices = data?.devices.items ?? []
-  const deviceLimit = user?.hwidDeviceLimit ?? null
-  const trafficUsed = toNumber(user?.trafficUsedBytes)
-  const trafficLimit = toNumber(user?.trafficLimitBytes)
+  if (isPending || !data) {
+    return (
+      <BasePage
+        full
+        title="Управление подпиской"
+        contentStyle={{ height: '100%' }}
+      >
+        <Box
+          sx={{
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            p: 2,
+          }}
+        >
+          <Stack spacing={1.5} sx={{ alignItems: 'center', maxWidth: 360 }}>
+            <CircularProgress size={32} />
+            <Typography sx={{ fontWeight: 800 }}>Данные загружаются</Typography>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ textAlign: 'center' }}
+            >
+              Проверяем доступность API управления подпиской. Страница откроется
+              автоматически, когда сервис ответит.
+            </Typography>
+          </Stack>
+        </Box>
+      </BasePage>
+    )
+  }
+
+  const user = data.user
+  const devices = data.devices.items
+  const deviceLimit = user.hwidDeviceLimit ?? null
+  const trafficUsed = toNumber(user.trafficUsedBytes)
+  const trafficLimit = toNumber(user.trafficLimitBytes)
   const trafficProgress =
     trafficLimit > 0 ? Math.min((trafficUsed / trafficLimit) * 100, 100) : 0
-
-  const handleCopySubscriptionUrl = async () => {
-    const subscriptionUrl = data?.subscription.subscriptionUrl
-    if (!subscriptionUrl) return
-
-    await writeText(subscriptionUrl)
-    showNotice.success('Ссылка подписки скопирована')
-  }
 
   return (
     <BasePage
@@ -130,12 +157,6 @@ const SubscriptionManagementPage = () => {
       }
     >
       <Box sx={{ p: 1.25, pb: 2 }}>
-        {error && (
-          <Alert severity="error" sx={{ mb: 1.25 }}>
-            {String(error)}
-          </Alert>
-        )}
-
         <Grid container spacing={1.25}>
           <Grid size={{ xs: 12, md: 8 }}>
             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
@@ -152,13 +173,13 @@ const SubscriptionManagementPage = () => {
                     Подписка
                   </Typography>
                   <Typography variant="h5" sx={{ fontWeight: 800 }} noWrap>
-                    {user?.username ?? current?.name ?? 'Celestial'}
+                    {user.username ?? current?.name ?? 'Celestial'}
                   </Typography>
                 </Box>
                 <Chip
                   size="small"
-                  color={getStatusColor(user?.status)}
-                  label={translateStatus(user?.status)}
+                  color={getStatusColor(user.status)}
+                  label={translateStatus(user.status)}
                 />
               </Stack>
 
@@ -166,12 +187,12 @@ const SubscriptionManagementPage = () => {
                 <Metric
                   icon={<EventAvailableRounded />}
                   label="Осталось"
-                  value={formatDaysLeft(user?.daysLeft)}
+                  value={formatDaysLeft(user.daysLeft)}
                 />
                 <Metric
                   icon={<CalendarMonthRounded />}
                   label="Действует до"
-                  value={formatDate(user?.expireAt ?? user?.expiresAt)}
+                  value={formatDate(user.expireAt ?? user.expiresAt)}
                 />
                 <Metric
                   icon={<SpeedRounded />}
@@ -215,26 +236,15 @@ const SubscriptionManagementPage = () => {
                 <Typography sx={{ fontWeight: 800 }}>Информация</Typography>
               </Stack>
               <Divider sx={{ my: 1 }} />
-              <InfoRow label="Short UUID" value={eligibility.shortUuid} />
+              <InfoRow label="Short UUID" value={maskSecret(user.shortUuid)} />
               <InfoRow
                 label="Стратегия лимита"
-                value={user?.trafficLimitStrategy ?? '-'}
+                value={user.trafficLimitStrategy ?? '-'}
               />
               <InfoRow
                 label="Всего использовано"
-                value={formatBytes(toNumber(user?.lifetimeTrafficUsedBytes))}
+                value={formatBytes(toNumber(user.lifetimeTrafficUsedBytes))}
               />
-              <Button
-                fullWidth
-                size="small"
-                variant="outlined"
-                startIcon={<ContentCopyRounded />}
-                disabled={!data?.subscription.subscriptionUrl}
-                onClick={handleCopySubscriptionUrl}
-                sx={{ mt: 1 }}
-              >
-                Скопировать ссылку
-              </Button>
             </Paper>
           </Grid>
 
@@ -258,7 +268,7 @@ const SubscriptionManagementPage = () => {
                   <Box>
                     <Typography sx={{ fontWeight: 800 }}>Устройства</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Управление привязанными HWID
+                      Управление привязанными устройствами
                     </Typography>
                   </Box>
                 </Stack>
@@ -281,10 +291,10 @@ const SubscriptionManagementPage = () => {
                 )}
                 {devices.map((device) => (
                   <DeviceCard
-                    key={device.hwid}
+                    key={device.id}
                     device={device}
                     deleting={deleteDevice.isPending}
-                    onDelete={() => deleteDevice.mutate(device.hwid)}
+                    onDelete={() => deleteDevice.mutate(device.id)}
                   />
                 ))}
               </Stack>
@@ -368,7 +378,7 @@ const DeviceCard = ({ device, deleting, onDelete }: DeviceCardProps) => {
           <Typography
             sx={{ fontWeight: 800 }}
             noWrap
-            title={title || device.hwid}
+            title={title || device.hwidMasked}
           >
             {title || 'Неизвестное устройство'}
           </Typography>
@@ -376,9 +386,9 @@ const DeviceCard = ({ device, deleting, onDelete }: DeviceCardProps) => {
             variant="body2"
             color="text.secondary"
             noWrap
-            title={device.hwid}
+            title={device.hwidMasked}
           >
-            {device.hwid}
+            {device.hwidMasked}
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Последняя активность: {formatDateTime(device.updatedAt)}
@@ -452,6 +462,11 @@ const formatBytes = (value: number) => {
   }
 
   return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
+}
+
+const maskSecret = (value: string) => {
+  if (value.length <= 8) return '••••'
+  return `${value.slice(0, 3)}••••${value.slice(-3)}`
 }
 
 export default SubscriptionManagementPage

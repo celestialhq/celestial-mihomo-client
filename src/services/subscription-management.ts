@@ -34,8 +34,8 @@ export interface CelestialSubscriptionUser {
 }
 
 export interface CelestialSubscriptionDevice {
-  hwid: string
-  userUuid: string
+  id: string
+  hwidMasked: string
   platform: string | null
   osVersion: string | null
   deviceModel: string | null
@@ -48,9 +48,6 @@ export interface CelestialSubscriptionManagement {
   user: CelestialSubscriptionUser
   subscription: {
     isFound: boolean
-    subscriptionUrl: string
-    links: string[]
-    ssConfLinks: Record<string, string>
   }
   devices: {
     total: number
@@ -100,14 +97,14 @@ export const getSubscriptionManagement = async ({
 
 export const deleteSubscriptionDevice = async (
   { origin, shortUuid }: SubscriptionManagementEligibility,
-  hwid: string,
+  deviceId: string,
 ) => {
   return requestSubscriptionManagement<{ isDeleted: boolean }>(
     origin,
     `/${encodeURIComponent(shortUuid)}/devices/delete`,
     {
       method: 'POST',
-      body: JSON.stringify({ hwid }),
+      body: JSON.stringify({ deviceId }),
     },
   )
 }
