@@ -9,7 +9,6 @@ on:
 permissions:
   contents: read
   actions: read
-  attestations: write
   id-token: write
 
 env:
@@ -149,10 +148,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         run: pnpm tauri build --target x86_64-pc-windows-msvc
 
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@v4
-        with:
-          subject-path: target/x86_64-pc-windows-msvc/release/bundle/nsis/*setup*
+      # Attestations are not available for user-owned private repositories.
+      # - name: Attest build provenance
+      #   uses: actions/attest-build-provenance@v4
+      #   with:
+      #     subject-path: target/x86_64-pc-windows-msvc/release/bundle/nsis/*setup*
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
