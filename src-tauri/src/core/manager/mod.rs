@@ -4,7 +4,7 @@ mod state;
 
 use anyhow::Result;
 use arc_swap::{ArcSwap, ArcSwapOption};
-use clash_verge_logger::AsyncLogger;
+use celestial_logger::AsyncLogger;
 use once_cell::sync::Lazy;
 use std::{fmt, sync::Arc, time::Instant};
 use tauri_plugin_shell::process::CommandChild;

@@ -1094,14 +1094,14 @@ dependencies = [
  "bitflags 2.11.0",
  "boa_engine",
  "bytes",
+ "celestial_logger",
+ "celestial_service_ipc",
  "chrono",
  "clash-verge-draft",
  "clash-verge-i18n",
  "clash-verge-limiter",
  "clash-verge-logging",
  "clash-verge-signal",
- "clash_verge_logger",
- "clash_verge_service_ipc",
  "compact_str",
  "console-subscriber",
  "criterion",
@@ -1160,6 +1160,36 @@ dependencies = [
  "windows 0.62.2",
  "winreg 0.56.0",
  "zip 8.5.1",
+]
+
+[[package]]
+name = "celestial_logger"
+version = "0.2.2"
+source = "git+https://github.com/pius-pp/celestial-logger#3ad358b9df956cc5282f765a835ed6cdfdf3575d"
+dependencies = [
+ "arraydeque",
+ "compact_str",
+ "flexi_logger",
+ "log",
+ "nu-ansi-term",
+ "tokio",
+]
+
+[[package]]
+name = "celestial_service_ipc"
+version = "1.0.0"
+source = "git+https://github.com/pius-pp/celestial-service-ipc#4f910f078728868b3edbae4329af2994be80ed2e"
+dependencies = [
+ "anyhow",
+ "compact_str",
+ "kode-bridge",
+ "log",
+ "once_cell",
+ "serde",
+ "serde_json",
+ "strum",
+ "strum_macros",
+ "tokio",
 ]
 
 [[package]]
@@ -1315,36 +1345,6 @@ version = "0.1.0"
 dependencies = [
  "clash-verge-logging",
  "log",
- "tokio",
-]
-
-[[package]]
-name = "clash_verge_logger"
-version = "0.2.2"
-source = "git+https://github.com/clash-verge-rev/clash-verge-logger#e4768e3852c4868ed86e7210df82c1178467820d"
-dependencies = [
- "arraydeque",
- "compact_str",
- "flexi_logger",
- "log",
- "nu-ansi-term",
- "tokio",
-]
-
-[[package]]
-name = "clash_verge_service_ipc"
-version = "2.2.0"
-source = "git+https://github.com/clash-verge-rev/clash-verge-service-ipc#62e0fe76279350303373e13cbdb6af32a04abe0f"
-dependencies = [
- "anyhow",
- "compact_str",
- "kode-bridge",
- "log",
- "once_cell",
- "serde",
- "serde_json",
- "strum",
- "strum_macros",
  "tokio",
 ]
 
@@ -7901,7 +7901,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-mihomo"
 version = "0.1.5"
-source = "git+https://github.com/clash-verge-rev/tauri-plugin-mihomo?branch=revert#1cc80bc0fbe1245315617f4cecd93710a152325b"
+source = "git+https://github.com/pius-pp/tauri-plugin-mihomo?branch=revert#1cc80bc0fbe1245315617f4cecd93710a152325b"
 dependencies = [
  "base64 0.22.1",
  "bytes",

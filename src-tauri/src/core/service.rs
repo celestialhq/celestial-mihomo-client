@@ -6,7 +6,7 @@ use crate::{
 use anyhow::{Context as _, Result, anyhow, bail};
 use backon::{ConstantBuilder, Retryable as _};
 use clash_verge_logging::{Type, logging, logging_error};
-use clash_verge_service_ipc::CoreConfig;
+use celestial_service_ipc::CoreConfig;
 use compact_str::CompactString;
 use once_cell::sync::Lazy;
 use std::{
@@ -41,7 +41,7 @@ fn uninstall_service() -> Result<()> {
     use std::os::windows::process::CommandExt as _;
 
     let binary_path = dirs::service_path()?;
-    let uninstall_path = binary_path.with_file_name("clash-verge-service-uninstall.exe");
+    let uninstall_path = binary_path.with_file_name("celestial-service-uninstall.exe");
 
     if !uninstall_path.exists() {
         bail!(format!("uninstaller not found: {uninstall_path:?}"));
@@ -74,7 +74,7 @@ fn install_service() -> Result<()> {
     use std::os::windows::process::CommandExt as _;
 
     let binary_path = dirs::service_path()?;
-    let install_path = binary_path.with_file_name("clash-verge-service-install.exe");
+    let install_path = binary_path.with_file_name("celestial-service-install.exe");
 
     if !install_path.exists() {
         bail!(format!("installer not found: {install_path:?}"));
@@ -115,7 +115,7 @@ fn install_service() -> Result<()> {
 fn uninstall_service() -> Result<()> {
     logging!(info, Type::Service, "uninstall service");
 
-    let uninstall_path = tauri::utils::platform::current_exe()?.with_file_name("clash-verge-service-uninstall");
+    let uninstall_path = tauri::utils::platform::current_exe()?.with_file_name("celestial-service-uninstall");
 
     if !uninstall_path.exists() {
         bail!(format!("uninstaller not found: {uninstall_path:?}"));
@@ -171,7 +171,7 @@ fn uninstall_service() -> Result<()> {
 fn install_service() -> Result<()> {
     logging!(info, Type::Service, "install service");
 
-    let install_path = tauri::utils::platform::current_exe()?.with_file_name("clash-verge-service-install");
+    let install_path = tauri::utils::platform::current_exe()?.with_file_name("celestial-service-install");
 
     if !install_path.exists() {
         bail!(format!("installer not found: {install_path:?}"));
@@ -234,7 +234,7 @@ fn uninstall_service() -> Result<()> {
     logging!(info, Type::Service, "uninstall service");
 
     let binary_path = dirs::service_path()?;
-    let uninstall_path = binary_path.with_file_name("clash-verge-service-uninstall");
+    let uninstall_path = binary_path.with_file_name("celestial-service-uninstall");
 
     if !uninstall_path.exists() {
         bail!(format!("uninstaller not found: {uninstall_path:?}"));
@@ -267,7 +267,7 @@ fn install_service() -> Result<()> {
     logging!(info, Type::Service, "install service");
 
     let binary_path = dirs::service_path()?;
-    let install_path = binary_path.with_file_name("clash-verge-service-install");
+    let install_path = binary_path.with_file_name("celestial-service-install");
 
     if !install_path.exists() {
         bail!(format!("installer not found: {install_path:?}"));
@@ -351,7 +351,7 @@ pub(super) async fn start_with_existing_service(config_file: &PathBuf) -> Result
     let bin_ext = if cfg!(windows) { ".exe" } else { "" };
     let bin_path = current_exe()?.with_file_name(format!("{clash_core}{bin_ext}"));
 
-    let payload = clash_verge_service_ipc::ClashConfig {
+    let payload = celestial_service_ipc::ClashConfig {
         core_config: CoreConfig {
             config_path: dirs::path_to_str(config_file)?.into(),
             core_path: dirs::path_to_str(&bin_path)?.into(),
@@ -361,7 +361,7 @@ pub(super) async fn start_with_existing_service(config_file: &PathBuf) -> Result
         log_config: Logger::global().service_writer_config()?,
     };
 
-    let response = clash_verge_service_ipc::start_clash(&payload)
+    let response = celestial_service_ipc::start_clash(&payload)
         .await
         .context("无法连接到Celestial Service")?;
 
@@ -388,7 +388,7 @@ pub(super) async fn run_core_by_service(config_file: &PathBuf) -> Result<()> {
 pub(super) async fn get_clash_logs_by_service() -> Result<Vec<CompactString>> {
     logging!(info, Type::Service, "正在获取服务模式下的 Clash 日志");
 
-    let response = clash_verge_service_ipc::get_clash_logs()
+    let response = celestial_service_ipc::get_clash_logs()
         .await
         .context("无法连接到Celestial Service")?;
 
@@ -406,7 +406,7 @@ pub(super) async fn get_clash_logs_by_service() -> Result<Vec<CompactString>> {
 pub(super) async fn stop_core_by_service() -> Result<()> {
     logging!(info, Type::Service, "通过服务停止核心 (IPC)");
 
-    let response = clash_verge_service_ipc::stop_clash()
+    let response = celestial_service_ipc::stop_clash()
         .await
         .context("无法连接到Celestial Service")?;
 
@@ -422,7 +422,7 @@ pub(super) async fn stop_core_by_service() -> Result<()> {
 
 /// 检查服务是否正在运行
 pub async fn is_service_available() -> Result<()> {
-    if let Err(e) = Path::metadata(clash_verge_service_ipc::IPC_PATH.as_ref()) {
+    if let Err(e) = Path::metadata(celestial_service_ipc::IPC_PATH.as_ref()) {
         let verge = Config::verge().await;
         let verge_last = verge.latest_arc();
         let is_enable = verge_last.enable_tun_mode.unwrap_or(false);
@@ -431,7 +431,7 @@ pub async fn is_service_available() -> Result<()> {
         }
         return Err(e.into());
     }
-    clash_verge_service_ipc::connect().await?;
+    celestial_service_ipc::connect().await?;
     Ok(())
 }
 
@@ -448,8 +448,8 @@ async fn wait_for_service_ipc(status: &mut ServiceManager, reason: &str) -> Resu
         .with_max_times(config.max_retries);
 
     let result = (|| async {
-        if Path::new(clash_verge_service_ipc::IPC_PATH).exists() {
-            clash_verge_service_ipc::connect().await?;
+        if Path::new(celestial_service_ipc::IPC_PATH).exists() {
+            celestial_service_ipc::connect().await?;
             Ok(())
         } else {
             Err(anyhow!("IPC path not ready"))
@@ -466,7 +466,7 @@ async fn wait_for_service_ipc(status: &mut ServiceManager, reason: &str) -> Resu
 }
 
 pub fn is_service_ipc_path_exists() -> bool {
-    Path::new(clash_verge_service_ipc::IPC_PATH).exists()
+    Path::new(celestial_service_ipc::IPC_PATH).exists()
 }
 
 impl ServiceManager {
@@ -474,8 +474,8 @@ impl ServiceManager {
         Self(ServiceStatus::Unavailable("Need Checks".into()))
     }
 
-    pub const fn config() -> clash_verge_service_ipc::IpcConfig {
-        clash_verge_service_ipc::IpcConfig {
+    pub const fn config() -> celestial_service_ipc::IpcConfig {
+        celestial_service_ipc::IpcConfig {
             default_timeout: Duration::from_millis(150),
             retry_delay: Duration::from_millis(250),
             max_retries: 20,
@@ -483,7 +483,7 @@ impl ServiceManager {
     }
 
     pub async fn init(&mut self) -> Result<()> {
-        if let Err(e) = clash_verge_service_ipc::connect().await {
+        if let Err(e) = celestial_service_ipc::connect().await {
             self.0 = ServiceStatus::Unavailable("服务连接失败: {e}".to_string());
             return Err(e);
         }
@@ -503,7 +503,7 @@ impl ServiceManager {
 
     /// 综合服务状态检查（一次性完成所有检查）
     pub async fn check_service_comprehensive(&self) -> ServiceStatus {
-        if clash_verge_service_ipc::is_reinstall_service_needed().await {
+        if celestial_service_ipc::is_reinstall_service_needed().await {
             ServiceStatus::NeedsReinstall
         } else {
             ServiceStatus::Ready

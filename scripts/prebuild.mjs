@@ -541,9 +541,9 @@ const resolvePlugin = async () => {
 // service chmod (保留并使用 glob)
 const resolveServicePermission = async () => {
   const serviceExecutables = [
-    'clash-verge-service*',
-    'clash-verge-service-install*',
-    'clash-verge-service-uninstall*',
+    'celestial-service*',
+    'celestial-service-install*',
+    'celestial-service-uninstall*',
   ]
   const hashCache = await loadHashCache()
   let hasChanges = false
@@ -577,32 +577,32 @@ const resolveServicePermission = async () => {
 // =======================
 // Other resource resolvers (service, mmdb, geosite, geoip, enableLoopback)
 // =======================
-const SERVICE_URL = `https://github.com/clash-verge-rev/clash-verge-service-ipc/releases/download/${SIDECAR_HOST}`
+const SERVICE_URL = `https://github.com/pius-pp/celestial-service-ipc/releases/download/${SIDECAR_HOST}`
 const resolveService = () => {
   const ext = platform === 'win32' ? '.exe' : ''
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
   return resolveResource({
-    file: 'clash-verge-service' + suffix + ext,
+    file: 'celestial-service' + suffix + ext,
     dir: SERVICE_DIR,
-    downloadURL: `${SERVICE_URL}/clash-verge-service${ext}`,
+    downloadURL: `${SERVICE_URL}/celestial-service${ext}`,
   })
 }
 const resolveInstall = () => {
   const ext = platform === 'win32' ? '.exe' : ''
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
   return resolveResource({
-    file: 'clash-verge-service-install' + suffix + ext,
+    file: 'celestial-service-install' + suffix + ext,
     dir: SERVICE_DIR,
-    downloadURL: `${SERVICE_URL}/clash-verge-service-install${ext}`,
+    downloadURL: `${SERVICE_URL}/celestial-service-install${ext}`,
   })
 }
 const resolveUninstall = () => {
   const ext = platform === 'win32' ? '.exe' : ''
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
   return resolveResource({
-    file: 'clash-verge-service-uninstall' + suffix + ext,
+    file: 'celestial-service-uninstall' + suffix + ext,
     dir: SERVICE_DIR,
-    downloadURL: `${SERVICE_URL}/clash-verge-service-uninstall${ext}`,
+    downloadURL: `${SERVICE_URL}/celestial-service-uninstall${ext}`,
   })
 }
 

@@ -24,9 +24,9 @@
       }
     },
     "externalBin": [
-      "./sidecar/clash-verge-service",
-      "./sidecar/clash-verge-service-install",
-      "./sidecar/clash-verge-service-uninstall",
+      "./sidecar/celestial-service",
+      "./sidecar/celestial-service-install",
+      "./sidecar/celestial-service-uninstall",
       "./sidecar/celestial-mihomo",
       "./sidecar/celestial-mihomo-alpha"
     ]

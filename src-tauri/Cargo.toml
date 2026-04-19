@@ -17,7 +17,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
-celestial-dev = ["clash_verge_logger/color"]
+celestial-dev = ["celestial_logger/color"]
 tauri-dev = []
 tokio-trace = ["console-subscriber"]
 clippy = ["tauri/test"]
@@ -95,12 +95,12 @@ backon = { version = "1.6.0", features = ["tokio-sleep"] }
 tauri-plugin-http = "2.5.7"
 console-subscriber = { version = "0.5.0", optional = true }
 tauri-plugin-devtools = { version = "2.0.1" }
-tauri-plugin-mihomo = { git = "https://github.com/clash-verge-rev/tauri-plugin-mihomo", branch = "revert" }
-clash_verge_logger = { git = "https://github.com/clash-verge-rev/clash-verge-logger" }
+tauri-plugin-mihomo = { git = "https://github.com/pius-pp/tauri-plugin-mihomo", branch = "revert" }
+celestial_logger = { git = "https://github.com/pius-pp/celestial-logger" }
 async-trait = "0.1.89"
-clash_verge_service_ipc = { version = "2.2.0", features = [
+celestial_service_ipc = { features = [
   "client",
-], git = "https://github.com/clash-verge-rev/clash-verge-service-ipc" }
+], git = "https://github.com/pius-pp/celestial-service-ipc" }
 arc-swap = "1.9.0"
 tokio-rustls = "0.26"
 rustls = { version = "0.23", features = ["ring"] }
