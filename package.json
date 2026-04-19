@@ -1,6 +1,6 @@
 {
   "name": "celestial-mihomo-client",
-  "version": "2.4.8",
+  "version": "1.0.0",
   "license": "GPL-3.0-only",
   "scripts": {
     "prepare": "husky || true",
