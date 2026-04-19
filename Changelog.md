@@ -1,22 +1,23 @@
-## v2.4.8
+## v1.0.0
 
-> [!IMPORTANT]
-> 关于版本的说明：Clash Verge 版本号遵循 x.y.z：x 为重大架构变更，y 为功能新增，z 为 Bug 修复。
+> **Initial Celestial release.** This is the first public build under the Celestial name, forked from [clash-verge-rev](https://github.com/clash-verge-rev/clash-verge-rev) and adapted for the Celestial client experience.
 
-- **Mihomo(Meta) 内核升级至 v1.19.23**
+- **Mihomo (Meta) core upgraded to v1.19.23**
 
-### 🐞 修复问题
+### 🐞 Bug Fixes
 
-- 修复系统代理关闭后在 PAC 模式下未完全关闭
-- 修复 macOS 开关代理时可能的卡死
-- 修复修改定时自动更新后记时未及时刷新
-- 修复 Linux 关闭 TUN 不立即生效
+- Fixed system proxy not fully closing in PAC mode after disabling
+- Fixed potential freeze when toggling proxy on macOS
+- Fixed auto-update timer not refreshing immediately after interval change
+- Fixed TUN disable not taking effect immediately on Linux
 
-### ✨ 新增功能
+### ✨ New Features
 
-- 新增 macOS 托盘速率显示
-- 快捷键操作通知操作结果
+- macOS tray now shows live upload/download speed
+- Hotkey actions now display a notification with the result
 
-### 🚀 优化改进
+### 🚀 Improvements
 
-- 优化 macOS 读取系统代理性能
+- Improved system proxy read performance on macOS
+- Rebranded all UI references from Clash Verge to Celestial
+- Cleaned up build pipeline: English-only release notes, UTC timestamps, removed external referral links
