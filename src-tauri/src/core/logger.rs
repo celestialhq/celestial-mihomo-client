@@ -7,8 +7,8 @@ use std::{
 };
 
 use anyhow::{Result, bail};
-use clash_verge_logging::{Type, logging};
 use celestial_service_ipc::WriterConfig;
+use clash_verge_logging::{Type, logging};
 use compact_str::CompactString;
 use flexi_logger::{
     Cleanup, Criterion, DeferredNow, FileSpec, LogSpecBuilder, LogSpecification, LoggerHandle,
