@@ -21,7 +21,6 @@ use tokio::sync::Mutex;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServiceStatus {
     Ready,
-    NeedsReinstall,
     InstallRequired,
     UninstallRequired,
     ReinstallRequired,
@@ -440,32 +439,11 @@ pub async fn is_service_available() -> Result<()> {
         return Err(e.into());
     }
     celestial_service_ipc::connect().await?;
-    if celestial_service_ipc::is_reinstall_service_needed().await {
-        bail!("service needs reinstall");
-    }
     Ok(())
 }
 
 pub async fn wait_and_check_service_available(status: &mut ServiceManager) -> Result<()> {
     wait_for_service_ipc(status, "Waiting for service to be available").await
-}
-
-async fn is_reinstall_service_needed_with_retry() -> bool {
-    let config = ServiceManager::config();
-    let backoff = ConstantBuilder::default()
-        .with_delay(config.retry_delay)
-        .with_max_times(config.max_retries);
-
-    (|| async {
-        if celestial_service_ipc::is_reinstall_service_needed().await {
-            Err(anyhow!("service needs reinstall"))
-        } else {
-            Ok(())
-        }
-    })
-    .retry(backoff)
-    .await
-    .is_err()
 }
 
 async fn wait_for_service_ipc(status: &mut ServiceManager, reason: &str) -> Result<()> {
@@ -531,10 +509,9 @@ impl ServiceManager {
 
     /// 综合服务状态检查（一次性完成所有检查）
     pub async fn check_service_comprehensive(&self) -> ServiceStatus {
-        if celestial_service_ipc::is_reinstall_service_needed().await {
-            ServiceStatus::NeedsReinstall
-        } else {
-            ServiceStatus::Ready
+        match is_service_available().await {
+            Ok(()) => ServiceStatus::Ready,
+            Err(err) => ServiceStatus::Unavailable(err.to_string()),
         }
     }
 
@@ -545,7 +522,7 @@ impl ServiceManager {
                 logging!(info, Type::Service, "服务就绪，直接启动");
                 self.0 = ServiceStatus::Ready;
             }
-            ServiceStatus::NeedsReinstall | ServiceStatus::ReinstallRequired => {
+            ServiceStatus::ReinstallRequired => {
                 logging!(info, Type::Service, "服务需要重装，执行重装流程");
                 reinstall_service()?;
                 wait_and_check_service_available(self).await?;
@@ -557,26 +534,8 @@ impl ServiceManager {
             }
             ServiceStatus::InstallRequired => {
                 logging!(info, Type::Service, "需要安装服务，执行安装流程");
-                if celestial_service_ipc::is_reinstall_service_needed().await {
-                    logging!(info, Type::Service, "existing service version is stale, reinstalling");
-                    reinstall_service()?;
-                } else {
-                    install_service()?;
-                }
+                install_service()?;
                 wait_and_check_service_available(self).await?;
-                if is_reinstall_service_needed_with_retry().await {
-                    logging!(
-                        warn,
-                        Type::Service,
-                        "service version is still stale after install, retrying reinstall once"
-                    );
-                    reinstall_service()?;
-                    wait_and_check_service_available(self).await?;
-                    if is_reinstall_service_needed_with_retry().await {
-                        self.0 = ServiceStatus::NeedsReinstall;
-                        bail!("service version mismatch after reinstall");
-                    }
-                }
             }
             ServiceStatus::UninstallRequired => {
                 logging!(info, Type::Service, "服务需要卸载，执行卸载流程");
