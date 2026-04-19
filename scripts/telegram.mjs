@@ -27,30 +27,31 @@ async function sendTelegramNotification() {
   const isAutobuild =
     process.env.BUILD_TYPE === 'autobuild' || version.includes('autobuild')
   const chatId = isAutobuild ? CHAT_ID_TEST : CHAT_ID_RELEASE
-  const buildType = isAutobuild ? '滚动更新版' : '正式版'
+  const buildType = isAutobuild ? 'автосборка' : 'стабильный релиз'
 
   log_info(`Preparing Telegram notification for ${buildType} ${version}`)
   log_info(`Target channel: ${chatId}`)
   log_info(`Download URL: ${downloadUrl}`)
 
-  // 读取发布说明和下载地址
+  // Чтение описания релиза
   let releaseContent
   try {
     releaseContent = readFileSync('release.txt', 'utf-8')
-    log_info('成功读取 release.txt 文件')
+    log_info('Successfully read release.txt file')
   } catch (error) {
-    log_error('无法读取 release.txt，使用默认发布说明', error)
-    releaseContent = '更多新功能现已支持，详细更新日志请查看发布页面。'
+    log_error('Failed to read release.txt, using default release notes', error)
+    releaseContent =
+      'В этой версии добавлены новые возможности и улучшения. Подробный список изменений доступен на странице релиза.'
   }
 
-  // Markdown 转换为 HTML
+  // Преобразование Markdown в HTML для Telegram
   function convertMarkdownToTelegramHTML(content) {
-    // Strip stray HTML tags and markdown bold from heading text
     const cleanHeading = (text) =>
       text
         .replace(/<\/?[^>]+>/g, '')
         .replace(/\*\*/g, '')
         .trim()
+
     return content
       .split('\n')
       .map((line) => {
@@ -89,18 +90,18 @@ async function sendTelegramNotification() {
       .replace(/<br\s*\/?>/g, '\n')
   }
 
-  // Strip HTML tags not supported by Telegram and escape stray angle brackets
+  // Удаление HTML-тегов, не поддерживаемых Telegram
   function sanitizeTelegramHTML(content) {
     // Telegram supports: b, strong, i, em, u, ins, s, strike, del,
     // a, code, pre, blockquote, tg-spoiler, tg-emoji
     const allowedTags =
       /^\/?(b|strong|i|em|u|ins|s|strike|del|a|code|pre|blockquote|tg-spoiler|tg-emoji)(\s|>|$)/i
+
     return content.replace(/<\/?[^>]*>/g, (tag) => {
       const inner = tag.replace(/^<\/?/, '').replace(/>$/, '')
       if (allowedTags.test(inner) || allowedTags.test(tag.slice(1))) {
         return tag
       }
-      // Escape unsupported tags so they display as text
       return tag.replace(/</g, '&lt;').replace(/>/g, '&gt;')
     })
   }
@@ -110,15 +111,18 @@ async function sendTelegramNotification() {
     convertMarkdownToTelegramHTML(releaseContent),
   )
 
-  const releaseTitle = isAutobuild ? '滚动更新版发布' : '正式发布'
+  const releaseTitle = isAutobuild
+    ? 'вышла новая автосборка'
+    : 'вышел новый стабильный релиз'
   const encodedVersion = encodeURIComponent(version)
   const releaseTag = isAutobuild ? 'autobuild' : `v${version}`
   const publicReleaseRepo =
     process.env.PUBLIC_RELEASE_REPO || 'pius-pp/celestial-mihomo-client-public'
   const releasePageUrl = `https://github.com/${publicReleaseRepo}/releases/tag/${releaseTag}`
-  const content = `<b>🎉 <a href="${releasePageUrl}">Celestial v${version}</a> ${releaseTitle}</b>\n\n${formattedContent}`
 
-  // 发送到 Telegram
+  const content = `<b>🎉 <a href="${releasePageUrl}">Celestial v${version}</a> — ${releaseTitle}</b>\n\n${formattedContent}`
+
+  // Отправка сообщения в Telegram
   try {
     await axios.post(
       `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
@@ -133,10 +137,10 @@ async function sendTelegramNotification() {
         parse_mode: 'HTML',
       },
     )
-    log_success(`✅ Telegram 通知发送成功到 ${chatId}`)
+    log_success(`Telegram notification sent successfully to ${chatId}`)
   } catch (error) {
     log_error(
-      `❌ Telegram 通知发送失败到 ${chatId}:`,
+      `Telegram notification failed for ${chatId}:`,
       error.response?.data || error.message,
       error,
     )
@@ -144,8 +148,8 @@ async function sendTelegramNotification() {
   }
 }
 
-// 执行函数
+// Запуск
 sendTelegramNotification().catch((error) => {
-  log_error('脚本执行失败:', error)
+  log_error('Script execution failed:', error)
   process.exit(1)
 })
