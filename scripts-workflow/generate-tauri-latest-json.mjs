@@ -38,7 +38,17 @@ for (const asset of assets) {
   }
 
   if (name.endsWith('amd64.AppImage.tar.gz')) {
-    await setPlatform(['linux', 'linux-x86_64'], name)
+    await setPlatform(['linux', 'linux-x86_64', 'linux-x86_64-appimage'], name)
+    continue
+  }
+
+  if (name.endsWith('amd64.deb')) {
+    await setPlatform(['linux-x86_64-deb'], name)
+    continue
+  }
+
+  if (name.endsWith('x86_64.rpm')) {
+    await setPlatform(['linux-x86_64-rpm'], name)
   }
 }
 

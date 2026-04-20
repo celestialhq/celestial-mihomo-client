@@ -39,6 +39,7 @@ export default defineConfig([
             `vite.config.mts`,
             'src/polyfills/*.js',
             'scripts/*.mjs',
+            'scripts-workflow/*.mjs',
           ],
         },
       },
@@ -136,7 +137,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['scripts/*.mjs'],
+    files: ['scripts/*.mjs', 'scripts-workflow/*.mjs'],
 
     languageOptions: {
       globals: {

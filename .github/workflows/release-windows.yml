@@ -286,40 +286,11 @@ jobs:
             --repo "$PUBLIC_REPO" \
             --clobber
 
-  release-update:
-    if: ${{ !startsWith(github.ref_name, 'testv') && !contains(github.ref_name, '-rc') }}
-    name: Publish updater manifest
-    runs-on: ubuntu-latest
-    needs: [publish-public-release]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          run_install: false
-
-      - name: Install Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Publish updater file
-        run: pnpm updater
-        env:
-          PUBLIC_RELEASE_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
-          PUBLIC_RELEASE_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
-
   # submit-to-winget:
   #   if: ${{ !startsWith(github.ref_name, 'testv') && !contains(github.ref_name, '-rc') }}
   #   name: Submit to Winget
   #   runs-on: ubuntu-latest
-  #   needs: [prepare, publish-public-release, release-update]
+  #   needs: [prepare, publish-public-release]
   #   continue-on-error: true
   #   steps:
   #     - name: Checkout repository
@@ -343,7 +314,7 @@ jobs:
     if: ${{ !startsWith(github.ref_name, 'testv') && !contains(github.ref_name, '-rc') }}
     name: Print Winget manifest
     runs-on: ubuntu-latest
-    needs: [prepare, publish-public-release, release-update]
+    needs: [prepare, publish-public-release]
     steps:
       - name: Download release artifacts
         uses: actions/download-artifact@v4
@@ -418,7 +389,6 @@ jobs:
     needs:
       - prepare
       - publish-public-release
-      - release-update
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

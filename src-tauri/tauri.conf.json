@@ -35,8 +35,6 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU0MTMzRUEzNkJBQTU2MDcKUldRSFZxcHJvejRUVkVLQTZiTDdSUkJkRTZxVURJcUx1cHJldEl0YTFZcmxzTXhnU2tlK1ZBUkkK",
       "endpoints": [
-        "https://update.hwdns.net/https://github.com/pius-pp/celestial-mihomo-client-public/releases/download/updater/update-proxy.json",
-        "https://gh-proxy.org/https://github.com/pius-pp/celestial-mihomo-client-public/releases/download/updater/update-proxy.json",
         "https://github.com/pius-pp/celestial-mihomo-client-public/releases/download/updater/update.json"
       ],
       "windows": {

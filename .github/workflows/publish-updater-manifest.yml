@@ -1,0 +1,131 @@
+name: Publish Updater Manifest
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Stable release tag to publish updater metadata for
+        required: true
+        default: v1.0.0
+  workflow_run:
+    workflows:
+      - Release Windows (private -> public)
+      - Release Linux (private -> public)
+      - Release Apple (manual)
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+env:
+  HUSKY: 0
+  NODE_VERSION: '24.15.0'
+  PUBLIC_RELEASE_REPO: pius-pp/celestial-mihomo-client-public
+
+concurrency:
+  group: updater-manifest-${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish-updater:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    name: Publish updater manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        env:
+          INPUT_TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || '' }}
+          HEAD_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "$INPUT_TAG_NAME" ]; then
+            TAG_NAME="$INPUT_TAG_NAME"
+          else
+            git fetch --tags --force
+            TAG_NAME="$(git tag --points-at "$HEAD_SHA" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+          fi
+
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "No stable release tag found for updater publishing."
+            exit 0
+          fi
+
+          VERSION="${TAG_NAME#v}"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for release assets
+        if: ${{ steps.release.outputs.publish == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          expected=(
+            "Celestial_${VERSION}_x64-setup.exe"
+            "Celestial_${VERSION}_x64-setup.exe.sig"
+            "Celestial_${VERSION}_amd64.deb"
+            "Celestial_${VERSION}_amd64.deb.sig"
+            "Celestial-${VERSION}-1.x86_64.rpm"
+            "Celestial-${VERSION}-1.x86_64.rpm.sig"
+          )
+
+          for attempt in {1..60}; do
+            assets="$(gh release view "$TAG_NAME" --repo "$PUBLIC_RELEASE_REPO" --json assets -q '.assets[].name' 2>/dev/null || true)"
+            missing=()
+
+            for asset in "${expected[@]}"; do
+              if ! grep -Fxq "$asset" <<< "$assets"; then
+                missing+=("$asset")
+              fi
+            done
+
+            if [ "${#missing[@]}" -eq 0 ]; then
+              echo "All required updater assets are present."
+              exit 0
+            fi
+
+            echo "Waiting for release assets, attempt ${attempt}/60. Missing: ${missing[*]}"
+            sleep 60
+          done
+
+          echo "Timed out waiting for required updater assets."
+          exit 1
+
+      - name: Install pnpm
+        if: ${{ steps.release.outputs.publish == 'true' }}
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Install Node
+        if: ${{ steps.release.outputs.publish == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        if: ${{ steps.release.outputs.publish == 'true' }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish updater file
+        if: ${{ steps.release.outputs.publish == 'true' }}
+        run: pnpm updater
+        env:
+          PUBLIC_RELEASE_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
+          PUBLIC_RELEASE_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}

@@ -183,14 +183,50 @@ async function processRelease(github, options, tag, isAlpha) {
 
       // linux url
       if (name.endsWith('amd64.AppImage.tar.gz')) {
-        setPlatforms(updateData.platforms, ['linux', 'linux-x86_64'], {
-          url: browser_download_url,
-        })
+        setPlatforms(
+          updateData.platforms,
+          ['linux', 'linux-x86_64', 'linux-x86_64-appimage'],
+          {
+            url: browser_download_url,
+          },
+        )
       }
       // linux signature
       if (name.endsWith('amd64.AppImage.tar.gz.sig')) {
         const sig = await getSignature(browser_download_url)
-        setPlatforms(updateData.platforms, ['linux', 'linux-x86_64'], {
+        setPlatforms(
+          updateData.platforms,
+          ['linux', 'linux-x86_64', 'linux-x86_64-appimage'],
+          {
+            signature: sig,
+          },
+        )
+      }
+
+      // linux deb url
+      if (name.endsWith('amd64.deb')) {
+        setPlatforms(updateData.platforms, ['linux-x86_64-deb'], {
+          url: browser_download_url,
+        })
+      }
+      // linux deb signature
+      if (name.endsWith('amd64.deb.sig')) {
+        const sig = await getSignature(browser_download_url)
+        setPlatforms(updateData.platforms, ['linux-x86_64-deb'], {
+          signature: sig,
+        })
+      }
+
+      // linux rpm url
+      if (name.endsWith('x86_64.rpm')) {
+        setPlatforms(updateData.platforms, ['linux-x86_64-rpm'], {
+          url: browser_download_url,
+        })
+      }
+      // linux rpm signature
+      if (name.endsWith('x86_64.rpm.sig')) {
+        const sig = await getSignature(browser_download_url)
+        setPlatforms(updateData.platforms, ['linux-x86_64-rpm'], {
           signature: sig,
         })
       }
