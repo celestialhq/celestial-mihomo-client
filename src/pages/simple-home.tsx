@@ -1,89 +1,117 @@
-import {
-  AccountTreeRounded,
-  DnsRounded,
-  PublicRounded,
-  ShieldRounded,
-} from '@mui/icons-material'
-import { Box, Chip, Stack, Typography } from '@mui/material'
+import { KeyboardArrowRightRounded } from '@mui/icons-material'
+import { Box, Button, ButtonGroup, Typography } from '@mui/material'
+import { useLockFn } from 'ahooks'
 import { useMemo } from 'react'
+import { closeAllConnections } from 'tauri-plugin-mihomo-api'
 
 import { SimpleConnectButton } from '@/components/simple/simple-connect-button'
 import { SimpleProxySelector } from '@/components/simple/simple-proxy-selector'
 import { useProfiles } from '@/hooks/use-profiles'
+import { useVerge } from '@/hooks/use-verge'
 import { useAppData } from '@/providers/app-data-context'
+import { patchClashMode } from '@/services/cmds'
 
-const MODE_LABELS: Record<string, string> = {
-  rule: 'Режим правил',
-  global: 'Глобальный режим',
-  direct: 'Direct',
+const CLASH_MODES = ['rule', 'global', 'direct'] as const
+type ClashMode = (typeof CLASH_MODES)[number]
+
+const MODE_LABELS: Record<ClashMode, string> = {
+  rule: 'Правила',
+  global: 'Глобал',
+  direct: 'Директ',
+}
+
+const isClashMode = (value?: string): value is ClashMode =>
+  Boolean(value && CLASH_MODES.includes(value as ClashMode))
+
+const formatTraffic = (bytes?: number) => {
+  if (!bytes || bytes <= 0) return 'Активна'
+
+  const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ']
+  let value = bytes
+  let unitIndex = 0
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]} · Активна`
 }
 
 const SimpleHomePage = () => {
   const { current } = useProfiles()
-  const { clashConfig, systemProxyAddress } = useAppData()
+  const { verge } = useVerge()
+  const { clashConfig, refreshClashConfig } = useAppData()
 
-  const mode = clashConfig?.mode?.toLowerCase() ?? 'rule'
-  const modeLabel = MODE_LABELS[mode] ?? mode
-
-  const profileName = useMemo(
-    () => current?.name || 'Профиль не выбран',
-    [current],
+  const currentMode = clashConfig?.mode?.toLowerCase()
+  const activeMode = isClashMode(currentMode) ? currentMode : 'rule'
+  const profileName = current?.name || 'Профиль не выбран'
+  const subscriptionInfo = useMemo(
+    () => formatTraffic(current?.extra?.total),
+    [current?.extra?.total],
   )
+
+  const changeMode = useLockFn(async (mode: ClashMode) => {
+    if (mode === activeMode) return
+
+    if (verge?.auto_close_connection) {
+      closeAllConnections()
+    }
+
+    await patchClashMode(mode)
+    refreshClashConfig()
+  })
 
   return (
     <Box className="simple-home-page">
-      <Box className="simple-home-page__status">
-        <Stack spacing={1} sx={{ alignItems: 'center', textAlign: 'center' }}>
-          <Box className="simple-home-page__avatar">
-            <ShieldRounded />
-          </Box>
-          <Typography variant="h5" sx={{ fontWeight: 900 }}>
-            Celestial VPN
+      <Box className="simple-home-page__shell">
+        <Box className="simple-home-page__center">
+          <SimpleConnectButton />
+        </Box>
+
+        <Box className="simple-home-page__mode">
+          <ButtonGroup variant="outlined" size="small">
+            {CLASH_MODES.map((mode) => (
+              <Button
+                key={mode}
+                variant={mode === activeMode ? 'contained' : 'outlined'}
+                onClick={() => changeMode(mode)}
+              >
+                {MODE_LABELS[mode]}
+              </Button>
+            ))}
+          </ButtonGroup>
+        </Box>
+
+        <Box className="simple-home-page__groups">
+          <Typography className="simple-home-page__groups-title">
+            Группы
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {profileName}
-          </Typography>
-        </Stack>
-      </Box>
 
-      <Box className="simple-home-page__meta">
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={1.5}
-          sx={{ alignItems: 'stretch' }}
-        >
-          <Box className="simple-stat">
-            <PublicRounded />
-            <span>{modeLabel}</span>
+          <Box className="simple-home-page__cards">
+            <Box className="simple-info-card">
+              <Typography className="simple-info-card__label">
+                Прокси
+              </Typography>
+              <SimpleProxySelector />
+              <KeyboardArrowRightRounded className="simple-info-card__arrow" />
+            </Box>
+
+            <Box className="simple-info-card">
+              <Typography className="simple-info-card__label">
+                Подписка
+              </Typography>
+              <Typography className="simple-info-card__title" noWrap>
+                {profileName}
+              </Typography>
+              <Typography className="simple-info-card__sub" noWrap>
+                {subscriptionInfo}
+              </Typography>
+              <KeyboardArrowRightRounded className="simple-info-card__arrow" />
+            </Box>
           </Box>
-          <Box className="simple-stat">
-            <DnsRounded />
-            <span>{systemProxyAddress || '-'}</span>
-          </Box>
-          <Box className="simple-stat">
-            <AccountTreeRounded />
-            <span>{current?.type || 'Profile'}</span>
-          </Box>
-        </Stack>
+        </Box>
       </Box>
-
-      <Box className="simple-home-page__center">
-        <SimpleConnectButton />
-      </Box>
-
-      <Box className="simple-home-page__selector">
-        <SimpleProxySelector />
-      </Box>
-
-      <Stack
-        direction="row"
-        spacing={1}
-        className="simple-home-page__footer"
-        sx={{ justifyContent: 'center' }}
-      >
-        <Chip label={modeLabel} color="primary" variant="outlined" />
-        <Chip label={systemProxyAddress || '-'} variant="outlined" />
-      </Stack>
     </Box>
   )
 }

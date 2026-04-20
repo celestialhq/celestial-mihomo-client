@@ -1,15 +1,11 @@
-import {
-  PauseRounded,
-  PlayArrowRounded,
-  PowerSettingsNewRounded,
-} from '@mui/icons-material'
+/* eslint-disable @eslint-react/set-state-in-effect */
+import { PowerSettingsNewRounded } from '@mui/icons-material'
 import { Box, CircularProgress, Stack, Typography } from '@mui/material'
 import { useLockFn } from 'ahooks'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useSystemProxyState } from '@/hooks/use-system-proxy-state'
 import { useVerge } from '@/hooks/use-verge'
-import { useAppData } from '@/providers/app-data-context'
 
 const formatUptime = (uptimeMs: number) => {
   const hours = Math.floor(uptimeMs / 3600000)
@@ -22,18 +18,48 @@ const formatUptime = (uptimeMs: number) => {
 }
 
 export const SimpleConnectButton = () => {
-  const { uptime } = useAppData()
   const { verge, mutateVerge, patchVerge } = useVerge()
   const { indicator: systemProxyEnabled, toggleSystemProxy } =
     useSystemProxyState()
   const [pending, setPending] = useState(false)
+  const [elapsedMs, setElapsedMs] = useState(0)
+  const startedAtRef = useRef<number | null>(null)
+  const wasConnectedRef = useRef(false)
 
   const tunEnabled = verge?.enable_tun_mode ?? false
   const connected = systemProxyEnabled || tunEnabled
 
+  useEffect(() => {
+    if (connected && !wasConnectedRef.current) {
+      startedAtRef.current = Date.now()
+      setElapsedMs(0)
+    }
+
+    if (!connected) {
+      startedAtRef.current = null
+      setElapsedMs(0)
+    }
+
+    wasConnectedRef.current = connected
+  }, [connected])
+
+  useEffect(() => {
+    if (!connected || startedAtRef.current == null) return
+
+    const tick = () => {
+      if (startedAtRef.current != null) {
+        setElapsedMs(Date.now() - startedAtRef.current)
+      }
+    }
+
+    tick()
+    const timer = window.setInterval(tick, 1000)
+    return () => window.clearInterval(timer)
+  }, [connected])
+
   const formattedUptime = useMemo(
-    () => (connected ? formatUptime(uptime) : '00:00:00'),
-    [connected, uptime],
+    () => (connected ? formatUptime(elapsedMs) : '00:00:00'),
+    [connected, elapsedMs],
   )
 
   const toggleConnection = useLockFn(async () => {
@@ -61,14 +87,7 @@ export const SimpleConnectButton = () => {
   })
 
   return (
-    <Stack spacing={2.2} sx={{ alignItems: 'center' }}>
-      <Typography
-        variant="overline"
-        sx={{ color: connected ? 'success.main' : 'text.secondary' }}
-      >
-        {connected ? 'Подключено' : 'Отключено'}
-      </Typography>
-
+    <Stack spacing={2.6} sx={{ alignItems: 'center' }}>
       <Box
         component="button"
         className={`simple-connect-button${connected ? ' is-connected' : ''}`}
@@ -79,27 +98,20 @@ export const SimpleConnectButton = () => {
         <span className="simple-connect-button__ring" />
         <span className="simple-connect-button__content">
           {pending ? (
-            <CircularProgress size={54} color="inherit" />
-          ) : connected ? (
-            <PauseRounded />
+            <CircularProgress size={30} color="inherit" />
           ) : (
-            <PlayArrowRounded />
+            <PowerSettingsNewRounded />
           )}
         </span>
       </Box>
 
-      <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
-        <Typography variant="h5" sx={{ fontWeight: 900 }}>
+      <Stack spacing={0.4} sx={{ alignItems: 'center' }}>
+        <Typography className="simple-connect-button__state">
+          {connected ? 'Защита включена' : 'Защита отключена'}
+        </Typography>
+        <Typography className="simple-connect-button__timer">
           {formattedUptime}
         </Typography>
-        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-          <PowerSettingsNewRounded
-            sx={{ fontSize: 16, color: 'text.secondary' }}
-          />
-          <Typography variant="body2" color="text.secondary">
-            {connected ? 'Защита активна' : 'Нажмите для подключения'}
-          </Typography>
-        </Stack>
       </Stack>
     </Stack>
   )

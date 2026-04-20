@@ -125,6 +125,7 @@ const Layout = () => {
   const { current: currentProfile } = useProfiles()
   const { language } = verge ?? {}
   const navCollapsed = verge?.collapse_navbar ?? false
+  const sidebarCollapsed = isSimpleMode || navCollapsed
   const { switchLanguage } = useI18n()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -328,7 +329,7 @@ const Layout = () => {
       <Paper
         square
         elevation={0}
-        className={`${OS} layout${navCollapsed ? ' layout--nav-collapsed' : ''}${isSimpleMode ? ' layout--simple-mode' : ''}`}
+        className={`${OS} layout${sidebarCollapsed ? ' layout--nav-collapsed' : ''}${isSimpleMode ? ' layout--simple-mode' : ''}`}
         style={{
           borderTopLeftRadius: '0px',
           borderTopRightRadius: '0px',
@@ -368,32 +369,34 @@ const Layout = () => {
                 <span className="the-brand__name">Celestial</span>
               </div>
               <UpdateButton className="the-newbtn" />
-              <Tooltip
-                title={
-                  navCollapsed
-                    ? t('layout.components.navigation.menu.expandNavBar')
-                    : t('layout.components.navigation.menu.collapseNavBar')
-                }
-                placement="right"
-                arrow
-              >
-                <IconButton
-                  className="the-nav-toggle"
-                  size="small"
-                  onClick={handleToggleNavCollapsed}
-                  aria-label={
+              {!isSimpleMode && (
+                <Tooltip
+                  title={
                     navCollapsed
                       ? t('layout.components.navigation.menu.expandNavBar')
                       : t('layout.components.navigation.menu.collapseNavBar')
                   }
+                  placement="right"
+                  arrow
                 >
-                  {navCollapsed ? (
-                    <KeyboardDoubleArrowRightRounded fontSize="small" />
-                  ) : (
-                    <KeyboardDoubleArrowLeftRounded fontSize="small" />
-                  )}
-                </IconButton>
-              </Tooltip>
+                  <IconButton
+                    className="the-nav-toggle"
+                    size="small"
+                    onClick={handleToggleNavCollapsed}
+                    aria-label={
+                      navCollapsed
+                        ? t('layout.components.navigation.menu.expandNavBar')
+                        : t('layout.components.navigation.menu.collapseNavBar')
+                    }
+                  >
+                    {navCollapsed ? (
+                      <KeyboardDoubleArrowRightRounded fontSize="small" />
+                    ) : (
+                      <KeyboardDoubleArrowLeftRounded fontSize="small" />
+                    )}
+                  </IconButton>
+                </Tooltip>
+              )}
             </div>
 
             {menuUnlocked && (
