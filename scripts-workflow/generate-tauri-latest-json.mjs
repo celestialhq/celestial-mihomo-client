@@ -82,6 +82,13 @@ async function setPlatform(keys, assetName) {
     return
   }
 
+  if (!asset.browser_download_url || !signatureAsset.browser_download_url) {
+    throw new Error(
+      `Missing browser_download_url for ${assetName}. ` +
+        `Expected GitHub REST release payload, got incompatible assets JSON.`,
+    )
+  }
+
   const signature = await fetch(signatureAsset.browser_download_url).then(
     (response) => {
       if (!response.ok) {

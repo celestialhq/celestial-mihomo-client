@@ -94,9 +94,10 @@ upload_assets "$PUBLIC_REPO" "$PUBLIC_RELEASE_TOKEN"
 clean_stale_assets "$PRIVATE_REPO" "$GITHUB_TOKEN"
 clean_stale_assets "$PUBLIC_REPO" "$PUBLIC_RELEASE_TOKEN"
 
-GH_TOKEN="$PUBLIC_RELEASE_TOKEN" gh release view "$TAG_NAME" \
-  --repo "$PUBLIC_REPO" \
-  --json assets > "$RELEASE_ASSETS_JSON"
+GH_TOKEN="$PUBLIC_RELEASE_TOKEN" gh api \
+  -H "Accept: application/vnd.github+json" \
+  "repos/$PUBLIC_REPO/releases/tags/$TAG_NAME" \
+  > "$RELEASE_ASSETS_JSON"
 
 VERSION="$VERSION" NOTES_FILE="$RELEASE_BODY_PATH" \
   node scripts-workflow/generate-tauri-latest-json.mjs "$RELEASE_ASSETS_JSON" "$LATEST_JSON_PATH"

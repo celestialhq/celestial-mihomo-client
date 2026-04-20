@@ -310,77 +310,77 @@ jobs:
   #         installers-regex: '_x64-setup\.exe$'
   #         token: ${{ secrets.WINGET_TOKEN }}
 
-  print-winget-manifest:
-    if: ${{ !startsWith(github.ref_name, 'testv') && !contains(github.ref_name, '-rc') }}
-    name: Print Winget manifest
-    runs-on: ubuntu-latest
-    needs: [prepare, publish-public-release]
-    steps:
-      - name: Download release artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: ./dist
-
-      - name: Print Winget manifest
-        shell: bash
-        env:
-          VERSION: ${{ needs.prepare.outputs.version }}
-          DOWNLOAD_URL: ${{ needs.prepare.outputs.public_download_url }}
-          RELEASE_NOTES_URL: https://github.com/${{ env.PUBLIC_RELEASE_REPO }}/releases/tag/${{ needs.prepare.outputs.tag_name }}
-        run: |
-          set -euo pipefail
-
-          X64_INSTALLER="$(find ./dist -type f -name "Celestial_${VERSION}_x64-setup.exe" | head -n 1)"
-
-          if [ -z "$X64_INSTALLER" ]; then
-            echo "Expected Windows installer artifact was not found."
-            find ./dist -type f | sort
-            exit 1
-          fi
-
-          X64_SHA256="$(sha256sum "$X64_INSTALLER" | awk '{print toupper($1)}')"
-
-          echo "::group::Winget manifest"
-          cat << EOF
-          # PiusPP.Celestial.yaml
-          PackageIdentifier: PiusPP.Celestial
-          PackageVersion: ${VERSION}
-          DefaultLocale: en-US
-          ManifestType: version
-          ManifestVersion: 1.10.0
-          ---
-          # PiusPP.Celestial.locale.en-US.yaml
-          PackageIdentifier: PiusPP.Celestial
-          PackageVersion: ${VERSION}
-          PackageLocale: en-US
-          Publisher: Celestial
-          PackageName: Celestial
-          License: GPL-3.0-only
-          ShortDescription: Celestial
-          Description: Celestial Mihomo Client
-          PackageUrl: https://github.com/pius-pp/celestial-mihomo-client-public
-          ReleaseNotesUrl: ${RELEASE_NOTES_URL}
-          ManifestType: defaultLocale
-          ManifestVersion: 1.10.0
-          ---
-          # PiusPP.Celestial.installer.yaml
-          PackageIdentifier: PiusPP.Celestial
-          PackageVersion: ${VERSION}
-          InstallerLocale: en-US
-          InstallerType: nullsoft
-          Scope: user
-          UpgradeBehavior: install
-          Protocols:
-            - celestial
-            - clash
-          Installers:
-            - Architecture: x64
-              InstallerUrl: ${DOWNLOAD_URL}/Celestial_${VERSION}_x64-setup.exe
-              InstallerSha256: ${X64_SHA256}
-          ManifestType: installer
-          ManifestVersion: 1.10.0
-          EOF
-          echo "::endgroup::"
+  #print-winget-manifest:
+  #  if: ${{ !startsWith(github.ref_name, 'testv') && !contains(github.ref_name, '-rc') }}
+  #  name: Print Winget manifest
+  #  runs-on: ubuntu-latest
+  #  needs: [prepare, publish-public-release]
+  #  steps:
+  #    - name: Download release artifacts
+  #      uses: actions/download-artifact@v4
+  #      with:
+  #        path: ./dist
+#
+  #    - name: Print Winget manifest
+  #      shell: bash
+  #      env:
+  #        VERSION: ${{ needs.prepare.outputs.version }}
+  #        DOWNLOAD_URL: ${{ needs.prepare.outputs.public_download_url }}
+  #        RELEASE_NOTES_URL: https://github.com/${{ env.PUBLIC_RELEASE_REPO }}/releases/tag/${{ needs.prepare.outputs.tag_name }}
+  #      run: |
+  #        set -euo pipefail
+#
+  #        X64_INSTALLER="$(find ./dist -type f -name "Celestial_${VERSION}_x64-setup.exe" | head -n 1)"
+#
+  #        if [ -z "$X64_INSTALLER" ]; then
+  #          echo "Expected Windows installer artifact was not found."
+  #          find ./dist -type f | sort
+  #          exit 1
+  #        fi
+#
+  #        X64_SHA256="$(sha256sum "$X64_INSTALLER" | awk '{print toupper($1)}')"
+#
+  #        echo "::group::Winget manifest"
+  #        cat << EOF
+  #        # PiusPP.Celestial.yaml
+  #        PackageIdentifier: PiusPP.Celestial
+  #        PackageVersion: ${VERSION}
+  #        DefaultLocale: en-US
+  #        ManifestType: version
+  #        ManifestVersion: 1.10.0
+  #        ---
+  #        # PiusPP.Celestial.locale.en-US.yaml
+  #        PackageIdentifier: PiusPP.Celestial
+  #        PackageVersion: ${VERSION}
+  #        PackageLocale: en-US
+  #        Publisher: Celestial
+  #        PackageName: Celestial
+  #        License: GPL-3.0-only
+  #        ShortDescription: Celestial
+  #        Description: Celestial Mihomo Client
+  #        PackageUrl: https://github.com/pius-pp/celestial-mihomo-client-public
+  #        ReleaseNotesUrl: ${RELEASE_NOTES_URL}
+  #        ManifestType: defaultLocale
+  #        ManifestVersion: 1.10.0
+  #        ---
+  #        # PiusPP.Celestial.installer.yaml
+  #        PackageIdentifier: PiusPP.Celestial
+  #        PackageVersion: ${VERSION}
+  #        InstallerLocale: en-US
+  #        InstallerType: nullsoft
+  #        Scope: user
+  #        UpgradeBehavior: install
+  #        Protocols:
+  #          - celestial
+  #          - clash
+  #        Installers:
+  #          - Architecture: x64
+  #            InstallerUrl: ${DOWNLOAD_URL}/Celestial_${VERSION}_x64-setup.exe
+  #            InstallerSha256: ${X64_SHA256}
+  #        ManifestType: installer
+  #        ManifestVersion: 1.10.0
+  #        EOF
+  #        echo "::endgroup::"
 
   notify-telegram:
     if: ${{ !startsWith(github.ref_name, 'testv') && !contains(github.ref_name, '-rc') }}
