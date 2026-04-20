@@ -1,0 +1,390 @@
+name: AutoBuild Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or commit to build
+        required: false
+        default: dev
+        type: string
+  push:
+    branches:
+      - dev
+  schedule:
+    - cron: '0 6,18 * * *'
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  TAG_NAME: autobuild
+  TAG_CHANNEL: AutoBuild
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+  HUSKY: 0
+  RUST_TOOLCHAIN: '1.91.0'
+  NODE_VERSION: '24.15.0'
+  PUBLIC_RELEASE_REPO: pius-pp/celestial-mihomo-client-public
+  BUILD_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || 'dev' }}
+
+concurrency:
+  group: '${{ github.workflow }}-${{ github.ref }}'
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  check_commit:
+    name: Check Commit Needs Build
+    uses: ./.github/workflows/check-commit-needs-build.yml
+    with:
+      tag_name: autobuild
+      force_build: ${{ github.event_name == 'workflow_dispatch' }}
+      ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || 'dev' }}
+    secrets: inherit
+
+  prepare:
+    name: Prepare AutoBuild metadata
+    runs-on: ubuntu-latest
+    needs: [check_commit]
+    outputs:
+      should_run: ${{ steps.meta.outputs.should_run }}
+      build_ref: ${{ steps.meta.outputs.build_ref }}
+      version: ${{ steps.meta.outputs.version }}
+      release_name: ${{ steps.meta.outputs.release_name }}
+      public_download_url: ${{ steps.meta.outputs.public_download_url }}
+    steps:
+      - name: Resolve metadata
+        id: meta
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLIC_RELEASE_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.check_commit.outputs.autobuild_version }}"
+          SHOULD_RUN="${{ needs.check_commit.outputs.should_run }}"
+
+          if [ "$SHOULD_RUN" != "true" ]; then
+            assets="$(GH_TOKEN="${PUBLIC_RELEASE_TOKEN:-$GITHUB_TOKEN}" gh release view "$TAG_NAME" --repo "$PUBLIC_RELEASE_REPO" --json assets -q '.assets[].name' 2>/dev/null || true)"
+            for expected in \
+              "Celestial_${VERSION}_x64-setup.exe" \
+              "Celestial_${VERSION}_x64_fixed_webview2-setup.exe" \
+              "Celestial_${VERSION}_x64_fixed_webview2_portable.zip"; do
+              if ! grep -Fxq "$expected" <<< "$assets"; then
+                echo "Missing Windows asset: $expected"
+                SHOULD_RUN=true
+              fi
+            done
+          fi
+
+          echo "should_run=$SHOULD_RUN" >> "$GITHUB_OUTPUT"
+          echo "build_ref=${BUILD_REF}" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_name=Celestial AutoBuild" >> "$GITHUB_OUTPUT"
+          echo "public_download_url=https://github.com/${PUBLIC_RELEASE_REPO}/releases/download/${TAG_NAME}" >> "$GITHUB_OUTPUT"
+
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+    needs: [prepare]
+    if: ${{ needs.prepare.outputs.should_run == 'true' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.build_ref }}
+          fetch-depth: 50
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: x86_64-pc-windows-msvc
+
+      - name: Add Rust target
+        shell: bash
+        run: |
+          rustup target add x86_64-pc-windows-msvc --toolchain ${{ env.RUST_TOOLCHAIN }} || rustup target add x86_64-pc-windows-msvc
+          rustup target list --installed
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
+          prefix-key: v1-rust
+          key: rust-shared-stable-windows-latest-x86_64-pc-windows-msvc
+          workspaces: |
+            . -> target
+          cache-all-crates: true
+          cache-workspace-crates: true
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies and prebuild
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run prebuild x86_64-pc-windows-msvc
+
+      - name: Bump version to autobuild format
+        run: pnpm release-version ${{ needs.prepare.outputs.version }}
+
+      - name: Tauri build
+        shell: bash
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        run: pnpm tauri build --target x86_64-pc-windows-msvc
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: autobuild-windows-x86_64
+          if-no-files-found: error
+          path: |
+            target/x86_64-pc-windows-msvc/release/bundle/**/*.exe
+            target/x86_64-pc-windows-msvc/release/bundle/**/*.msi
+            target/x86_64-pc-windows-msvc/release/bundle/**/*.zip
+            target/x86_64-pc-windows-msvc/release/bundle/**/*.sig
+
+  build-windows-webview2:
+    name: Build Windows x64 bundled WebView2
+    runs-on: windows-latest
+    needs: [prepare]
+    if: ${{ needs.prepare.outputs.should_run == 'true' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.build_ref }}
+          fetch-depth: 50
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: x86_64-pc-windows-msvc
+
+      - name: Add Rust target
+        shell: bash
+        run: |
+          rustup target add x86_64-pc-windows-msvc --toolchain ${{ env.RUST_TOOLCHAIN }} || rustup target add x86_64-pc-windows-msvc
+          rustup target list --installed
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
+          prefix-key: v1-rust
+          key: rust-shared-stable-windows-latest-x86_64-pc-windows-msvc-webview2
+          workspaces: |
+            . -> target
+          cache-all-crates: true
+          cache-workspace-crates: true
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies and prebuild
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run prebuild x86_64-pc-windows-msvc
+
+      - name: Bump version to autobuild format
+        run: pnpm release-version ${{ needs.prepare.outputs.version }}
+
+      - name: Download and extract bundled WebView2 runtime
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://github.com/westinyang/WebView2RuntimeArchive/releases/download/133.0.3065.92/Microsoft.WebView2.FixedVersionRuntime.133.0.3065.92.x64.cab -OutFile Microsoft.WebView2.FixedVersionRuntime.133.0.3065.92.x64.cab
+          Expand .\Microsoft.WebView2.FixedVersionRuntime.133.0.3065.92.x64.cab -F:* ./src-tauri
+          Remove-Item .\src-tauri\tauri.windows.conf.json
+          Rename-Item .\src-tauri\webview2.x64.json tauri.windows.conf.json
+
+      - name: Tauri build
+        shell: bash
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        run: pnpm tauri build --target x86_64-pc-windows-msvc
+
+      - name: Rename artifacts to indicate bundled WebView2
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem ".\target\x86_64-pc-windows-msvc\release\bundle\nsis\*-setup.exe"
+          foreach ($file in $files) {
+            Rename-Item $file.FullName ($file.Name -replace "-setup\.exe$", "_fixed_webview2-setup.exe")
+          }
+          $files = Get-ChildItem ".\target\x86_64-pc-windows-msvc\release\bundle\nsis\*.nsis.zip"
+          foreach ($file in $files) {
+            Rename-Item $file.FullName ($file.Name -replace "-setup\.nsis\.zip$", "_fixed_webview2-setup.nsis.zip")
+          }
+          $files = Get-ChildItem ".\target\x86_64-pc-windows-msvc\release\bundle\nsis\*-setup.exe.sig"
+          foreach ($file in $files) {
+            Rename-Item $file.FullName ($file.Name -replace "-setup\.exe\.sig$", "_fixed_webview2-setup.exe.sig")
+          }
+
+      - name: Build portable bundle
+        run: pnpm portable-fixed-webview2 x86_64-pc-windows-msvc --${{ env.TAG_NAME }}
+        env:
+          PORTABLE_SKIP_RELEASE_UPLOAD: '1'
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: autobuild-windows-x86_64-webview2
+          if-no-files-found: error
+          path: |
+            target/x86_64-pc-windows-msvc/release/bundle/nsis/*fixed_webview2*
+            Celestial_*_x64_fixed_webview2_portable.zip
+
+  publish-public-release:
+    name: Publish Windows assets to releases
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - build-windows
+      - build-windows-webview2
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.build_ref }}
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./dist
+
+      - name: Flatten artifact tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ./release-assets
+          find ./dist -type f -exec cp {} ./release-assets/ \;
+          ls -lah ./release-assets
+
+      - name: Fetch update logs
+        shell: bash
+        run: bash ./scripts/extract_update_logs.sh || true
+
+      - name: Generate release body
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          DOWNLOAD_URL: ${{ needs.prepare.outputs.public_download_url }}
+        run: |
+          set -euo pipefail
+          BUILDTIME="$(date -u '+%Y-%m-%d %H:%M UTC')"
+
+          if [ -z "${UPDATE_LOGS:-}" ]; then
+            UPDATE_LOGS="No changelog entry found for this build."
+          fi
+
+          cat > release.txt << EOF
+          > This is an automated development build from the dev branch. It may be unstable. For stable builds, use the regular releases.
+
+          ${UPDATE_LOGS}
+
+          ## Downloads
+
+          ### Windows
+          #### Standard installer
+          - [x64](${DOWNLOAD_URL}/Celestial_${VERSION}_x64-setup.exe)
+
+          #### Bundled WebView2
+          - [x64 setup](${DOWNLOAD_URL}/Celestial_${VERSION}_x64_fixed_webview2-setup.exe)
+          - [x64 portable](${DOWNLOAD_URL}/Celestial_${VERSION}_x64_fixed_webview2_portable.zip)
+
+          ### macOS
+          - [Intel x64 DMG](${DOWNLOAD_URL}/Celestial_${VERSION}_x64.dmg)
+
+          ### Linux
+          #### DEB package
+          - [x64](${DOWNLOAD_URL}/Celestial_${VERSION}_amd64.deb)
+
+          #### RPM package
+          - [x64](${DOWNLOAD_URL}/Celestial-${VERSION}-1.x86_64.rpm)
+
+          ---
+
+          Built at ${BUILDTIME}.
+          EOF
+
+      - name: Publish assets
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_NAME: ${{ needs.prepare.outputs.release_name }}
+          DOWNLOAD_URL: ${{ needs.prepare.outputs.public_download_url }}
+          PRIVATE_REPO: ${{ github.repository }}
+          PUBLIC_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLIC_RELEASE_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+        run: bash ./scripts-workflow/publish-autobuild-release.bash
+
+  notify-telegram:
+    name: Notify Telegram
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - publish-public-release
+    if: ${{ needs.publish-public-release.result == 'success' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.build_ref }}
+
+      - name: Fetch update logs
+        shell: bash
+        run: bash ./scripts/extract_update_logs.sh || true
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Send Telegram notification
+        run: node scripts/telegram.mjs
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          BUILD_TYPE: autobuild
+          VERSION: ${{ needs.prepare.outputs.version }}
+          DOWNLOAD_URL: ${{ needs.prepare.outputs.public_download_url }}
+          PUBLIC_RELEASE_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
