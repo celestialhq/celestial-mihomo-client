@@ -90,6 +90,8 @@ export const navItems = [
   },
 ]
 
+export const simpleNavPaths = ['/', '/profile', '/settings'] as const
+
 export const router = createBrowserRouter([
   {
     path: '/',

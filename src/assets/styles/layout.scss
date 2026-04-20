@@ -147,6 +147,19 @@
           padding: 0 20px;
         }
       }
+
+      .the-mode-switch {
+        flex: 0 0 auto;
+        padding: 8px 16px 10px;
+
+        .MuiButton-root {
+          min-height: 42px;
+          border-radius: 8px;
+          font-weight: 800;
+          text-transform: none;
+          white-space: nowrap;
+        }
+      }
     }
 
     &__right {
@@ -283,6 +296,31 @@
         display: none !important;
       }
 
+      .the-mode-switch {
+        padding: 8px 10px 12px !important;
+
+        .MuiButton-root {
+          min-width: 52px !important;
+          width: 52px !important;
+          height: 48px !important;
+          padding: 0 !important;
+          margin: 0 auto !important;
+          font-size: 0 !important;
+        }
+
+        .MuiButton-startIcon {
+          margin: 0 !important;
+        }
+
+        .MuiButton-icon {
+          margin: 0 !important;
+        }
+
+        .MuiSvgIcon-root {
+          font-size: 22px !important;
+        }
+      }
+
       > .MuiBox-root {
         display: none !important;
       }
@@ -366,6 +404,18 @@
           display: none !important;
         }
       }
+    }
+  }
+}
+
+.layout.layout--simple-mode {
+  .layout-content__left {
+    .the-traffic {
+      display: none;
+    }
+
+    .the-menu {
+      flex: 1 1 auto;
     }
   }
 }

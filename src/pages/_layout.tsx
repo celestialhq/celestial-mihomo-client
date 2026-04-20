@@ -13,11 +13,14 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
+  AppsRounded,
+  DashboardCustomizeRounded,
   KeyboardDoubleArrowLeftRounded,
   KeyboardDoubleArrowRightRounded,
 } from '@mui/icons-material'
 import {
   Box,
+  Button,
   IconButton,
   List,
   Menu,
@@ -41,6 +44,7 @@ import { UpdateButton } from '@/components/layout/update-button'
 import { WindowControls } from '@/components/layout/window-controller'
 import { useI18n } from '@/hooks/use-i18n'
 import { useProfiles } from '@/hooks/use-profiles'
+import { useUiMode } from '@/hooks/use-ui-mode'
 import { useVerge } from '@/hooks/use-verge'
 import { ensureRemoteNotificationsPolling } from '@/services/remote-notifications'
 import getSystem from '@/utils/get-system'
@@ -52,7 +56,7 @@ import {
   useNavMenuOrder,
 } from './_layout/hooks'
 import { handleNoticeMessage } from './_layout/utils'
-import { navItems } from './_routers'
+import { navItems, simpleNavPaths } from './_routers'
 import LogsPage from './logs'
 
 import 'dayjs/locale/ru'
@@ -110,11 +114,14 @@ const SortableNavMenuItem = ({ item, label }: SortableNavMenuItemProps) => {
 dayjs.extend(relativeTime)
 
 const OS = getSystem()
+const isSimpleNavPath = (path: string) =>
+  simpleNavPaths.includes(path as (typeof simpleNavPaths)[number])
 
 const Layout = () => {
   const { t } = useTranslation()
   const { theme } = useCustomTheme()
   const { verge, mutateVerge, patchVerge } = useVerge()
+  const { isSimpleMode, setMode } = useUiMode()
   const { current: currentProfile } = useProfiles()
   const { language } = verge ?? {}
   const navCollapsed = verge?.collapse_navbar ?? false
@@ -156,12 +163,20 @@ const Layout = () => {
     [patchVerge],
   )
 
+  const modeNavItems = useMemo(
+    () =>
+      isSimpleMode
+        ? navItems.filter((item) => isSimpleNavPath(item.path))
+        : navItems,
+    [isSimpleMode],
+  )
+
   const visibleNavItems = useMemo(
     () =>
-      navItems.filter((item) => {
+      modeNavItems.filter((item) => {
         return !item.visible || item.visible(currentProfile)
       }),
-    [currentProfile],
+    [currentProfile, modeNavItems],
   )
 
   const {
@@ -171,20 +186,23 @@ const Layout = () => {
     isDefaultOrder,
     resetMenuOrder,
   } = useNavMenuOrder({
-    enabled: menuUnlocked,
+    enabled: menuUnlocked && !isSimpleMode,
     items: visibleNavItems,
-    storedOrder: verge?.menu_order,
+    storedOrder: isSimpleMode ? undefined : verge?.menu_order,
     onOptimisticUpdate: handleMenuOrderOptimisticUpdate,
     onPersist: handleMenuOrderPersist,
   })
 
   const handleMenuContextMenu = useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
+      if (isSimpleMode) {
+        return
+      }
       event.preventDefault()
       event.stopPropagation()
       setMenuContextPosition({ top: event.clientY, left: event.clientX })
     },
-    [],
+    [isSimpleMode],
   )
 
   const handleMenuContextClose = useCallback(() => {
@@ -211,6 +229,19 @@ const Layout = () => {
     void patchVerge({ collapse_navbar: !navCollapsed })
   }, [navCollapsed, patchVerge])
 
+  const handleSwitchToAdvancedMode = useCallback(() => {
+    setMenuUnlocked(false)
+    setMode('advanced')
+  }, [setMode])
+
+  const handleSwitchToSimpleMode = useCallback(() => {
+    setMenuUnlocked(false)
+    setMode('simple')
+    if (!isSimpleNavPath(pathname)) {
+      navigate('/', { replace: true })
+    }
+  }, [navigate, pathname, setMode])
+
   const customTitlebar = useMemo(
     () => (
       <div className="the_titlebar" data-tauri-drag-region="true">
@@ -231,6 +262,12 @@ const Layout = () => {
   useEffect(() => {
     ensureRemoteNotificationsPolling()
   }, [])
+
+  useEffect(() => {
+    if (isSimpleMode && !isSimpleNavPath(pathname)) {
+      navigate('/', { replace: true })
+    }
+  }, [isSimpleMode, navigate, pathname])
 
   const handleNotice = useCallback(
     (payload: [string, string]) => {
@@ -291,7 +328,7 @@ const Layout = () => {
       <Paper
         square
         elevation={0}
-        className={`${OS} layout${navCollapsed ? ' layout--nav-collapsed' : ''}`}
+        className={`${OS} layout${navCollapsed ? ' layout--nav-collapsed' : ''}${isSimpleMode ? ' layout--simple-mode' : ''}`}
         style={{
           borderTopLeftRadius: '0px',
           borderTopRightRadius: '0px',
@@ -422,46 +459,70 @@ const Layout = () => {
               </List>
             )}
 
-            <Menu
-              open={Boolean(menuContextPosition)}
-              onClose={handleMenuContextClose}
-              anchorReference="anchorPosition"
-              anchorPosition={
-                menuContextPosition
-                  ? {
-                      top: menuContextPosition.top,
-                      left: menuContextPosition.left,
-                    }
-                  : undefined
-              }
-              transitionDuration={200}
-              slotProps={{
-                list: {
-                  sx: { py: 0.5 },
-                },
-              }}
-            >
-              <MenuItem onClick={handleToggleNavCollapsed} dense>
-                {navCollapsed
-                  ? t('layout.components.navigation.menu.expandNavBar')
-                  : t('layout.components.navigation.menu.collapseNavBar')}
-              </MenuItem>
-              <MenuItem
-                onClick={menuUnlocked ? handleLockMenu : handleUnlockMenu}
-                dense
+            {!isSimpleMode && (
+              <Menu
+                open={Boolean(menuContextPosition)}
+                onClose={handleMenuContextClose}
+                anchorReference="anchorPosition"
+                anchorPosition={
+                  menuContextPosition
+                    ? {
+                        top: menuContextPosition.top,
+                        left: menuContextPosition.left,
+                      }
+                    : undefined
+                }
+                transitionDuration={200}
+                slotProps={{
+                  list: {
+                    sx: { py: 0.5 },
+                  },
+                }}
               >
-                {menuUnlocked
-                  ? t('layout.components.navigation.menu.lock')
-                  : t('layout.components.navigation.menu.unlock')}
-              </MenuItem>
-              <MenuItem
-                onClick={handleResetMenuOrder}
-                dense
-                disabled={isDefaultOrder}
+                <MenuItem onClick={handleToggleNavCollapsed} dense>
+                  {navCollapsed
+                    ? t('layout.components.navigation.menu.expandNavBar')
+                    : t('layout.components.navigation.menu.collapseNavBar')}
+                </MenuItem>
+                <MenuItem
+                  onClick={menuUnlocked ? handleLockMenu : handleUnlockMenu}
+                  dense
+                >
+                  {menuUnlocked
+                    ? t('layout.components.navigation.menu.lock')
+                    : t('layout.components.navigation.menu.unlock')}
+                </MenuItem>
+                <MenuItem
+                  onClick={handleResetMenuOrder}
+                  dense
+                  disabled={isDefaultOrder}
+                >
+                  {t('layout.components.navigation.menu.restoreDefaultOrder')}
+                </MenuItem>
+              </Menu>
+            )}
+
+            <div className="the-mode-switch">
+              <Button
+                fullWidth
+                variant={isSimpleMode ? 'contained' : 'outlined'}
+                color={isSimpleMode ? 'primary' : 'inherit'}
+                startIcon={
+                  isSimpleMode ? (
+                    <DashboardCustomizeRounded fontSize="small" />
+                  ) : (
+                    <AppsRounded fontSize="small" />
+                  )
+                }
+                onClick={
+                  isSimpleMode
+                    ? handleSwitchToAdvancedMode
+                    : handleSwitchToSimpleMode
+                }
               >
-                {t('layout.components.navigation.menu.restoreDefaultOrder')}
-              </MenuItem>
-            </Menu>
+                {isSimpleMode ? 'Расширенный режим' : 'Простой режим'}
+              </Button>
+            </div>
 
             <div className="the-traffic">
               <LayoutTraffic />

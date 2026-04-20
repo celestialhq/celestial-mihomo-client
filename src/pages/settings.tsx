@@ -8,10 +8,13 @@ import SettingClash from '@/components/setting/setting-clash'
 import SettingSystem from '@/components/setting/setting-system'
 import SettingVergeAdvanced from '@/components/setting/setting-verge-advanced'
 import SettingVergeBasic from '@/components/setting/setting-verge-basic'
+import { useUiMode } from '@/hooks/use-ui-mode'
 import { openWebUrl } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 
-const SettingPage = () => {
+import SimpleSettingsPage from './simple-settings'
+
+const AdvancedSettingPage = () => {
   const { t } = useTranslation()
 
   const onError = (err: any) => {
@@ -106,6 +109,12 @@ const SettingPage = () => {
       </Grid>
     </BasePage>
   )
+}
+
+const SettingPage = () => {
+  const { isSimpleMode } = useUiMode()
+
+  return isSimpleMode ? <SimpleSettingsPage /> : <AdvancedSettingPage />
 }
 
 export default SettingPage
