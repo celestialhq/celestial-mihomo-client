@@ -14,3 +14,4 @@ jobs:
           token: ${{ secrets.RENOVATE_TOKEN }}
         env:
           RENOVATE_REPOSITORIES: pius-pp/celestial-mihomo-client
+          GITHUB_COM_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
