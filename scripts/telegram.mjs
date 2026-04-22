@@ -5,8 +5,8 @@ import axios from 'axios'
 import { log_error, log_info, log_success } from './utils.mjs'
 
 const CHAT_ID_RELEASE =
-  process.env.TELEGRAM_RELEASE_CHAT_ID || '@clash_verge_re'
-const CHAT_ID_TEST = process.env.TELEGRAM_TEST_CHAT_ID || '@vergetest'
+  process.env.TELEGRAM_RELEASE_CHAT_ID || '@celestial_releases'
+const CHAT_ID_TEST = process.env.TELEGRAM_TEST_CHAT_ID || '@celestial_ddev'
 
 async function sendTelegramNotification() {
   if (!process.env.TELEGRAM_BOT_TOKEN) {
