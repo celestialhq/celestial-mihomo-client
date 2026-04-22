@@ -140,7 +140,7 @@ jobs:
           fi
 
           echo "Downloading latest.json to compare commit hashes..."
-          LATEST_JSON_URL="https://github.com/pius-pp/celestial-mihomo-client/releases/download/autobuild/latest.json"
+          LATEST_JSON_URL="https://github.com/pius-pp/celestial-mihomo-client-public/releases/download/autobuild/latest.json"
           LATEST_JSON_CONTENT=$(curl -sL "$LATEST_JSON_URL" 2>/dev/null || echo "")
 
           if [ -z "$LATEST_JSON_CONTENT" ]; then
