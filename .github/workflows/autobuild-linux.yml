@@ -85,12 +85,12 @@ jobs:
 
   build-linux:
     name: Build Linux x64
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [prepare]
     if: ${{ needs.prepare.outputs.should_run == 'true' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.build_ref }}
           fetch-depth: 50
@@ -124,12 +124,12 @@ jobs:
           sudo apt-get install -y libxslt1.1 libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
       - name: Install Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -152,7 +152,7 @@ jobs:
         run: pnpm tauri build --target x86_64-unknown-linux-gnu
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: autobuild-linux-x86_64
           if-no-files-found: error
@@ -171,17 +171,17 @@ jobs:
       - build-linux
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.build_ref }}
 
       - name: Install Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: ./dist
 
