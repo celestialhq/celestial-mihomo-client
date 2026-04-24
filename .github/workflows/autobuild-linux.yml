@@ -64,7 +64,22 @@ jobs:
           set -euo pipefail
           VERSION="${{ needs.check_commit.outputs.autobuild_version }}"
           SHOULD_RUN="${{ needs.check_commit.outputs.should_run }}"
-
+          
+          if [ "$SHOULD_RUN" != "true" ]; then
+            echo "Reading published version from latest.json..."
+          
+            LATEST_JSON_CONTENT="$(curl -sL "https://github.com/${PUBLIC_RELEASE_REPO}/releases/download/${TAG_NAME}/latest.json" || true)"
+            PUBLISHED_VERSION="$(jq -r '.version // empty' <<< "$LATEST_JSON_CONTENT" 2>/dev/null || true)"
+          
+            if [ -n "$PUBLISHED_VERSION" ]; then
+              echo "Using published version: $PUBLISHED_VERSION"
+              VERSION="$PUBLISHED_VERSION"
+            else
+              echo "Could not read published version from latest.json; forcing build."
+              SHOULD_RUN=true
+            fi
+          fi
+          
           if [ "$SHOULD_RUN" != "true" ]; then
             assets="$(GH_TOKEN="${PUBLIC_RELEASE_TOKEN:-$GITHUB_TOKEN}" gh release view "$TAG_NAME" --repo "$PUBLIC_RELEASE_REPO" --json assets -q '.assets[].name' 2>/dev/null || true)"
             for expected in \
@@ -76,7 +91,7 @@ jobs:
               fi
             done
           fi
-
+          
           echo "should_run=$SHOULD_RUN" >> "$GITHUB_OUTPUT"
           echo "build_ref=${BUILD_REF}" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
