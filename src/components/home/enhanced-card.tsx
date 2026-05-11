@@ -46,11 +46,13 @@ export const EnhancedCard = forwardRef<HTMLElement, EnhancedCardProps>(
           display: 'flex',
           flexDirection: 'column',
           borderRadius: 2,
-          border: '1px solid rgba(148, 163, 184, 0.11)',
+          border: `1px solid ${alpha(theme.palette.primary.main, isDark ? 0.16 : 0.12)}`,
           background: isDark
-            ? 'linear-gradient(180deg, rgba(23, 32, 51, 0.96), rgba(17, 26, 43, 0.96))'
+            ? 'linear-gradient(180deg, rgba(185, 167, 255, 0.08), rgba(255, 255, 255, 0.018)), #101318'
             : 'background.paper',
-          boxShadow: '0 18px 40px rgba(0, 0, 0, 0.22)',
+          boxShadow: isDark
+            ? '0 18px 42px rgba(0, 0, 0, 0.26), 0 0 0 1px rgba(255, 255, 255, 0.02)'
+            : '0 18px 42px rgba(15, 23, 42, 0.08)',
           overflow: 'hidden',
         }}
         ref={ref}
@@ -64,7 +66,7 @@ export const EnhancedCard = forwardRef<HTMLElement, EnhancedCardProps>(
             justifyContent: 'space-between',
             borderBottom: 0,
             background: isDark
-              ? 'linear-gradient(180deg, rgba(125, 183, 255, 0.06), rgba(125, 183, 255, 0))'
+              ? 'linear-gradient(180deg, rgba(185, 167, 255, 0.075), rgba(255, 255, 255, 0))'
               : 'linear-gradient(180deg, rgba(237, 244, 250, 0.9), rgba(250, 252, 255, 0))',
           }}
         >
@@ -87,7 +89,12 @@ export const EnhancedCard = forwardRef<HTMLElement, EnhancedCardProps>(
                 height: 38,
                 mr: 1.5,
                 flexShrink: 0,
-                backgroundColor: alpha(theme.palette[iconColor].main, 0.12),
+                backgroundColor: isDark
+                  ? alpha(theme.palette[iconColor].main, 0.12)
+                  : alpha(theme.palette[iconColor].main, 0.12),
+                border: isDark
+                  ? `1px solid ${alpha(theme.palette[iconColor].main, 0.2)}`
+                  : 'none',
                 color: theme.palette[iconColor].main,
               }}
             >

@@ -126,11 +126,12 @@ export const ProxyItem = (props: Props) => {
               'transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease',
           },
           ({ palette: { mode, primary } }) => {
+            const proxyAccent = '#B9A7FF'
             const bgcolor =
               mode === 'light'
                 ? 'rgba(255, 255, 255, 0.92)'
-                : 'rgba(36, 39, 53, 0.9)'
-            const selectColor = mode === 'light' ? primary.main : primary.light
+                : 'rgba(20, 19, 31, 0.92)'
+            const selectColor = mode === 'light' ? primary.main : proxyAccent
             const showDelay = delayValue > 0
 
             return {
@@ -139,7 +140,7 @@ export const ProxyItem = (props: Props) => {
               '&:hover .the-icon': { display: 'none' },
               '&:hover': {
                 transform: 'translateY(-1px)',
-                borderColor: alpha(primary.main, 0.34),
+                borderColor: alpha(proxyAccent, 0.38),
               },
               '&.Mui-selected': {
                 width: `calc(100% + 3px)`,
@@ -148,10 +149,10 @@ export const ProxyItem = (props: Props) => {
                 bgcolor:
                   mode === 'light'
                     ? alpha(primary.main, 0.15)
-                    : alpha(primary.main, 0.35),
+                    : alpha(proxyAccent, 0.2),
               },
               backgroundColor: bgcolor,
-              border: `1px solid ${alpha(primary.main, selected ? 0.3 : 0.08)}`,
+              border: `1px solid ${alpha(proxyAccent, selected ? 0.34 : 0.1)}`,
               boxShadow:
                 mode === 'light'
                   ? '0 8px 18px rgba(15, 23, 42, 0.05)'
@@ -193,7 +194,7 @@ export const ProxyItem = (props: Props) => {
         <ListItemIcon
           sx={{
             justifyContent: 'flex-end',
-            color: 'primary.main',
+            color: '#B9A7FF',
             display: isPreset ? 'none' : '',
           }}
         >

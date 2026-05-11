@@ -55,8 +55,9 @@ export const ProxyRender = (props: RenderProps) => {
   const enable_group_icon = verge?.enable_group_icon ?? true
   const mode = useThemeMode()
   const isDark = mode === 'light' ? false : true
+  const proxyAccent = '#B9A7FF'
   const itembackgroundcolor = isDark
-    ? 'linear-gradient(135deg, rgba(36, 39, 53, 0.98), rgba(25, 34, 50, 0.98))'
+    ? 'linear-gradient(180deg, rgba(185, 167, 255, 0.09), rgba(255, 255, 255, 0.014)), #11121A'
     : 'linear-gradient(135deg, #ffffff, #f8fbff)'
   const iconCachePath = useIconCache({
     icon: group.icon,
@@ -92,20 +93,20 @@ export const ProxyRender = (props: RenderProps) => {
           borderRadius: '8px',
         }}
         sx={(theme) => ({
-          border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+          border: `1px solid ${alpha(proxyAccent, 0.16)}`,
           boxShadow:
             theme.palette.mode === 'light'
               ? '0 10px 24px rgba(15, 23, 42, 0.06)'
-              : '0 14px 30px rgba(0, 0, 0, 0.2)',
+              : '0 14px 30px rgba(0, 0, 0, 0.24), 0 0 22px rgba(185, 167, 255, 0.04)',
           transition:
             'transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease',
           '&:hover': {
             transform: 'translateY(-1px)',
-            borderColor: alpha(theme.palette.primary.main, 0.3),
+            borderColor: alpha(proxyAccent, 0.34),
             boxShadow:
               theme.palette.mode === 'light'
                 ? '0 14px 30px rgba(15, 23, 42, 0.09)'
-                : '0 18px 36px rgba(0, 0, 0, 0.26)',
+                : '0 18px 36px rgba(0, 0, 0, 0.3)',
           },
         })}
         onClick={() => onHeadState(group.name, { open: !headState?.open })}
@@ -170,8 +171,11 @@ export const ProxyRender = (props: RenderProps) => {
               sx={{
                 mr: 1,
                 backgroundColor: (theme) =>
-                  alpha(theme.palette.primary.main, 0.1),
-                color: (theme) => theme.palette.primary.main,
+                  alpha(
+                    proxyAccent,
+                    theme.palette.mode === 'dark' ? 0.18 : 0.1,
+                  ),
+                color: proxyAccent,
               }}
             />
           </Tooltip>
@@ -266,8 +270,8 @@ const StyledSubtitle = styled('span')`
 const StyledTypeBox = styled(Box)(({ theme }) => ({
   display: 'inline-block',
   border: '1px solid #ccc',
-  borderColor: alpha(theme.palette.primary.main, 0.5),
-  color: alpha(theme.palette.primary.main, 0.8),
+  borderColor: alpha('#B9A7FF', theme.palette.mode === 'dark' ? 0.46 : 0.5),
+  color: alpha('#B9A7FF', theme.palette.mode === 'dark' ? 0.88 : 0.8),
   borderRadius: 4,
   fontSize: 10,
   padding: '0 4px',

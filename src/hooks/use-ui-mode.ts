@@ -5,26 +5,23 @@ export type UiMode = 'simple' | 'advanced'
 const STORAGE_KEY = 'celestial-ui-mode'
 const CHANGE_EVENT = 'celestial-ui-mode-change'
 
-const isUiMode = (value: unknown): value is UiMode =>
-  value === 'simple' || value === 'advanced'
-
 const readUiMode = (): UiMode => {
-  if (typeof window === 'undefined') return 'simple'
+  if (typeof window === 'undefined') return 'advanced'
 
-  const stored = window.localStorage.getItem(STORAGE_KEY)
-  return isUiMode(stored) ? stored : 'simple'
+  window.localStorage.setItem(STORAGE_KEY, 'advanced')
+  return 'advanced'
 }
 
 export const useUiMode = () => {
   const [uiMode, setUiMode] = useState<UiMode>(readUiMode)
 
-  const updateMode = useCallback((nextMode: UiMode) => {
-    setUiMode(nextMode)
+  const updateMode = useCallback((_nextMode: UiMode) => {
+    setUiMode('advanced')
 
     if (typeof window === 'undefined') return
-    window.localStorage.setItem(STORAGE_KEY, nextMode)
+    window.localStorage.setItem(STORAGE_KEY, 'advanced')
     window.dispatchEvent(
-      new CustomEvent<UiMode>(CHANGE_EVENT, { detail: nextMode }),
+      new CustomEvent<UiMode>(CHANGE_EVENT, { detail: 'advanced' }),
     )
   }, [])
 
@@ -33,15 +30,13 @@ export const useUiMode = () => {
 
     const handleStorage = (event: StorageEvent) => {
       if (event.key === STORAGE_KEY) {
-        setUiMode(isUiMode(event.newValue) ? event.newValue : 'simple')
+        setUiMode('advanced')
+        window.localStorage.setItem(STORAGE_KEY, 'advanced')
       }
     }
 
-    const handleLocalChange = (event: Event) => {
-      const nextMode = (event as CustomEvent<UiMode>).detail
-      if (isUiMode(nextMode)) {
-        setUiMode(nextMode)
-      }
+    const handleLocalChange = (_event: Event) => {
+      setUiMode('advanced')
     }
 
     window.addEventListener('storage', handleStorage)
@@ -56,6 +51,6 @@ export const useUiMode = () => {
   return {
     mode: uiMode,
     setMode: updateMode,
-    isSimpleMode: uiMode === 'simple',
+    isSimpleMode: false,
   }
 }

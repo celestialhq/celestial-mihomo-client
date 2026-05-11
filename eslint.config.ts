@@ -12,6 +12,9 @@ import tseslint from 'typescript-eslint'
 
 export default defineConfig([
   {
+    ignores: ['newdesign2/**'],
+  },
+  {
     files: ['**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
 
     plugins: {

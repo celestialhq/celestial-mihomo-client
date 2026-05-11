@@ -8,7 +8,7 @@ export const ProfileBox = styled(Box)(
     const backgroundColor =
       mode === 'light'
         ? 'linear-gradient(135deg, #ffffff 0%, #f8fbff 100%)'
-        : 'linear-gradient(135deg, rgba(36, 39, 53, 0.98) 0%, rgba(25, 34, 50, 0.98) 100%)'
+        : 'linear-gradient(180deg, rgba(185, 167, 255, 0.075), rgba(255, 255, 255, 0.016)), #101318'
 
     const color = {
       'light-true': text.secondary,
@@ -55,7 +55,7 @@ export const ProfileBox = styled(Box)(
       borderRadius: '8px',
       minHeight: 98,
       color,
-      border: `1px solid ${alpha(mode === 'light' ? text.primary : '#fff', mode === 'light' ? 0.08 : 0.06)}`,
+      border: `1px solid ${alpha(mode === 'light' ? text.primary : primary.main, mode === 'light' ? 0.08 : 0.14)}`,
       boxShadow:
         mode === 'light'
           ? '0 10px 24px rgba(15, 23, 42, 0.06)'
@@ -71,7 +71,7 @@ export const ProfileBox = styled(Box)(
         right: 0,
         height: 2,
         background: selected
-          ? `linear-gradient(90deg, ${primary.main}, ${theme.palette.info.main})`
+          ? `linear-gradient(90deg, ${primary.main}, transparent)`
           : 'transparent',
       },
       '&:hover': {

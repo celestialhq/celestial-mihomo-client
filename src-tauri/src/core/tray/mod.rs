@@ -21,6 +21,7 @@ use anyhow::Result;
 use smartstring::alias::String;
 use std::collections::HashMap;
 use std::time::Duration;
+use sysproxy::{Autoproxy, Sysproxy};
 use tauri::{
     AppHandle, Wry,
     menu::{CheckMenuItem, IsMenuItem, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
@@ -55,7 +56,7 @@ pub struct Tray {
 impl TrayState {
     async fn get_tray_icon(verge: &IVerge) -> (bool, Vec<u8>) {
         let tun_mode = verge.enable_tun_mode.unwrap_or(false);
-        let system_mode = verge.enable_system_proxy.unwrap_or(false);
+        let system_mode = Self::system_proxy_points_to_verge(verge).await;
         let kind = if tun_mode {
             IconKind::Tun
         } else if system_mode {
@@ -81,6 +82,30 @@ impl TrayState {
         }
 
         Self::default_icon(verge, kind)
+    }
+
+    async fn system_proxy_points_to_verge(verge: &IVerge) -> bool {
+        let host = verge.proxy_host.clone().unwrap_or_else(|| "127.0.0.1".into());
+        let pac_enabled = verge.proxy_auto_config.unwrap_or_default();
+        let pac_url = format!("http://{}:{}/commands/pac", host, IVerge::get_singleton_port());
+        let mixed_port = match verge.verge_mixed_port {
+            Some(port) => port,
+            None => Config::clash().await.latest_arc().get_mixed_port(),
+        };
+
+        tokio::task::spawn_blocking(move || {
+            if pac_enabled {
+                return Autoproxy::get_auto_proxy()
+                    .map(|proxy| proxy.enable && proxy.url == pac_url)
+                    .unwrap_or(false);
+            }
+
+            Sysproxy::get_system_proxy()
+                .map(|proxy| proxy.enable && proxy.host == host && proxy.port == mixed_port)
+                .unwrap_or(false)
+        })
+        .await
+        .unwrap_or(false)
     }
 
     fn default_icon(verge: &IVerge, kind: IconKind) -> (bool, Vec<u8>) {
@@ -192,7 +217,7 @@ impl Tray {
         };
 
         let verge = Config::verge().await.latest_arc();
-        let system_proxy = verge.enable_system_proxy.as_ref().unwrap_or(&false);
+        let system_proxy = TrayState::system_proxy_points_to_verge(&verge).await;
         let tun_mode = verge.enable_tun_mode.as_ref().unwrap_or(&false);
         let tun_mode_available =
             is_current_app_handle_admin(app_handle) || service::is_service_available().await.is_ok();
@@ -217,7 +242,7 @@ impl Tray {
                 create_tray_menu(
                     app_handle,
                     Some(mode.as_str()),
-                    *system_proxy,
+                    system_proxy,
                     *tun_mode,
                     tun_mode_available,
                     profiles_preview,
@@ -271,7 +296,7 @@ impl Tray {
         let app_handle = handle::Handle::app_handle();
 
         let verge = Config::verge().await.latest_arc();
-        let system_proxy = verge.enable_system_proxy.unwrap_or(false);
+        let system_proxy = TrayState::system_proxy_points_to_verge(&verge).await;
         let tun_mode = verge.enable_tun_mode.unwrap_or(false);
 
         let switch_str = |flag: bool| {

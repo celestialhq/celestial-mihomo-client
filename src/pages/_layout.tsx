@@ -13,14 +13,11 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
-  AppsRounded,
-  DashboardCustomizeRounded,
   KeyboardDoubleArrowLeftRounded,
   KeyboardDoubleArrowRightRounded,
 } from '@mui/icons-material'
 import {
   Box,
-  Button,
   IconButton,
   List,
   Menu,
@@ -36,6 +33,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 
+import logoUrl from '@/assets/image/logo.svg'
 import { BaseErrorBoundary } from '@/components/base'
 import { LayoutItem } from '@/components/layout/layout-item'
 import { LayoutTraffic } from '@/components/layout/layout-traffic'
@@ -44,7 +42,6 @@ import { UpdateButton } from '@/components/layout/update-button'
 import { WindowControls } from '@/components/layout/window-controller'
 import { useI18n } from '@/hooks/use-i18n'
 import { useProfiles } from '@/hooks/use-profiles'
-import { useUiMode } from '@/hooks/use-ui-mode'
 import { useVerge } from '@/hooks/use-verge'
 import { ensureRemoteNotificationsPolling } from '@/services/remote-notifications'
 import getSystem from '@/utils/get-system'
@@ -56,7 +53,7 @@ import {
   useNavMenuOrder,
 } from './_layout/hooks'
 import { handleNoticeMessage } from './_layout/utils'
-import { navItems, simpleNavPaths } from './_routers'
+import { navItems } from './_routers'
 import LogsPage from './logs'
 
 import 'dayjs/locale/ru'
@@ -114,18 +111,15 @@ const SortableNavMenuItem = ({ item, label }: SortableNavMenuItemProps) => {
 dayjs.extend(relativeTime)
 
 const OS = getSystem()
-const isSimpleNavPath = (path: string) =>
-  simpleNavPaths.includes(path as (typeof simpleNavPaths)[number])
 
 const Layout = () => {
   const { t } = useTranslation()
   const { theme } = useCustomTheme()
   const { verge, mutateVerge, patchVerge } = useVerge()
-  const { isSimpleMode, setMode } = useUiMode()
   const { current: currentProfile } = useProfiles()
   const { language } = verge ?? {}
   const navCollapsed = verge?.collapse_navbar ?? false
-  const sidebarCollapsed = isSimpleMode || navCollapsed
+  const sidebarCollapsed = navCollapsed
   const { switchLanguage } = useI18n()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -164,20 +158,12 @@ const Layout = () => {
     [patchVerge],
   )
 
-  const modeNavItems = useMemo(
-    () =>
-      isSimpleMode
-        ? navItems.filter((item) => isSimpleNavPath(item.path))
-        : navItems,
-    [isSimpleMode],
-  )
-
   const visibleNavItems = useMemo(
     () =>
-      modeNavItems.filter((item) => {
+      navItems.filter((item) => {
         return !item.visible || item.visible(currentProfile)
       }),
-    [currentProfile, modeNavItems],
+    [currentProfile],
   )
 
   const {
@@ -187,23 +173,20 @@ const Layout = () => {
     isDefaultOrder,
     resetMenuOrder,
   } = useNavMenuOrder({
-    enabled: menuUnlocked && !isSimpleMode,
+    enabled: menuUnlocked,
     items: visibleNavItems,
-    storedOrder: isSimpleMode ? undefined : verge?.menu_order,
+    storedOrder: verge?.menu_order,
     onOptimisticUpdate: handleMenuOrderOptimisticUpdate,
     onPersist: handleMenuOrderPersist,
   })
 
   const handleMenuContextMenu = useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
-      if (isSimpleMode) {
-        return
-      }
       event.preventDefault()
       event.stopPropagation()
       setMenuContextPosition({ top: event.clientY, left: event.clientX })
     },
-    [isSimpleMode],
+    [],
   )
 
   const handleMenuContextClose = useCallback(() => {
@@ -230,26 +213,11 @@ const Layout = () => {
     void patchVerge({ collapse_navbar: !navCollapsed })
   }, [navCollapsed, patchVerge])
 
-  const handleSwitchToAdvancedMode = useCallback(() => {
-    setMenuUnlocked(false)
-    setMode('advanced')
-  }, [setMode])
-
-  const handleSwitchToSimpleMode = useCallback(() => {
-    setMenuUnlocked(false)
-    setMode('simple')
-    if (!isSimpleNavPath(pathname)) {
-      navigate('/', { replace: true })
-    }
-  }, [navigate, pathname, setMode])
-
   const customTitlebar = useMemo(
     () => (
       <div className="the_titlebar" data-tauri-drag-region="true">
         <div className="the_titlebar__brand" data-tauri-drag-region="true">
-          <span className="the-titlebar-cloud" aria-hidden="true">
-            ☁️
-          </span>
+          <img className="the-titlebar-cloud" src={logoUrl} alt="" />
           <span>Celestial</span>
         </div>
         <WindowControls />
@@ -263,12 +231,6 @@ const Layout = () => {
   useEffect(() => {
     ensureRemoteNotificationsPolling()
   }, [])
-
-  useEffect(() => {
-    if (isSimpleMode && !isSimpleNavPath(pathname)) {
-      navigate('/', { replace: true })
-    }
-  }, [isSimpleMode, navigate, pathname])
 
   const handleNotice = useCallback(
     (payload: [string, string]) => {
@@ -297,7 +259,7 @@ const Layout = () => {
         style={{
           width: '100vw',
           height: '100vh',
-          background: '#0F172A',
+          background: '#070B12',
           transition: 'background 0.2s',
           display: 'flex',
           alignItems: 'center',
@@ -329,7 +291,7 @@ const Layout = () => {
       <Paper
         square
         elevation={0}
-        className={`${OS} layout${sidebarCollapsed ? ' layout--nav-collapsed' : ''}${isSimpleMode ? ' layout--simple-mode' : ''}`}
+        className={`${OS} layout${sidebarCollapsed ? ' layout--nav-collapsed' : ''}`}
         style={{
           borderTopLeftRadius: '0px',
           borderTopRightRadius: '0px',
@@ -363,40 +325,36 @@ const Layout = () => {
           <div className="layout-content__left">
             <div className="the-logo" data-tauri-drag-region="false">
               <div data-tauri-drag-region="true" className="the-brand">
-                <span className="the-brand__icon" aria-hidden="true">
-                  ☁️
-                </span>
+                <img className="the-brand__icon" src={logoUrl} alt="" />
                 <span className="the-brand__name">Celestial</span>
               </div>
               <UpdateButton className="the-newbtn" />
-              {!isSimpleMode && (
-                <Tooltip
-                  title={
+              <Tooltip
+                title={
+                  navCollapsed
+                    ? t('layout.components.navigation.menu.expandNavBar')
+                    : t('layout.components.navigation.menu.collapseNavBar')
+                }
+                placement="right"
+                arrow
+              >
+                <IconButton
+                  className="the-nav-toggle"
+                  size="small"
+                  onClick={handleToggleNavCollapsed}
+                  aria-label={
                     navCollapsed
                       ? t('layout.components.navigation.menu.expandNavBar')
                       : t('layout.components.navigation.menu.collapseNavBar')
                   }
-                  placement="right"
-                  arrow
                 >
-                  <IconButton
-                    className="the-nav-toggle"
-                    size="small"
-                    onClick={handleToggleNavCollapsed}
-                    aria-label={
-                      navCollapsed
-                        ? t('layout.components.navigation.menu.expandNavBar')
-                        : t('layout.components.navigation.menu.collapseNavBar')
-                    }
-                  >
-                    {navCollapsed ? (
-                      <KeyboardDoubleArrowRightRounded fontSize="small" />
-                    ) : (
-                      <KeyboardDoubleArrowLeftRounded fontSize="small" />
-                    )}
-                  </IconButton>
-                </Tooltip>
-              )}
+                  {navCollapsed ? (
+                    <KeyboardDoubleArrowRightRounded fontSize="small" />
+                  ) : (
+                    <KeyboardDoubleArrowLeftRounded fontSize="small" />
+                  )}
+                </IconButton>
+              </Tooltip>
             </div>
 
             {menuUnlocked && (
@@ -462,70 +420,46 @@ const Layout = () => {
               </List>
             )}
 
-            {!isSimpleMode && (
-              <Menu
-                open={Boolean(menuContextPosition)}
-                onClose={handleMenuContextClose}
-                anchorReference="anchorPosition"
-                anchorPosition={
-                  menuContextPosition
-                    ? {
-                        top: menuContextPosition.top,
-                        left: menuContextPosition.left,
-                      }
-                    : undefined
-                }
-                transitionDuration={200}
-                slotProps={{
-                  list: {
-                    sx: { py: 0.5 },
-                  },
-                }}
+            <Menu
+              open={Boolean(menuContextPosition)}
+              onClose={handleMenuContextClose}
+              anchorReference="anchorPosition"
+              anchorPosition={
+                menuContextPosition
+                  ? {
+                      top: menuContextPosition.top,
+                      left: menuContextPosition.left,
+                    }
+                  : undefined
+              }
+              transitionDuration={200}
+              slotProps={{
+                list: {
+                  sx: { py: 0.5 },
+                },
+              }}
+            >
+              <MenuItem onClick={handleToggleNavCollapsed} dense>
+                {navCollapsed
+                  ? t('layout.components.navigation.menu.expandNavBar')
+                  : t('layout.components.navigation.menu.collapseNavBar')}
+              </MenuItem>
+              <MenuItem
+                onClick={menuUnlocked ? handleLockMenu : handleUnlockMenu}
+                dense
               >
-                <MenuItem onClick={handleToggleNavCollapsed} dense>
-                  {navCollapsed
-                    ? t('layout.components.navigation.menu.expandNavBar')
-                    : t('layout.components.navigation.menu.collapseNavBar')}
-                </MenuItem>
-                <MenuItem
-                  onClick={menuUnlocked ? handleLockMenu : handleUnlockMenu}
-                  dense
-                >
-                  {menuUnlocked
-                    ? t('layout.components.navigation.menu.lock')
-                    : t('layout.components.navigation.menu.unlock')}
-                </MenuItem>
-                <MenuItem
-                  onClick={handleResetMenuOrder}
-                  dense
-                  disabled={isDefaultOrder}
-                >
-                  {t('layout.components.navigation.menu.restoreDefaultOrder')}
-                </MenuItem>
-              </Menu>
-            )}
-
-            <div className="the-mode-switch">
-              <Button
-                fullWidth
-                variant={isSimpleMode ? 'contained' : 'outlined'}
-                color={isSimpleMode ? 'primary' : 'inherit'}
-                startIcon={
-                  isSimpleMode ? (
-                    <DashboardCustomizeRounded fontSize="small" />
-                  ) : (
-                    <AppsRounded fontSize="small" />
-                  )
-                }
-                onClick={
-                  isSimpleMode
-                    ? handleSwitchToAdvancedMode
-                    : handleSwitchToSimpleMode
-                }
+                {menuUnlocked
+                  ? t('layout.components.navigation.menu.lock')
+                  : t('layout.components.navigation.menu.unlock')}
+              </MenuItem>
+              <MenuItem
+                onClick={handleResetMenuOrder}
+                dense
+                disabled={isDefaultOrder}
               >
-                {isSimpleMode ? 'Расширенный режим' : 'Простой режим'}
-              </Button>
-            </div>
+                {t('layout.components.navigation.menu.restoreDefaultOrder')}
+              </MenuItem>
+            </Menu>
 
             <div className="the-traffic">
               <LayoutTraffic />

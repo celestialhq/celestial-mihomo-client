@@ -8,11 +8,8 @@ import SettingClash from '@/components/setting/setting-clash'
 import SettingSystem from '@/components/setting/setting-system'
 import SettingVergeAdvanced from '@/components/setting/setting-verge-advanced'
 import SettingVergeBasic from '@/components/setting/setting-verge-basic'
-import { useUiMode } from '@/hooks/use-ui-mode'
 import { openWebUrl } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
-
-import SimpleSettingsPage from './simple-settings'
 
 const AdvancedSettingPage = () => {
   const { t } = useTranslation()
@@ -39,10 +36,10 @@ const AdvancedSettingPage = () => {
 
   const panelSx = {
     borderRadius: 2,
-    border: '1px solid rgba(148, 163, 184, 0.11)',
+    border: '1px solid rgba(185, 167, 255, 0.16)',
     background:
-      'linear-gradient(180deg, rgba(23, 32, 51, 0.96), rgba(17, 26, 43, 0.96))',
-    boxShadow: '0 18px 40px rgba(0, 0, 0, 0.22)',
+      'linear-gradient(180deg, rgba(185, 167, 255, 0.075), rgba(255, 255, 255, 0.015)), #101318',
+    boxShadow: '0 18px 42px rgba(0, 0, 0, 0.24)',
     overflow: 'hidden',
   }
 
@@ -112,9 +109,7 @@ const AdvancedSettingPage = () => {
 }
 
 const SettingPage = () => {
-  const { isSimpleMode } = useUiMode()
-
-  return isSimpleMode ? <SimpleSettingsPage /> : <AdvancedSettingPage />
+  return <AdvancedSettingPage />
 }
 
 export default SettingPage

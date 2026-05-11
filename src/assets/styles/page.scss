@@ -14,7 +14,9 @@
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid var(--divider-color);
-    background: var(--surface-color);
+    background:
+      linear-gradient(180deg, rgba(185, 167, 255, 0.08), rgba(255, 255, 255, 0)),
+      var(--surface-color);
   }
 
   .base-container {
@@ -32,6 +34,10 @@
       padding: 12px 0;
       box-sizing: border-box;
       scrollbar-gutter: stable;
+      background:
+        radial-gradient(circle at 100% 0%, rgba(185, 167, 255, 0.1), transparent 30%),
+        transparent;
+
       .base-content {
         width: calc(100% - 10px * 2);
         margin: 0 auto;

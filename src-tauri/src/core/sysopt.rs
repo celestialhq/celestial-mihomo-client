@@ -162,8 +162,19 @@ impl Sysopt {
         self.access_guard().write().set_guard_type(guard_type);
 
         tokio::task::spawn_blocking(move || -> Result<()> {
-            sys.set_system_proxy()?;
-            auto.set_auto_proxy()?;
+            if auto.enable {
+                // PAC mode: clear the global proxy first, then set the PAC URL.
+                sys.set_system_proxy()?;
+                auto.set_auto_proxy()?;
+            } else if sys.enable {
+                // Manual proxy mode: clearing PAC calls unset_proxy() on Windows,
+                // so it must happen before enabling the global proxy.
+                auto.set_auto_proxy()?;
+                sys.set_system_proxy()?;
+            } else {
+                sys.set_system_proxy()?;
+                auto.set_auto_proxy()?;
+            }
             Ok(())
         })
         .await??;

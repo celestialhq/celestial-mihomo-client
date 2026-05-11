@@ -5,9 +5,9 @@ use tauri::{Theme, WebviewWindow};
 use crate::{config::Config, core::handle, utils::resolve::window_script::build_window_initial_script};
 use clash_verge_logging::{Type, logging_error};
 
-const DARK_BACKGROUND_COLOR: Color = Color(15, 23, 42, 255); // #0F172A
+const DARK_BACKGROUND_COLOR: Color = Color(7, 11, 18, 255); // #070B12
 const LIGHT_BACKGROUND_COLOR: Color = Color(243, 247, 251, 255); // #F3F7FB
-const DARK_BACKGROUND_HEX: &str = "#0F172A";
+const DARK_BACKGROUND_HEX: &str = "#070B12";
 const LIGHT_BACKGROUND_HEX: &str = "#F3F7FB";
 
 // 定义默认窗口尺寸常量

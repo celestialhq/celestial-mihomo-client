@@ -1,6 +1,5 @@
 @use './layout.scss';
 @use './page.scss';
-@use './simple.scss';
 @use './font.scss';
 
 body {
@@ -17,14 +16,18 @@ body {
 }
 
 :root {
-  --primary-main: #3478c6;
-  --text-primary: #152235;
-  --selection-color: #e0f2fe;
-  --scroller-color: rgba(52, 120, 198, 0.3);
-  --background-color: #f3f7fb;
-  --surface-color: #fafcff;
-  --surface-color-elevated: #f6f9fc;
-  --background-color-alpha: rgba(52, 120, 198, 0.08);
+  --primary-main: #b9a7ff;
+  --celestial-main: #b9a7ff;
+  --celestial-soft: rgba(185, 167, 255, 0.16);
+  --proxy-accent: #b9a7ff;
+  --proxy-accent-soft: rgba(185, 167, 255, 0.16);
+  --text-primary: #f3f8ff;
+  --selection-color: #071018;
+  --scroller-color: rgba(185, 167, 255, 0.34);
+  --background-color: #070b12;
+  --surface-color: #101318;
+  --surface-color-elevated: #171b22;
+  --background-color-alpha: rgba(185, 167, 255, 0.12);
   --border-radius: 8px;
 }
 

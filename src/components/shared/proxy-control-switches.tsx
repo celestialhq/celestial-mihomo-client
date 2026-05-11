@@ -30,6 +30,7 @@ interface ProxySwitchProps {
 interface SwitchRowProps {
   label: string
   active: boolean
+  checked?: boolean
   disabled?: boolean
   infoTitle: string
   onInfoClick?: () => void
@@ -46,6 +47,7 @@ interface SwitchRowProps {
 const SwitchRow = ({
   label,
   active,
+  checked: checkedProp,
   disabled,
   infoTitle,
   onInfoClick,
@@ -55,13 +57,14 @@ const SwitchRow = ({
   highlight,
 }: SwitchRowProps) => {
   const theme = useTheme()
-  const [checked, setChecked] = useState(active)
+  const controlledChecked = checkedProp ?? active
+  const [checked, setChecked] = useState(controlledChecked)
   const pendingRef = useRef(false)
 
   if (pendingRef.current) {
-    if (active === checked) pendingRef.current = false
-  } else if (checked !== active) {
-    setChecked(active)
+    if (controlledChecked === checked) pendingRef.current = false
+  } else if (checked !== controlledChecked) {
+    setChecked(controlledChecked)
   }
 
   const handleChange = (_: React.ChangeEvent, value: boolean) => {
@@ -69,7 +72,7 @@ const SwitchRow = ({
     setChecked(value)
     onToggle(value)
       .catch((err: any) => {
-        setChecked(active)
+        setChecked(controlledChecked)
         onError?.(err)
       })
       .finally(() => {
@@ -133,8 +136,11 @@ const ProxyControlSwitches = ({
   const { verge, mutateVerge, patchVerge } = useVerge()
   const { installServiceAndRestartCore } = useServiceInstaller()
   const { uninstallServiceAndRestartCore } = useServiceUninstaller()
-  const { indicator: systemProxyIndicator, toggleSystemProxy } =
-    useSystemProxyState()
+  const {
+    configState: systemProxyConfigState,
+    indicator: systemProxyIndicator,
+    toggleSystemProxy,
+  } = useSystemProxyState()
   const { isServiceOk, isTunModeAvailable, mutateSystemState } =
     useSystemState()
 
@@ -189,6 +195,7 @@ const ProxyControlSwitches = ({
         <SwitchRow
           label={t('settings.sections.proxyControl.fields.systemProxy')}
           active={systemProxyIndicator}
+          checked={systemProxyConfigState}
           infoTitle={t('settings.sections.proxyControl.tooltips.systemProxy')}
           onInfoClick={() => sysproxyRef.current?.open()}
           onToggle={(value) => toggleSystemProxy(value)}

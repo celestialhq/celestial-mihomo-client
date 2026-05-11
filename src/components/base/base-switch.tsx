@@ -20,7 +20,7 @@ export const Switch = styled((props: SwitchProps) => (
       transform: 'translateX(16px)',
       color: '#fff',
       '& + .MuiSwitch-track': {
-        backgroundColor: theme.palette.primary.main,
+        backgroundColor: theme.palette.mode === 'light' ? '#4D9EEA' : '#B9A7FF',
         opacity: 1,
         border: 0,
       },
@@ -49,7 +49,8 @@ export const Switch = styled((props: SwitchProps) => (
   },
   '& .MuiSwitch-track': {
     borderRadius: 26 / 2,
-    backgroundColor: theme.palette.mode === 'light' ? '#BBBBBB' : '#39393D',
+    backgroundColor:
+      theme.palette.mode === 'light' ? '#BBBBBB' : 'rgba(185, 167, 255, 0.18)',
     opacity: 1,
     transition: theme.transitions.create(['background-color'], {
       duration: 500,

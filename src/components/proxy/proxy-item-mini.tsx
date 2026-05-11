@@ -104,12 +104,13 @@ export const ProxyItemMini = (props: Props) => {
             'transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease',
         },
         ({ palette: { mode, primary } }) => {
+          const proxyAccent = '#B9A7FF'
           const bgcolor =
             mode === 'light'
               ? 'rgba(255, 255, 255, 0.92)'
-              : 'rgba(36, 39, 53, 0.9)'
+              : 'rgba(20, 19, 31, 0.92)'
           const showDelay = delayValue > 0
-          const selectColor = mode === 'light' ? primary.main : primary.light
+          const selectColor = mode === 'light' ? primary.main : proxyAccent
 
           return {
             '&:hover .the-check': { display: !showDelay ? 'block' : 'none' },
@@ -117,7 +118,7 @@ export const ProxyItemMini = (props: Props) => {
             '&:hover .the-icon': { display: 'none' },
             '&:hover': {
               transform: 'translateY(-1px)',
-              borderColor: alpha(primary.main, 0.34),
+              borderColor: alpha(proxyAccent, 0.38),
             },
             '& .the-pin, & .the-unpin': {
               position: 'absolute',
@@ -133,10 +134,10 @@ export const ProxyItemMini = (props: Props) => {
               bgcolor:
                 mode === 'light'
                   ? alpha(primary.main, 0.15)
-                  : alpha(primary.main, 0.35),
+                  : alpha(proxyAccent, 0.2),
             },
             backgroundColor: bgcolor,
-            border: `1px solid ${alpha(primary.main, selected ? 0.3 : 0.08)}`,
+            border: `1px solid ${alpha(proxyAccent, selected ? 0.34 : 0.1)}`,
             boxShadow:
               mode === 'light'
                 ? '0 8px 18px rgba(15, 23, 42, 0.05)'
@@ -226,9 +227,7 @@ export const ProxyItemMini = (props: Props) => {
           </Box>
         )}
       </Box>
-      <Box
-        sx={{ ml: 0.5, color: 'primary.main', display: isPreset ? 'none' : '' }}
-      >
+      <Box sx={{ ml: 0.5, color: '#B9A7FF', display: isPreset ? 'none' : '' }}>
         {delayValue === -2 && (
           <Widget>
             <BaseLoading />
@@ -309,11 +308,11 @@ const Widget = styled(Box)(({ theme: { typography } }) => ({
 
 const TypeBox = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'component',
-})<{ component?: React.ElementType }>(({ theme: { typography } }) => ({
+})<{ component?: React.ElementType }>(({ theme: { palette, typography } }) => ({
   display: 'inline-block',
   border: '1px solid #ccc',
-  borderColor: 'text.secondary',
-  color: 'text.secondary',
+  borderColor: alpha('#B9A7FF', palette.mode === 'dark' ? 0.34 : 0.24),
+  color: alpha('#B9A7FF', palette.mode === 'dark' ? 0.76 : 0.58),
   borderRadius: 4,
   fontSize: 10,
   fontFamily: typography.fontFamily,

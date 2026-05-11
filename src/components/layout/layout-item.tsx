@@ -53,8 +53,15 @@ export const LayoutItem = (props: Props) => {
     <ListItem
       ref={setNodeRef}
       style={style}
-        sx={[
-        { py: 0.5, maxWidth: 250, mx: 'auto', padding: '4px 0px' },
+      sx={[
+        {
+          py: 0.5,
+          width: '100%',
+          maxWidth: '100%',
+          mx: 'auto',
+          padding: '4px 0px',
+          overflowX: 'hidden',
+        },
         isDragging ? { opacity: 0.78 } : {},
       ]}
     >
@@ -68,12 +75,14 @@ export const LayoutItem = (props: Props) => {
             paddingLeft: 1.5,
             paddingRight: 1.25,
             marginRight: 1.25,
+            maxWidth: 'calc(100% - 20px)',
+            minWidth: 0,
             minHeight: 48,
             gap: 1.5,
             justifyContent: 'flex-start',
             cursor: draggable ? 'grab' : 'pointer',
             transition:
-              'background-color 0.2s ease, color 0.2s ease, transform 0.2s ease',
+              'background 0.2s ease, color 0.2s ease, transform 0.2s ease',
             '&:active': draggable ? { cursor: 'grabbing' } : {},
             '&:hover': {
               transform: 'translateX(2px)',
@@ -85,21 +94,21 @@ export const LayoutItem = (props: Props) => {
             },
           },
           ({ palette: { mode, primary, text } }) => {
-            const bgcolor =
+            const background =
               mode === 'light'
                 ? alpha(primary.main, 0.14)
-                : alpha(primary.main, 0.24)
-            const hoverBgcolor =
+                : 'linear-gradient(135deg, #E9E2FF 0%, #B9A7FF 100%)'
+            const hoverBackground =
               mode === 'light'
                 ? alpha(primary.main, 0.08)
-                : alpha(primary.main, 0.16)
-            const color = mode === 'light' ? '#075985' : '#E0F2FE'
+                : alpha('#B9A7FF', 0.1)
+            const color = mode === 'light' ? '#111111' : '#071018'
             return {
-              '&:hover': { bgcolor: hoverBgcolor },
-              '&.Mui-selected': { bgcolor },
-              '&.Mui-selected:hover': { bgcolor },
+              '&:hover': { background: hoverBackground },
+              '&.Mui-selected': { background },
+              '&.Mui-selected:hover': { background },
               '&.Mui-selected .MuiListItemText-primary': { color },
-              '&.Mui-selected .MuiListItemIcon-root': { color: primary.main },
+              '&.Mui-selected .MuiListItemIcon-root': { color },
               '&:not(.Mui-selected) .MuiListItemIcon-root': {
                 color: alpha(text.primary, mode === 'light' ? 0.72 : 0.82),
               },

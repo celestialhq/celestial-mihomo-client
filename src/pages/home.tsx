@@ -33,11 +33,8 @@ import { EnhancedTrafficStats } from '@/components/home/enhanced-traffic-stats'
 import { HomeProfileCard } from '@/components/home/home-profile-card'
 import { ProxyTunCard } from '@/components/home/proxy-tun-card'
 import { useProfiles } from '@/hooks/use-profiles'
-import { useUiMode } from '@/hooks/use-ui-mode'
 import { useVerge } from '@/hooks/use-verge'
 import { entry_lightweight_mode, openWebUrl } from '@/services/cmds'
-
-import SimpleHomePage from './simple-home'
 
 const LazyIpInfoCard = lazy(() =>
   import('@/components/home/ip-info-card').then((module) => ({
@@ -422,9 +419,7 @@ const ClashModeEnhancedCard = () => {
 }
 
 const HomePage = () => {
-  const { isSimpleMode } = useUiMode()
-
-  return isSimpleMode ? <SimpleHomePage /> : <AdvancedHomePage />
+  return <AdvancedHomePage />
 }
 
 export default HomePage

@@ -29,6 +29,7 @@
       overflow: visible;
       border-right: 1px solid var(--divider-color);
       background:
+        radial-gradient(circle at 50% 0%, rgba(185, 167, 255, 0.14), transparent 36%),
         linear-gradient(180deg, var(--surface-color) 0%, var(--surface-color-elevated) 100%);
       transition:
         flex-basis 0.28s ease,
@@ -61,16 +62,13 @@
         .the-brand__icon {
           width: 34px;
           height: 34px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
+          display: block;
           background: transparent;
-          font-family: 'twemoji mozilla', system-ui, sans-serif;
-          font-size: 30px;
-          line-height: 1;
+          object-fit: contain;
+          border-radius: 8px;
           filter:
-            drop-shadow(0 0 8px rgba(190, 226, 255, 0.65))
-            drop-shadow(0 0 16px rgba(125, 183, 255, 0.34));
+            drop-shadow(0 0 10px rgba(185, 167, 255, 0.28))
+            drop-shadow(0 0 18px rgba(255, 255, 255, 0.08));
         }
 
         .the-brand__name {
@@ -100,7 +98,7 @@
           height: 28px;
           color: #dcecff;
           background:
-            linear-gradient(145deg, rgba(96, 165, 250, 0.36), rgba(25, 182, 210, 0.2)),
+            linear-gradient(145deg, rgba(185, 167, 255, 0.22), rgba(185, 167, 255, 0.07)),
             var(--surface-color-elevated);
           border: 1px solid var(--divider-color);
           border-radius: 50%;
@@ -115,7 +113,7 @@
           &:hover {
             transform: translateX(2px) scale(1.04);
             background:
-              linear-gradient(145deg, rgba(125, 183, 255, 0.34), rgba(34, 211, 238, 0.22)),
+              linear-gradient(145deg, rgba(185, 167, 255, 0.3), rgba(185, 167, 255, 0.1)),
               var(--surface-color-elevated);
             box-shadow:
               inset 0 1px 0 rgba(255, 255, 255, 0.12),
@@ -128,6 +126,7 @@
         flex: 1 1 80%;
         overflow-y: auto;
         overflow-x: hidden;
+        max-width: 100%;
         margin-bottom: 0;
         padding-top: 6px;
         scrollbar-width: none;
@@ -148,18 +147,6 @@
         }
       }
 
-      .the-mode-switch {
-        flex: 0 0 auto;
-        padding: 8px 16px 10px;
-
-        .MuiButton-root {
-          min-height: 42px;
-          border-radius: 8px;
-          font-weight: 800;
-          text-transform: none;
-          white-space: nowrap;
-        }
-      }
     }
 
     &__right {
@@ -167,8 +154,25 @@
       flex: 1 1 100%;
       height: 100%;
       background:
-        radial-gradient(circle at top left, var(--background-color-alpha), transparent 34%),
+        linear-gradient(rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+        radial-gradient(circle at top right, rgba(185, 167, 255, 0.17), transparent 28%),
+        radial-gradient(circle at bottom left, var(--background-color-alpha), transparent 34%),
         var(--background-color);
+      background-size: 34px 34px, 34px 34px, auto, auto, auto;
+
+      &::before {
+        content: '';
+        position: absolute;
+        top: 18px;
+        right: -128px;
+        width: 520px;
+        height: 150px;
+        border: 1px solid rgba(185, 167, 255, 0.16);
+        border-radius: 999px;
+        transform: rotate(-16deg);
+        pointer-events: none;
+      }
 
       .the-bar {
         height: 36px;
@@ -226,12 +230,9 @@
       .the-titlebar-cloud {
         width: 18px;
         height: 18px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-family: 'twemoji mozilla', system-ui, sans-serif;
-        font-size: 16px;
-        line-height: 1;
+        display: block;
+        object-fit: contain;
+        border-radius: 5px;
       }
     }
 
@@ -285,7 +286,7 @@
   --layout-nav-logo-size: 56px;
 
   .layout-content {
-      &__left {
+    &__left {
       flex: 0 0 var(--layout-nav-collapsed-width) !important;
       width: var(--layout-nav-collapsed-width) !important;
       min-width: var(--layout-nav-collapsed-width) !important;
@@ -294,31 +295,6 @@
 
       .the-traffic {
         display: none !important;
-      }
-
-      .the-mode-switch {
-        padding: 8px 10px 12px !important;
-
-        .MuiButton-root {
-          min-width: 52px !important;
-          width: 52px !important;
-          height: 48px !important;
-          padding: 0 !important;
-          margin: 0 auto !important;
-          font-size: 0 !important;
-        }
-
-        .MuiButton-startIcon {
-          margin: 0 !important;
-        }
-
-        .MuiButton-icon {
-          margin: 0 !important;
-        }
-
-        .MuiSvgIcon-root {
-          font-size: 22px !important;
-        }
       }
 
       > .MuiBox-root {
@@ -404,18 +380,6 @@
           display: none !important;
         }
       }
-    }
-  }
-}
-
-.layout.layout--simple-mode {
-  .layout-content__left {
-    .the-traffic {
-      display: none;
-    }
-
-    .the-menu {
-      flex: 1 1 auto;
     }
   }
 }
