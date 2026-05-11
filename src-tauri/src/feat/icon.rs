@@ -9,6 +9,7 @@ use std::hash::{Hash as _, Hasher as _};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt as _;
 use std::path::{Component, Path, PathBuf};
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 use std::process::Command;
 #[cfg(target_os = "linux")]
 use std::string::String as StdString;
