@@ -26,11 +26,6 @@ notifications:
   appHidden:
     title: Anwendung ausgeblendet
     body: Celestial läuft im Hintergrund.
-  updateReady:
-    title: Celestial Update
-    body: A new version (v{version}) has been downloaded and is ready to install.
-    installNow: Install Now
-    later: Later
 service:
   adminInstallPrompt: Für die Installation des Clash-Verge-Dienstes sind Administratorrechte erforderlich.
   adminUninstallPrompt: Für die Deinstallation des Clash-Verge-Dienstes sind Administratorrechte erforderlich.

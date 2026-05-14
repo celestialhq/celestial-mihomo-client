@@ -7,6 +7,7 @@ import {
   flexRender,
   getCoreRowModel,
   getSortedRowModel,
+  Row,
   SortingState,
   Updater,
   useReactTable,
@@ -16,11 +17,13 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import dayjs from 'dayjs'
 import { useLocalStorage } from 'foxact/use-local-storage'
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -32,9 +35,156 @@ import { ConnectionColumnManager } from './connection-column-manager'
 
 const ROW_HEIGHT = 40
 
-/**
- * Reconcile stored column order with base columns to handle added/removed fields
- */
+type TickListener = () => void
+let _tickNow = Date.now()
+const _tickListeners = new Set<TickListener>()
+let _tickTimer: ReturnType<typeof setInterval> | null = null
+
+const _startTick = () => {
+  if (_tickTimer !== null) return
+  _tickTimer = setInterval(() => {
+    _tickNow = Date.now()
+    _tickListeners.forEach((fn) => fn())
+  }, 5000)
+}
+
+const _stopTick = () => {
+  if (_tickListeners.size === 0 && _tickTimer !== null) {
+    clearInterval(_tickTimer)
+    _tickTimer = null
+  }
+}
+
+const tickStore = {
+  subscribe: (listener: TickListener) => {
+    _tickListeners.add(listener)
+    _startTick()
+    return () => {
+      _tickListeners.delete(listener)
+      _stopTick()
+    }
+  },
+  getSnapshot: () => _tickNow,
+}
+
+interface RelativeTimeCellProps {
+  start: string
+}
+
+const RelativeTimeCell = memo(function RelativeTimeCell({
+  start,
+}: RelativeTimeCellProps) {
+  const now = useSyncExternalStore(tickStore.subscribe, tickStore.getSnapshot)
+  return <>{dayjs(start).from(now)}</>
+})
+
+const SX_OUTER: React.ComponentProps<typeof Box>['sx'] = {
+  display: 'flex',
+  flexDirection: 'column',
+  flex: 1,
+  minHeight: 0,
+  position: 'relative',
+  fontFamily: (theme) => theme.typography.fontFamily,
+}
+
+const SX_SCROLL_CONTAINER: React.ComponentProps<typeof Box>['sx'] = {
+  flex: 1,
+  minHeight: 0,
+  overflow: 'auto',
+  WebkitOverflowScrolling: 'touch',
+  overscrollBehavior: 'contain',
+  borderRadius: 1,
+  border: 'none',
+  '&::-webkit-scrollbar': {
+    height: 8,
+  },
+}
+
+const SX_HEADER_STICKY: React.ComponentProps<typeof Box>['sx'] = {
+  position: 'sticky',
+  top: 0,
+  zIndex: 2,
+}
+
+const SX_CELL_CONTENT: React.ComponentProps<typeof Box>['sx'] = {
+  flex: 1,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 0.5,
+  px: 1,
+  py: 1,
+}
+
+const SX_RESIZE_HANDLE: React.ComponentProps<typeof Box>['sx'] = {
+  cursor: 'col-resize',
+  position: 'absolute',
+  right: 0,
+  top: 0,
+  width: 4,
+  height: '100%',
+  transform: 'translateX(50%)',
+  '&:hover': {
+    backgroundColor: (theme) => theme.palette.action.active,
+  },
+}
+
+const SX_ICON_BTN: React.ComponentProps<typeof IconButton>['sx'] = {
+  position: 'absolute',
+  top: 4,
+  right: 4,
+  zIndex: 3,
+  backgroundColor: (theme) =>
+    theme.palette.mode === 'dark'
+      ? theme.palette.background.default
+      : theme.palette.background.paper,
+  '&:hover': {
+    backgroundColor: (theme) => theme.palette.action.hover,
+  },
+}
+
+const SX_HEADER_ROW: React.ComponentProps<typeof Box>['sx'] = {
+  display: 'flex',
+  borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
+  backgroundColor: (theme) => theme.palette.background.paper,
+}
+
+const SX_HEADER_CELL_BASE: React.ComponentProps<typeof Box>['sx'] = {
+  display: 'flex',
+  alignItems: 'center',
+  position: 'relative',
+  boxSizing: 'border-box',
+  fontSize: 13,
+  fontWeight: 600,
+  color: 'text.secondary',
+  userSelect: 'none',
+  '&:hover': {
+    backgroundColor: (theme) => theme.palette.action.hover,
+  },
+}
+
+const SX_DATA_CELL_BASE: React.ComponentProps<typeof Box>['sx'] = {
+  boxSizing: 'border-box',
+  px: 1,
+  fontSize: 13,
+  display: 'flex',
+  alignItems: 'center',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+}
+
+const SX_ROW_BASE: React.ComponentProps<typeof Box>['sx'] = {
+  display: 'flex',
+  position: 'absolute',
+  left: 0,
+  right: 0,
+  cursor: 'pointer',
+  borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
+  '&:hover': {
+    backgroundColor: (theme) => theme.palette.action.hover,
+  },
+}
+
 const reconcileColumnOrder = (
   storedOrder: string[],
   baseFields: string[],
@@ -95,6 +245,68 @@ const getConnectionCellValue = (field: ColumnField, each: IConnectionsItem) => {
   }
 }
 
+interface RowComponentProps {
+  row: Row<IConnectionsItem>
+  virtualStart: number
+  virtualSize: number
+  onShowDetail: (data: IConnectionsItem) => void
+}
+
+const RowComponent = memo(
+  function RowComponent({
+    row,
+    virtualStart,
+    virtualSize,
+    onShowDetail,
+  }: RowComponentProps) {
+    const handleClick = useCallback(
+      () => onShowDetail(row.original),
+      [onShowDetail, row.original],
+    )
+
+    return (
+      <Box
+        sx={[
+          SX_ROW_BASE,
+          {
+            height: virtualSize,
+            transform: `translateY(${virtualStart}px)`,
+          },
+        ]}
+        onClick={handleClick}
+      >
+        {row.getVisibleCells().map((cell) => {
+          const meta = cell.column.columnDef.meta as {
+            align?: 'left' | 'right'
+          }
+          return (
+            <Box
+              key={cell.id}
+              sx={[
+                SX_DATA_CELL_BASE,
+                {
+                  flex: `0 0 ${cell.column.getSize()}px`,
+                  minWidth: cell.column.columnDef.minSize ?? 80,
+                  maxWidth: cell.column.columnDef.maxSize,
+                  justifyContent:
+                    meta?.align === 'right' ? 'flex-end' : 'flex-start',
+                },
+              ]}
+            >
+              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            </Box>
+          )
+        })}
+      </Box>
+    )
+  },
+  (prev, next) =>
+    prev.row === next.row &&
+    prev.virtualStart === next.virtualStart &&
+    prev.virtualSize === next.virtualSize &&
+    prev.onShowDetail === next.onShowDetail,
+)
+
 interface Props {
   connections: IConnectionsItem[]
   onShowDetail: (data: IConnectionsItem) => void
@@ -106,16 +318,20 @@ interface Props {
 export const ConnectionTable = (props: Props) => {
   const {
     connections,
-    onShowDetail,
+    onShowDetail: rawOnShowDetail,
     columnManagerOpen,
     onOpenColumnManager,
     onCloseColumnManager,
   } = props
+  const onShowDetailRef = useRef(rawOnShowDetail)
+  onShowDetailRef.current = rawOnShowDetail
+  const onShowDetail = useCallback(
+    (data: IConnectionsItem) => onShowDetailRef.current(data),
+    [],
+  )
   const { t } = useTranslation()
   const [columnWidths, setColumnWidths] = useLocalStorage<ColumnSizingState>(
     'connection-table-widths',
-    // server-side value, this is the default value used by server-side rendering (if any)
-    // Do not omit (otherwise a Suspense boundary will be triggered)
     {},
   )
 
@@ -227,7 +443,6 @@ export const ConnectionTable = (props: Props) => {
         width: 100,
         minWidth: 80,
         align: 'right',
-        // cell filled later with shared relativeNow ticker
       },
       {
         field: 'source',
@@ -307,18 +522,25 @@ export const ConnectionTable = (props: Props) => {
   )
 
   const [sorting, setSorting] = useState<SortingState>([])
-  const [relativeNow, setRelativeNow] = useState(() => Date.now())
 
+  // columnDefs no longer depends on relativeNow — time column delegates to RelativeTimeCell
   const columnDefs = useMemo<ColumnDef<IConnectionsItem>[]>(() => {
     return baseColumns.map((column) => {
-      const baseCell: ColumnDef<IConnectionsItem>['cell'] = column.cell
-        ? (ctx) => column.cell?.(ctx.row.original)
-        : (ctx) => ctx.getValue() as ReactNode
-
-      const cell: ColumnDef<IConnectionsItem>['cell'] =
-        column.field === 'time'
-          ? (ctx) => dayjs(ctx.getValue() as string).from(relativeNow)
-          : baseCell
+      let cell: ColumnDef<IConnectionsItem>['cell']
+      if (column.field === 'time') {
+        cell = (ctx) => <RelativeTimeCell start={ctx.row.original.start} />
+      } else if (column.cell) {
+        const renderCell = column.cell
+        cell = (ctx) => renderCell(ctx.row.original)
+      } else {
+        cell = (ctx) =>
+          ctx.row.original
+            ? (getConnectionCellValue(
+                column.field,
+                ctx.row.original,
+              ) as ReactNode)
+            : null
+      }
 
       return {
         id: column.field,
@@ -334,17 +556,7 @@ export const ConnectionTable = (props: Props) => {
         cell,
       } satisfies ColumnDef<IConnectionsItem>
     })
-  }, [baseColumns, relativeNow])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined
-
-    const timer = window.setInterval(() => {
-      setRelativeNow(Date.now())
-    }, 5000)
-
-    return () => window.clearInterval(timer)
-  }, [])
+  }, [baseColumns])
 
   const handleColumnSizingChange = useCallback(
     (updater: Updater<ColumnSizingState>) => {
@@ -420,75 +632,26 @@ export const ConnectionTable = (props: Props) => {
 
   return (
     <>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          flex: 1,
-          minHeight: 0,
-          position: 'relative',
-          fontFamily: (theme) => theme.typography.fontFamily,
-        }}
-      >
+      <Box sx={SX_OUTER}>
         <Tooltip title={t('connections.components.columnManager.title')}>
           <IconButton
             size="small"
             onClick={onOpenColumnManager}
-            sx={{
-              position: 'absolute',
-              top: 4,
-              right: 4,
-              zIndex: 3,
-              backgroundColor: (theme) =>
-                theme.palette.mode === 'dark'
-                  ? theme.palette.background.default
-                  : theme.palette.background.paper,
-              '&:hover': {
-                backgroundColor: (theme) => theme.palette.action.hover,
-              },
-            }}
+            sx={SX_ICON_BTN}
           >
             <ViewColumnRounded fontSize="small" />
           </IconButton>
         </Tooltip>
-        <Box
-          ref={tableContainerRef}
-          sx={{
-            flex: 1,
-            minHeight: 0,
-            overflow: 'auto',
-            WebkitOverflowScrolling: 'touch',
-            overscrollBehavior: 'contain',
-            borderRadius: 1,
-            border: 'none',
-            '&::-webkit-scrollbar': {
-              height: 8,
-            },
-          }}
-        >
+        <Box ref={tableContainerRef} sx={SX_SCROLL_CONTAINER}>
           <Box
             sx={{
               minWidth: '100%',
               width: tableWidth,
             }}
           >
-            <Box
-              sx={{
-                position: 'sticky',
-                top: 0,
-                zIndex: 2,
-              }}
-            >
+            <Box sx={SX_HEADER_STICKY}>
               {table.getHeaderGroups().map((headerGroup) => (
-                <Box
-                  key={headerGroup.id}
-                  sx={{
-                    display: 'flex',
-                    borderBottom: (theme) =>
-                      `1px solid ${theme.palette.divider}`,
-                    backgroundColor: (theme) => theme.palette.background.paper,
-                  }}
-                >
+                <Box key={headerGroup.id} sx={SX_HEADER_ROW}>
                   {headerGroup.headers.map((header) => {
                     if (header.isPlaceholder) {
                       return null
@@ -500,23 +663,14 @@ export const ConnectionTable = (props: Props) => {
                     return (
                       <Box
                         key={header.id}
-                        sx={{
-                          flex: `0 0 ${header.getSize()}px`,
-                          minWidth: header.column.columnDef.minSize || 80,
-                          maxWidth: header.column.columnDef.maxSize,
-                          display: 'flex',
-                          alignItems: 'center',
-                          position: 'relative',
-                          boxSizing: 'border-box',
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: 'text.secondary',
-                          userSelect: 'none',
-                          '&:hover': {
-                            backgroundColor: (theme) =>
-                              theme.palette.action.hover,
+                        sx={[
+                          SX_HEADER_CELL_BASE,
+                          {
+                            flex: `0 0 ${header.getSize()}px`,
+                            minWidth: header.column.columnDef.minSize ?? 80,
+                            maxWidth: header.column.columnDef.maxSize,
                           },
-                        }}
+                        ]}
                       >
                         <Box
                           component="span"
@@ -525,21 +679,18 @@ export const ConnectionTable = (props: Props) => {
                               ? header.column.getToggleSortingHandler()
                               : undefined
                           }
-                          sx={{
-                            flex: 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent:
-                              meta?.align === 'right'
-                                ? 'flex-end'
-                                : 'flex-start',
-                            gap: 0.5,
-                            px: 1,
-                            py: 1,
-                            cursor: header.column.getCanSort()
-                              ? 'pointer'
-                              : 'default',
-                          }}
+                          sx={[
+                            SX_CELL_CONTENT,
+                            {
+                              justifyContent:
+                                meta?.align === 'right'
+                                  ? 'flex-end'
+                                  : 'flex-start',
+                              cursor: header.column.getCanSort()
+                                ? 'pointer'
+                                : 'default',
+                            },
+                          ]}
                         >
                           {flexRender(
                             header.column.columnDef.header,
@@ -561,19 +712,7 @@ export const ConnectionTable = (props: Props) => {
                               event.stopPropagation()
                               header.getResizeHandler()(event)
                             }}
-                            sx={{
-                              cursor: 'col-resize',
-                              position: 'absolute',
-                              right: 0,
-                              top: 0,
-                              width: 4,
-                              height: '100%',
-                              transform: 'translateX(50%)',
-                              '&:hover': {
-                                backgroundColor: (theme) =>
-                                  theme.palette.action.active,
-                              },
-                            }}
+                            sx={SX_RESIZE_HANDLE}
                           />
                         )}
                       </Box>
@@ -593,57 +732,13 @@ export const ConnectionTable = (props: Props) => {
                 if (!row) return null
 
                 return (
-                  <Box
+                  <RowComponent
                     key={row.id}
-                    onClick={() => onShowDetail(row.original)}
-                    sx={{
-                      display: 'flex',
-                      position: 'absolute',
-                      left: 0,
-                      right: 0,
-                      height: virtualRow.size,
-                      transform: `translateY(${virtualRow.start}px)`,
-                      borderBottom: (theme) =>
-                        `1px solid ${theme.palette.divider}`,
-                      cursor: 'pointer',
-                      '&:hover': {
-                        backgroundColor: (theme) => theme.palette.action.hover,
-                      },
-                    }}
-                  >
-                    {row.getVisibleCells().map((cell) => {
-                      const meta = cell.column.columnDef.meta as {
-                        align?: 'left' | 'right'
-                      }
-                      return (
-                        <Box
-                          key={cell.id}
-                          sx={{
-                            flex: `0 0 ${cell.column.getSize()}px`,
-                            minWidth: cell.column.columnDef.minSize || 80,
-                            maxWidth: cell.column.columnDef.maxSize,
-                            boxSizing: 'border-box',
-                            px: 1,
-                            fontSize: 13,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent:
-                              meta?.align === 'right'
-                                ? 'flex-end'
-                                : 'flex-start',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                          )}
-                        </Box>
-                      )
-                    })}
-                  </Box>
+                    row={row}
+                    virtualStart={virtualRow.start}
+                    virtualSize={virtualRow.size}
+                    onShowDetail={onShowDetail}
+                  />
                 )
               })}
             </Box>

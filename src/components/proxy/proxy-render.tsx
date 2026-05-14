@@ -65,6 +65,7 @@ export const ProxyRender = (props: RenderProps) => {
     enabled: enable_group_icon,
   })
 
+  const showType = headState?.showType
   const proxyColItemsMemo = useMemo(() => {
     if (type !== 4 || !proxyCol) {
       return null
@@ -76,11 +77,11 @@ export const ProxyRender = (props: RenderProps) => {
         group={group}
         proxy={proxyItem!}
         selected={group.now === proxyItem?.name}
-        showType={headState?.showType}
+        showType={showType}
         onClick={() => onChangeProxy(group, proxyItem!)}
       />
     ))
-  }, [type, proxyCol, item.key, group, headState, onChangeProxy])
+  }, [type, proxyCol, item.key, group, showType, onChangeProxy])
 
   if (type === 0) {
     return (

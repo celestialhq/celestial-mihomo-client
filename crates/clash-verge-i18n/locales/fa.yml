@@ -26,11 +26,6 @@ notifications:
   appHidden:
     title: برنامه پنهان شد
     body: Celestial در پس‌زمینه در حال اجراست.
-  updateReady:
-    title: Celestial Update
-    body: A new version (v{version}) has been downloaded and is ready to install.
-    installNow: Install Now
-    later: Later
 service:
   adminInstallPrompt: نصب سرویس Celestial به دسترسی مدیر نیاز دارد.
   adminUninstallPrompt: حذف سرویس Celestial به دسترسی مدیر نیاز دارد.

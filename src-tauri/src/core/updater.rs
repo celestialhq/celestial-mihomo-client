@@ -158,17 +158,10 @@ impl SilentUpdater {
         logging!(
             info,
             Type::System,
-            "Update cache version ({}) > current ({}), asking user to install",
+            "Update cache version ({}) > current ({}), attempting startup install",
             cached_version,
             current_version
         );
-
-        // Ask user for confirmation — they can skip and use the app normally.
-        // The cache is preserved so next launch will ask again.
-        if !Self::ask_user_to_install(app_handle, cached_version).await {
-            logging!(info, Type::System, "User skipped update install, starting normally");
-            return false;
-        }
 
         // Read cached bytes
         let bytes = match Self::read_cache_bytes() {
@@ -283,35 +276,6 @@ impl SilentUpdater {
         }
 
         success
-    }
-}
-
-// ─── User Confirmation Dialog ────────────────────────────────────────────────
-
-impl SilentUpdater {
-    /// Show a native dialog asking the user to install or skip the update.
-    /// Returns true if user chose to install, false if they chose to skip.
-    async fn ask_user_to_install(app_handle: &tauri::AppHandle, version: &str) -> bool {
-        use tauri_plugin_dialog::{DialogExt as _, MessageDialogButtons, MessageDialogKind};
-
-        let title = clash_verge_i18n::t!("notifications.updateReady.title");
-        let body = clash_verge_i18n::t!("notifications.updateReady.body").replace("{version}", version);
-        let install_now = clash_verge_i18n::t!("notifications.updateReady.installNow").into_owned();
-        let later = clash_verge_i18n::t!("notifications.updateReady.later").into_owned();
-
-        let (tx, rx) = tokio::sync::oneshot::channel();
-
-        app_handle
-            .dialog()
-            .message(body)
-            .title(title)
-            .buttons(MessageDialogButtons::OkCancelCustom(install_now, later))
-            .kind(MessageDialogKind::Info)
-            .show(move |confirmed| {
-                let _ = tx.send(confirmed);
-            });
-
-        rx.await.unwrap_or(false)
     }
 }
 
