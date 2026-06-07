@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo } from 'react'
 
 import { useRuntimeConfig } from '@/hooks/use-clash'
 import { useVerge } from '@/hooks/use-verge'
@@ -66,15 +66,6 @@ export interface IRenderItem {
   icon?: string
   provider?: string
   testUrl?: string
-}
-
-type GroupCache = {
-  now: string
-  all: IProxyItem[]
-  headState: HeadState
-  col: number
-  latencyTimeout: number | undefined
-  items: IRenderItem[]
 }
 
 // 优化列布局计算
@@ -178,9 +169,6 @@ export const useRenderList = (
       delayManager.removeGroupListener('chain-mode')
     }
   }, [isChainMode, runtimeConfig, verge?.default_latency_timeout, refreshProxy])
-
-  const groupCacheRef = useRef<Map<string, GroupCache>>(new Map())
-  const prevListRef = useRef<IRenderItem[]>([])
 
   // 处理渲染列表
   const renderList: IRenderItem[] = useMemo(() => {
@@ -384,25 +372,8 @@ export const useRenderList = (
         ? proxiesData.groups
         : [proxiesData.global!]
 
-    const cache = groupCacheRef.current
-    let anyChanged = false
-
     const retList = renderGroups.flatMap((group: ProxyGroup) => {
       const headState = headStates[group.name] || DEFAULT_STATE
-      const cached = cache.get(group.name)
-
-      if (
-        cached &&
-        cached.now === group.now &&
-        cached.all === group.all &&
-        cached.headState === headState &&
-        cached.col === col &&
-        cached.latencyTimeout === latencyTimeout
-      ) {
-        return cached.items
-      }
-
-      anyChanged = true
       const ret: IRenderItem[] = [
         {
           type: 0,
@@ -468,26 +439,11 @@ export const useRenderList = (
         }
       }
 
-      cache.set(group.name, {
-        now: group.now,
-        all: group.all,
-        headState,
-        col,
-        latencyTimeout,
-        items: ret,
-      })
       return ret
     })
 
-    const filtered = !useRule
-      ? retList.slice(1)
-      : retList.filter((item: IRenderItem) => !item.group.hidden)
-
-    if (!anyChanged && prevListRef.current.length === filtered.length) {
-      return prevListRef.current
-    }
-    prevListRef.current = filtered
-    return filtered
+    if (!useRule) return retList.slice(1)
+    return retList.filter((item: IRenderItem) => !item.group.hidden)
   }, [
     headStates,
     proxiesData,

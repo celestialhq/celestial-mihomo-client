@@ -9,9 +9,8 @@ import {
   Snackbar,
   Typography,
 } from '@mui/material'
-import { useTheme } from '@mui/material/styles'
 import { useQuery } from '@tanstack/react-query'
-import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLockFn } from 'ahooks'
 import {
   type Key,
@@ -164,7 +163,6 @@ export const ProxyGroups = (props: Props) => {
   const scrollPositionRef = useRef<Record<string, number>>({})
   const scrollTopRef = useRef(0)
   const showScrollTopRef = useRef(false)
-  const activeStickyIndexRef = useRef<number | null>(null)
   const restoredScrollKeyRef = useRef<string | null>(null)
   const [showScrollTop, setShowScrollTop] = useState(false)
   const scrollPositionKey = useMemo(
@@ -174,39 +172,14 @@ export const ProxyGroups = (props: Props) => {
         : `${mode}:normal`,
     [activeSelectedGroup, isChainMode, mode],
   )
-  const stickyGroupIndexes = useMemo(
-    () =>
-      renderList.flatMap((item, index) =>
-        item.type === 0 && !item.group.hidden ? [index] : [],
-      ),
-    [renderList],
-  )
-
-  const rangeExtractor = useCallback(
-    (range: Parameters<typeof defaultRangeExtractor>[0]) => {
-      const activeStickyIndex = [...stickyGroupIndexes]
-        .reverse()
-        .find((index) => index <= range.startIndex)
-      activeStickyIndexRef.current = activeStickyIndex ?? null
-
-      const indexes = defaultRangeExtractor(range)
-      return activeStickyIndex == null || indexes.includes(activeStickyIndex)
-        ? indexes
-        : [activeStickyIndex, ...indexes]
-    },
-    [stickyGroupIndexes],
-  )
-
   const virtualizer = useVirtualizer({
     count: renderList.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 56,
     overscan: 15,
     getItemKey: (index) => renderList[index]?.key ?? index,
-    rangeExtractor,
   })
   const virtualItems = virtualizer.getVirtualItems()
-  const activeStickyIndex = activeStickyIndexRef.current
 
   // 从 localStorage 恢复滚动位置
   useLayoutEffect(() => {
@@ -485,7 +458,6 @@ export const ProxyGroups = (props: Props) => {
       totalSize={virtualizer.getTotalSize()}
       virtualItems={virtualItems}
       renderList={renderList}
-      activeStickyIndex={activeStickyIndex}
       indent={mode === 'rule' || mode === 'script'}
       isChainMode={isChainMode}
       measureElement={virtualizer.measureElement}
@@ -596,7 +568,6 @@ interface ProxyVirtualListProps {
   totalSize: number
   virtualItems: VirtualListItem[]
   renderList: IRenderItem[]
-  activeStickyIndex: number | null
   indent: boolean
   isChainMode?: boolean
   measureElement: (node: Element | null) => void
@@ -760,7 +731,6 @@ function ProxyVirtualList({
   totalSize,
   virtualItems,
   renderList,
-  activeStickyIndex,
   indent,
   isChainMode,
   measureElement,
@@ -769,10 +739,6 @@ function ProxyVirtualList({
   onHeadState,
   onChangeProxy,
 }: ProxyVirtualListProps) {
-  const theme = useTheme()
-  const stickyBackground =
-    theme.palette.mode === 'dark' ? '#1e1f27' : 'var(--background-color)'
-
   return (
     <div ref={parentRef} style={{ height, overflow: 'auto' }}>
       <div style={{ height: totalSize, position: 'relative' }}>
@@ -782,24 +748,11 @@ function ProxyVirtualList({
             data-index={virtualItem.index}
             ref={measureElement}
             style={{
-              position:
-                virtualItem.index === activeStickyIndex ? 'sticky' : 'absolute',
+              position: 'absolute',
               top: 0,
               left: 0,
-              zIndex: virtualItem.index === activeStickyIndex ? 5 : undefined,
-              display:
-                virtualItem.index === activeStickyIndex
-                  ? 'flow-root'
-                  : undefined,
-              backgroundColor:
-                virtualItem.index === activeStickyIndex
-                  ? stickyBackground
-                  : undefined,
               width: '100%',
-              transform:
-                virtualItem.index === activeStickyIndex
-                  ? undefined
-                  : `translateY(${virtualItem.start}px)`,
+              transform: `translateY(${virtualItem.start}px)`,
             }}
           >
             <ProxyRender
