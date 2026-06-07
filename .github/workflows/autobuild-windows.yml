@@ -100,7 +100,7 @@ jobs:
           echo "public_download_url=https://github.com/${PUBLIC_RELEASE_REPO}/releases/download/${TAG_NAME}" >> "$GITHUB_OUTPUT"
 
   build-windows:
-    name: Build Windows x64
+    name: Build and publish Windows x64
     runs-on: windows-latest
     needs: [prepare]
     if: ${{ needs.prepare.outputs.should_run == 'true' }}
@@ -126,7 +126,7 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/dev' }}
+          save-if: false
           prefix-key: v1-rust
           key: rust-shared-stable-windows-latest-x86_64-pc-windows-msvc
           workspaces: |
@@ -143,7 +143,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
 
       - name: Install dependencies and prebuild
         shell: bash
@@ -162,71 +161,17 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         run: pnpm tauri build --target x86_64-pc-windows-msvc
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: autobuild-windows-x86_64
-          if-no-files-found: error
-          path: |
-            target/x86_64-pc-windows-msvc/release/bundle/**/*.exe
-            target/x86_64-pc-windows-msvc/release/bundle/**/*.msi
-            target/x86_64-pc-windows-msvc/release/bundle/**/*.zip
-            target/x86_64-pc-windows-msvc/release/bundle/**/*.sig
-
-  build-windows-webview2:
-    name: Build Windows x64 bundled WebView2
-    runs-on: windows-latest
-    needs: [prepare]
-    if: ${{ needs.prepare.outputs.should_run == 'true' }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare.outputs.build_ref }}
-          fetch-depth: 50
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-          targets: x86_64-pc-windows-msvc
-
-      - name: Add Rust target
+      - name: Collect standard release assets
         shell: bash
         run: |
-          rustup target add x86_64-pc-windows-msvc --toolchain ${{ env.RUST_TOOLCHAIN }} || rustup target add x86_64-pc-windows-msvc
-          rustup target list --installed
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/dev' }}
-          prefix-key: v1-rust
-          key: rust-shared-stable-windows-latest-x86_64-pc-windows-msvc-webview2
-          workspaces: |
-            . -> target
-          cache-all-crates: true
-          cache-workspace-crates: true
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Install Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Install dependencies and prebuild
-        shell: bash
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm run prebuild x86_64-pc-windows-msvc
-
-      - name: Bump version to autobuild format
-        run: pnpm release-version ${{ needs.prepare.outputs.version }}
+          set -euo pipefail
+          mkdir -p ./release-assets
+          find target/x86_64-pc-windows-msvc/release/bundle -type f \( \
+            -name '*.exe' -o \
+            -name '*.msi' -o \
+            -name '*.zip' -o \
+            -name '*.sig' \
+          \) -exec cp {} ./release-assets/ \;
 
       - name: Download and extract bundled WebView2 runtime
         shell: pwsh
@@ -265,44 +210,14 @@ jobs:
         env:
           PORTABLE_SKIP_RELEASE_UPLOAD: '1'
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: autobuild-windows-x86_64-webview2
-          if-no-files-found: error
-          path: |
-            target/x86_64-pc-windows-msvc/release/bundle/nsis/*fixed_webview2*
-            Celestial_*_x64_fixed_webview2_portable.zip
-
-  publish-public-release:
-    name: Publish Windows assets to releases
-    runs-on: ubuntu-latest
-    needs:
-      - prepare
-      - build-windows
-      - build-windows-webview2
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare.outputs.build_ref }}
-
-      - name: Install Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: ./dist
-
-      - name: Flatten artifact tree
+      - name: Collect bundled WebView2 release assets
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p ./release-assets
-          find ./dist -type f -exec cp {} ./release-assets/ \;
+          find target/x86_64-pc-windows-msvc/release/bundle/nsis -type f \
+            -name '*fixed_webview2*' \
+            -exec cp {} ./release-assets/ \;
+          cp Celestial_*_x64_fixed_webview2_portable.zip ./release-assets/
           ls -lah ./release-assets
 
       - name: Fetch update logs
@@ -369,8 +284,8 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - prepare
-      - publish-public-release
-    if: ${{ needs.publish-public-release.result == 'success' }}
+      - build-windows
+    if: ${{ needs.build-windows.result == 'success' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -390,7 +305,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
