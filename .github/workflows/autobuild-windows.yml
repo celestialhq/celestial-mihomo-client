@@ -214,10 +214,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+      
           find target/x86_64-pc-windows-msvc/release/bundle/nsis -type f \
             -name '*fixed_webview2*' \
             -exec cp {} ./release-assets/ \;
-          cp Celestial_*_x64_fixed_webview2_portable.zip ./release-assets/
+      
+          echo "Looking for portable ZIP..."
+          find . -type f -name '*portable*.zip' -o -name '*fixed_webview2*.zip'
+      
+          portable_zip="$(find . -type f -name 'Celestial_*_x64_fixed_webview2_portable.zip' | head -n 1)"
+      
+          if [ -z "$portable_zip" ]; then
+            echo "Portable ZIP was not produced."
+            echo "Files in repo root:"
+            ls -lah
+            echo "ZIP files found:"
+            find . -type f -name '*.zip'
+            exit 1
+          fi
+      
+          cp "$portable_zip" ./release-assets/
           ls -lah ./release-assets
 
       - name: Fetch update logs
