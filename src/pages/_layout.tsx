@@ -215,11 +215,15 @@ const Layout = () => {
 
   const customTitlebar = useMemo(
     () => (
-      <div className="the_titlebar" data-tauri-drag-region="true">
+      <div className="the_titlebar">
         <div className="the_titlebar__brand" data-tauri-drag-region="true">
           <img className="the-titlebar-cloud" src={logoUrl} alt="" />
           <span>Celestial</span>
         </div>
+        <div
+          className="the_titlebar-drag-region"
+          data-tauri-drag-region="true"
+        />
         <WindowControls />
       </div>
     ),
