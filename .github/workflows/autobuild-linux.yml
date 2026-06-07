@@ -125,7 +125,7 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/dev' }}
+          save-if: false
           prefix-key: v1-rust
           key: rust-shared-stable-ubuntu-22.04-x86_64-unknown-linux-gnu
           workspaces: |
@@ -147,7 +147,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
 
       - name: Install dependencies and prebuild
         shell: bash
@@ -166,46 +165,18 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         run: pnpm tauri build --target x86_64-unknown-linux-gnu
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: autobuild-linux-x86_64
-          if-no-files-found: error
-          path: |
-            target/x86_64-unknown-linux-gnu/release/bundle/**/*.AppImage
-            target/x86_64-unknown-linux-gnu/release/bundle/**/*.AppImage.tar.gz
-            target/x86_64-unknown-linux-gnu/release/bundle/**/*.deb
-            target/x86_64-unknown-linux-gnu/release/bundle/**/*.rpm
-            target/x86_64-unknown-linux-gnu/release/bundle/**/*.sig
-
-  publish-public-release:
-    name: Publish Linux assets to releases
-    runs-on: ubuntu-latest
-    needs:
-      - prepare
-      - build-linux
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare.outputs.build_ref }}
-
-      - name: Install Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: ./dist
-
-      - name: Flatten artifact tree
+      - name: Collect release assets
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ./release-assets
-          find ./dist -type f -exec cp {} ./release-assets/ \;
+          find target/x86_64-unknown-linux-gnu/release/bundle -type f \( \
+            -name '*.AppImage' -o \
+            -name '*.AppImage.tar.gz' -o \
+            -name '*.deb' -o \
+            -name '*.rpm' -o \
+            -name '*.sig' \
+          \) -exec cp {} ./release-assets/ \;
           ls -lah ./release-assets
 
       - name: Fetch update logs

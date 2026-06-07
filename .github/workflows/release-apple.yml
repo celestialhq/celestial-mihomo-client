@@ -75,6 +75,7 @@ jobs:
     runs-on: macos-latest
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - target: aarch64-apple-darwin
@@ -100,6 +101,7 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: false
           prefix-key: v1-rust
           key: rust-shared-stable-macos-latest-${{ matrix.target }}
           workspaces: |
@@ -126,7 +128,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
 
       - name: Install dependencies and prebuild
         shell: bash
@@ -154,34 +155,16 @@ jobs:
       #   with:
       #     subject-path: target/${{ matrix.target }}/release/bundle/dmg/*.dmg
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-${{ matrix.target }}
-          if-no-files-found: error
-          path: |
-            target/${{ matrix.target }}/release/bundle/**/*.dmg
-            target/${{ matrix.target }}/release/bundle/**/*.app.tar.gz
-            target/${{ matrix.target }}/release/bundle/**/*.sig
-
-  publish-public-release:
-    name: Publish Apple assets to public repository
-    runs-on: ubuntu-latest
-    needs:
-      - prepare
-      - build-apple
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: ./dist
-
-      - name: Flatten artifact tree
+      - name: Collect release assets
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ./release-assets
-          find ./dist -type f -exec cp {} ./release-assets/ \;
+          find target/${{ matrix.target }}/release/bundle -type f \( \
+            -name '*.dmg' -o \
+            -name '*.app.tar.gz' -o \
+            -name '*.sig' \
+          \) -exec cp {} ./release-assets/ \;
           echo "Collected files:"
           ls -lah ./release-assets
 

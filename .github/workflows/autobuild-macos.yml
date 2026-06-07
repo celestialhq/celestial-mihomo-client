@@ -87,6 +87,7 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: false
           prefix-key: v1-rust
           key: rust-shared-stable-macos-latest-x86_64-apple-darwin
           workspaces: |
@@ -112,7 +113,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
 
       - name: Install dependencies and prebuild
         shell: bash
@@ -137,44 +137,16 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm tauri build --target x86_64-apple-darwin
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: autobuild-macos-x86_64
-          if-no-files-found: error
-          path: |
-            target/x86_64-apple-darwin/release/bundle/**/*.dmg
-            target/x86_64-apple-darwin/release/bundle/**/*.app.tar.gz
-            target/x86_64-apple-darwin/release/bundle/**/*.sig
-
-  publish-public-release:
-    name: Publish macOS assets to releases
-    runs-on: ubuntu-latest
-    needs:
-      - prepare
-      - build-macos
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare.outputs.build_ref }}
-
-      - name: Install Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: ./dist
-
-      - name: Flatten artifact tree
+      - name: Collect release assets
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ./release-assets
-          find ./dist -type f -exec cp {} ./release-assets/ \;
+          find target/x86_64-apple-darwin/release/bundle -type f \( \
+            -name '*.dmg' -o \
+            -name '*.app.tar.gz' -o \
+            -name '*.sig' \
+          \) -exec cp {} ./release-assets/ \;
           ls -lah ./release-assets
 
       - name: Fetch update logs
