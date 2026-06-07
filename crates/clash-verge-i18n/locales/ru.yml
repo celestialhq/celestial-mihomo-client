@@ -26,11 +26,6 @@ notifications:
   appHidden:
     title: Приложение скрыто
     body: Celestial работает в фоновом режиме.
-  updateReady:
-    title: Celestial Update
-    body: A new version (v{version}) has been downloaded and is ready to install.
-    installNow: Install Now
-    later: Later
 service:
   adminInstallPrompt: Для установки службы Celestial требуются права администратора.
   adminUninstallPrompt: Для удаления службы Celestial требуются права администратора.

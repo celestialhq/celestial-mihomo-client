@@ -26,11 +26,6 @@ notifications:
   appHidden:
     title: Кушымта яшерелде
     body: Celestial фон режимында эшли.
-  updateReady:
-    title: Celestial Update
-    body: A new version (v{version}) has been downloaded and is ready to install.
-    installNow: Install Now
-    later: Later
 service:
   adminInstallPrompt: Celestial хезмәтен урнаштыру өчен администратор хокуклары кирәк.
   adminUninstallPrompt: Celestial хезмәтен бетерү өчен администратор хокуклары кирәк.
