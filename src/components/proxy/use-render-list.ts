@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 
 import { useRuntimeConfig } from '@/hooks/use-clash'
 import { useVerge } from '@/hooks/use-verge'
-import { useAppData } from '@/providers/app-data-context'
+import { useAppRefreshers, useProxiesData } from '@/providers/app-data-context'
 import delayManager from '@/services/delay'
 import { debugLog } from '@/utils/debug'
 
@@ -99,7 +99,8 @@ export const useRenderList = (
   selectedGroup?: string | null,
 ) => {
   // 使用全局数据提供者
-  const { proxies: proxiesData, refreshProxy } = useAppData()
+  const { proxies: proxiesData } = useProxiesData()
+  const { refreshProxy } = useAppRefreshers()
   const { verge } = useVerge()
   const { width } = useWindowWidth()
   const [headStates, setHeadState] = useHeadStateNew()
@@ -413,9 +414,9 @@ export const useRenderList = (
             headState,
           })
         } else if (col > 1) {
-          return ret.concat(
-            groupProxies(proxies, col).map((proxyCol, colIndex) => ({
-              type: 4,
+          ret.push(
+            ...groupProxies(proxies, col).map((proxyCol, colIndex) => ({
+              type: 4 as const,
               key: `col-${group.name}-${proxyCol[0].name}-${colIndex}`,
               group,
               headState,
@@ -425,9 +426,9 @@ export const useRenderList = (
             })),
           )
         } else {
-          return ret.concat(
-            proxies.map((proxy) => ({
-              type: 2,
+          ret.push(
+            ...proxies.map((proxy) => ({
+              type: 2 as const,
               key: `${group.name}-${proxy!.name}`,
               group,
               proxy,
@@ -437,6 +438,7 @@ export const useRenderList = (
           )
         }
       }
+
       return ret
     })
 

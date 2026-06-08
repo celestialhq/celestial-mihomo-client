@@ -176,10 +176,35 @@ jobs:
       - name: Download and extract bundled WebView2 runtime
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri https://github.com/westinyang/WebView2RuntimeArchive/releases/download/133.0.3065.92/Microsoft.WebView2.FixedVersionRuntime.133.0.3065.92.x64.cab -OutFile Microsoft.WebView2.FixedVersionRuntime.133.0.3065.92.x64.cab
-          Expand .\Microsoft.WebView2.FixedVersionRuntime.133.0.3065.92.x64.cab -F:* ./src-tauri
-          Remove-Item .\src-tauri\tauri.windows.conf.json
-          Rename-Item .\src-tauri\webview2.x64.json tauri.windows.conf.json
+          $version = "133.0.3065.92"
+          $arch = "x64"
+          $cab = "Microsoft.WebView2.FixedVersionRuntime.$version.$arch.cab"
+          $runtimeDir = "Microsoft.WebView2.FixedVersionRuntime.$version.$arch"
+          $releaseDir = ".\target\x86_64-pc-windows-msvc\release"
+      
+          Invoke-WebRequest `
+            -Uri "https://github.com/westinyang/WebView2RuntimeArchive/releases/download/$version/$cab" `
+            -OutFile $cab
+      
+          Expand ".\$cab" -F:* .\src-tauri
+      
+          Remove-Item .\src-tauri\tauri.windows.conf.json -Force
+          Rename-Item .\src-tauri\webview2.x64.json tauri.windows.conf.json -Force
+      
+          New-Item -ItemType Directory -Force $releaseDir | Out-Null
+      
+          if (Test-Path ".\src-tauri\$runtimeDir") {
+            Copy-Item ".\src-tauri\$runtimeDir" "$releaseDir\$runtimeDir" -Recurse -Force
+          } else {
+            Write-Host "Runtime folder not found at .\src-tauri\$runtimeDir"
+            Write-Host "Searching extracted files..."
+            Get-ChildItem .\src-tauri -Recurse -Directory |
+              Where-Object { $_.Name -like "Microsoft.WebView2.FixedVersionRuntime*" } |
+              Select-Object FullName
+            exit 1
+          }
+      
+          Write-Host "Runtime copied to $releaseDir\$runtimeDir"
 
       - name: Tauri build
         shell: bash

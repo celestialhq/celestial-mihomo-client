@@ -26,11 +26,6 @@ notifications:
   appHidden:
     title: Uygulama Gizlendi
     body: Celestial arka planda çalışıyor.
-  updateReady:
-    title: Celestial Update
-    body: A new version (v{version}) has been downloaded and is ready to install.
-    installNow: Install Now
-    later: Later
 service:
   adminInstallPrompt: Celestial hizmetini kurmak için yönetici ayrıcalıkları gerekir.
   adminUninstallPrompt: Celestial hizmetini kaldırmak için yönetici ayrıcalıkları gerekir.

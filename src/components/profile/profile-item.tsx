@@ -1,20 +1,20 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
-  RefreshRounded,
-  DragIndicatorRounded,
-  CheckBoxRounded,
   CheckBoxOutlineBlankRounded,
+  CheckBoxRounded,
+  DragIndicatorRounded,
+  RefreshRounded,
 } from '@mui/icons-material'
 import {
   Box,
-  Typography,
-  LinearProgress,
+  CircularProgress,
   IconButton,
   keyframes,
-  MenuItem,
+  LinearProgress,
   Menu,
-  CircularProgress,
+  MenuItem,
+  Typography,
 } from '@mui/material'
 import { open } from '@tauri-apps/plugin-shell'
 import { useLockFn } from 'ahooks'
@@ -22,17 +22,17 @@ import dayjs from 'dayjs'
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { ConfirmViewer } from '@/components/profile/confirm-viewer'
+import { BaseDialog } from '@/components/base'
 import { EditorViewer } from '@/components/profile/editor-viewer'
 import { GroupsEditorViewer } from '@/components/profile/groups-editor-viewer'
 import { RulesEditorViewer } from '@/components/profile/rules-editor-viewer'
 import { useEditorDocument } from '@/hooks/use-editor-document'
 import {
-  viewProfile,
-  readProfileFile,
-  updateProfile,
-  saveProfileFile,
   getNextUpdateTime,
+  readProfileFile,
+  saveProfileFile,
+  updateProfile,
+  viewProfile,
 } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 import { useLoadingCache, useSetLoadingCache } from '@/services/states'
@@ -42,6 +42,7 @@ import parseTraffic from '@/utils/parse-traffic'
 
 import { ProfileBox } from './profile-box'
 import { ProxiesEditorViewer } from './proxies-editor-viewer'
+import { QrViewer } from './qr-viewer'
 const round = keyframes`
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -285,6 +286,7 @@ export const ProfileItem = (props: Props) => {
   const [mergeOpen, setMergeOpen] = useState(false)
   const [scriptOpen, setScriptOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [qrOpen, setQrOpen] = useState(false)
 
   const loadProfileDocument = useCallback(() => readProfileFile(uid), [uid])
   const loadMergeDocument = useCallback(
@@ -317,6 +319,11 @@ export const ProfileItem = (props: Props) => {
   const onEditInfo = () => {
     setAnchorEl(null)
     onEdit()
+  }
+
+  const onShareQrCode = () => {
+    setAnchorEl(null)
+    setQrOpen(true)
   }
 
   const onEditFile = () => {
@@ -409,6 +416,7 @@ export const ProfileItem = (props: Props) => {
   const menuLabels: Record<string, TranslationKey> = {
     home: 'profiles.components.menu.home',
     select: 'profiles.components.menu.select',
+    shareQrCode: 'profiles.components.menu.shareQrCode',
     editInfo: 'profiles.components.menu.editInfo',
     editFile: 'profiles.components.menu.editFile',
     editRules: 'profiles.components.menu.editRules',
@@ -435,6 +443,11 @@ export const ProfileItem = (props: Props) => {
     {
       label: menuLabels.select,
       handler: onForceSelect,
+      disabled: false,
+    },
+    {
+      label: menuLabels.shareQrCode,
+      handler: onShareQrCode,
       disabled: false,
     },
     {
@@ -968,16 +981,30 @@ export const ProfileItem = (props: Props) => {
         />
       )}
 
-      <ConfirmViewer
+      <BaseDialog
         title={t('profiles.modals.confirmDelete.title')}
-        message={t('profiles.modals.confirmDelete.message')}
         open={confirmOpen}
+        okBtn={t('shared.actions.confirm')}
+        cancelBtn={t('shared.actions.cancel')}
+        contentSx={{ width: { xs: 320, sm: 420 }, userSelect: 'text' }}
+        onCancel={() => setConfirmOpen(false)}
         onClose={() => setConfirmOpen(false)}
-        onConfirm={() => {
+        onOk={() => {
           onDelete()
           setConfirmOpen(false)
         }}
-      />
+      >
+        <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+          {t('profiles.modals.confirmDelete.message')}
+        </Typography>
+      </BaseDialog>
+      {qrOpen && itemData.url && (
+        <QrViewer
+          open={true}
+          value={`${itemData.url}${itemData.url.includes('?') ? '&' : '?'}name=${encodeURIComponent(name)}`}
+          onClose={() => setQrOpen(false)}
+        />
+      )}
     </Box>
   )
 }
