@@ -1,0 +1,438 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'testv*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Existing release tag to build
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  PUBLIC_RELEASE_REPO: pius-pp/celestial-mihomo-client-public
+  RELEASE_SOURCE_BRANCH: main
+  RUST_TOOLCHAIN: '1.91.0'
+  NODE_VERSION: '24.15.0'
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+  HUSKY: 0
+
+jobs:
+  prepare:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.meta.outputs.tag_name }}
+      version: ${{ steps.meta.outputs.version }}
+      release_name: ${{ steps.meta.outputs.release_name }}
+      is_test: ${{ steps.meta.outputs.is_test }}
+      is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
+      download_url: ${{ steps.meta.outputs.download_url }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Validate tag, version, and source branch
+        id: meta
+        shell: bash
+        env:
+          TAG_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          package_version="$(jq -r '.version' package.json)"
+          if [[ "$TAG_REF" =~ ^testv[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            expected_tag="testv${package_version}"
+            release_name="Celestial TEST ${TAG_REF}"
+            is_test=true
+            is_prerelease=true
+          elif [[ "$TAG_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            expected_tag="v${package_version}"
+            release_name="Celestial ${TAG_REF}"
+            is_test=false
+            is_prerelease=false
+          else
+            echo "Unsupported tag format: $TAG_REF"
+            exit 1
+          fi
+
+          if [[ "$TAG_REF" != "$expected_tag" ]]; then
+            echo "Tag $TAG_REF does not match package.json version $package_version"
+            exit 1
+          fi
+
+          tag_commit="$(git rev-list -n 1 "$TAG_REF")"
+          git fetch origin "$RELEASE_SOURCE_BRANCH" --depth=1
+          if ! git merge-base --is-ancestor \
+            "$tag_commit" "origin/$RELEASE_SOURCE_BRANCH"; then
+            echo "Tag $TAG_REF is not reachable from $RELEASE_SOURCE_BRANCH"
+            exit 1
+          fi
+
+          echo "tag_name=$TAG_REF" >> "$GITHUB_OUTPUT"
+          echo "version=$package_version" >> "$GITHUB_OUTPUT"
+          echo "release_name=$release_name" >> "$GITHUB_OUTPUT"
+          echo "is_test=$is_test" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$is_prerelease" >> "$GITHUB_OUTPUT"
+          echo "download_url=https://github.com/${PUBLIC_RELEASE_REPO}/releases/download/${TAG_REF}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Release metadata"
+            echo "- Tag: \`$TAG_REF\`"
+            echo "- Version: \`$package_version\`"
+            echo "- Test release: \`$is_test\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  windows:
+    name: Windows ${{ matrix.arch }}
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            target: x86_64-pc-windows-msvc
+          - arch: ARM64
+            target: aarch64-pc-windows-msvc
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag_name }}
+          fetch-depth: 1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-windows-${{ matrix.target }}
+          workspaces: . -> target
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies and sidecars
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run prebuild ${{ matrix.target }}
+
+      - name: Build NSIS installer
+        shell: bash
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        run: pnpm tauri build --target ${{ matrix.target }} --bundles nsis
+
+      - name: Collect installer and updater files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          find target/${{ matrix.target }}/release/bundle/nsis -type f \
+            \( -name '*.exe' -o -name '*.zip' -o -name '*.sig' \) \
+            -exec cp {} release-assets/ \;
+
+      - name: Build portable archive
+        run: node .github/scripts/create-portable.mjs "${{ matrix.target }}" "${{ needs.prepare.outputs.version }}" release-assets
+
+      - name: Generate SHA-256 files
+        run: node .github/scripts/checksum-assets.mjs release-assets
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-${{ matrix.arch }}
+          path: release-assets/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: Apple Silicon
+            runner: macos-latest
+            target: aarch64-apple-darwin
+          - arch: Intel x64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag_name }}
+          fetch-depth: 1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-macos-${{ matrix.target }}
+          workspaces: . -> target
+
+      - name: Configure OpenSSL
+        shell: bash
+        run: |
+          brew install openssl@3 || true
+          openssl_prefix="$(brew --prefix openssl@3)"
+          echo "OPENSSL_DIR=$openssl_prefix" >> "$GITHUB_ENV"
+          echo "OPENSSL_INCLUDE_DIR=$openssl_prefix/include" >> "$GITHUB_ENV"
+          echo "OPENSSL_LIB_DIR=$openssl_prefix/lib" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$openssl_prefix/lib/pkgconfig" >> "$GITHUB_ENV"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies and sidecars
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run prebuild ${{ matrix.target }}
+
+      - name: Build unsigned DMG
+        shell: bash
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        run: pnpm tauri build --target ${{ matrix.target }} --bundles app,dmg
+
+      - name: Collect DMG and updater files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          find target/${{ matrix.target }}/release/bundle -type f \
+            \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.sig' \) \
+            -exec cp {} release-assets/ \;
+
+      - name: Generate SHA-256 files
+        run: node .github/scripts/checksum-assets.mjs release-assets
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos-${{ matrix.target }}
+          path: release-assets/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  linux:
+    name: Linux x64
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag_name }}
+          fetch-depth: 1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxslt1.1 \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-linux-x86_64
+          workspaces: . -> target
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies and sidecars
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run prebuild x86_64-unknown-linux-gnu
+
+      - name: Build AppImage, DEB, and RPM
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        run: pnpm tauri build --target x86_64-unknown-linux-gnu --bundles appimage,deb,rpm
+
+      - name: Collect packages and updater files
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          find target/x86_64-unknown-linux-gnu/release/bundle -type f \
+            \( -name '*.AppImage' -o -name '*.AppImage.tar.gz' -o \
+               -name '*.deb' -o -name '*.rpm' -o -name '*.sig' \) \
+            -exec cp {} release-assets/ \;
+
+      - name: Generate SHA-256 files
+        run: node .github/scripts/checksum-assets.mjs release-assets
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux-x64
+          path: release-assets/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    name: Publish release
+    needs: [prepare, windows, macos, linux]
+    if: always() && needs.prepare.result == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag_name }}
+          fetch-depth: 1
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download successful build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Inspect available assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          find release-assets -maxdepth 1 -type f -printf '%f\n' | sort
+          find release-assets -maxdepth 1 -type f \
+            ! -name '*.sha256' ! -name '*.sig' | grep -q .
+
+      - name: Generate release page
+        env:
+          RELEASE_KIND: ${{ needs.prepare.outputs.is_test == 'true' && 'test' || 'stable' }}
+        run: >-
+          node .github/scripts/generate-release-body.mjs
+          release-assets
+          release.txt
+          "${{ needs.prepare.outputs.download_url }}"
+          "${{ needs.prepare.outputs.version }}"
+          "$RELEASE_KIND"
+
+      - name: Publish release and stable updater
+        id: publish
+        shell: bash
+        env:
+          TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_NAME: ${{ needs.prepare.outputs.release_name }}
+          IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
+          PUBLIC_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
+          PUBLIC_RELEASE_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+        run: |
+          bash .github/scripts/publish-stable-release.bash
+          echo "published=true" >> "$GITHUB_OUTPUT"
+
+      - name: Publish summary
+        run: |
+          cat release.txt >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo
+            echo "Build results: Windows=${{ needs.windows.result }}, macOS=${{ needs.macos.result }}, Linux=${{ needs.linux.result }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  notify:
+    name: Notify Telegram
+    needs: [prepare, publish]
+    if: needs.publish.result == 'success' && needs.prepare.outputs.is_test != 'true'
+    runs-on: ubuntu-latest
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+    steps:
+      - name: Send notification when configured
+        if: env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_URL: https://github.com/${{ env.PUBLIC_RELEASE_REPO }}/releases/tag/${{ needs.prepare.outputs.tag_name }}
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_RELEASE_CHAT_ID || '@celestial_releases' }}
+        shell: bash
+        run: |
+          message="$(printf '🎉 Celestial %s is available\n%s' "$VERSION" "$RELEASE_URL")"
+          curl --fail --silent --show-error \
+            --request POST \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${message}" \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"

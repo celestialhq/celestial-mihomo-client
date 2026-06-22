@@ -1,0 +1,463 @@
+name: Development AutoBuild
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or commit to build
+        required: false
+        default: dev
+        type: string
+      force_build:
+        description: Build even if this dev commit is already published
+        required: false
+        default: true
+        type: boolean
+  push:
+    branches: [dev]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: development-autobuild
+  cancel-in-progress: true
+
+env:
+  TAG_NAME: autobuild
+  RELEASE_NAME: Celestial AutoBuild
+  PUBLIC_RELEASE_REPO: pius-pp/celestial-mihomo-client-public
+  RUST_TOOLCHAIN: '1.91.0'
+  NODE_VERSION: '24.15.0'
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+  HUSKY: 0
+
+jobs:
+  prepare:
+    name: Prepare build metadata
+    runs-on: ubuntu-latest
+    outputs:
+      build_ref: ${{ steps.meta.outputs.build_ref }}
+      should_run: ${{ steps.meta.outputs.should_run }}
+      version: ${{ steps.meta.outputs.version }}
+      download_url: ${{ steps.meta.outputs.download_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || (github.event_name == 'push' && github.sha || 'dev') }}
+          fetch-depth: 50
+
+      - name: Resolve version and decide whether to build
+        id: meta
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          FORCE_BUILD: ${{ github.event_name == 'workflow_dispatch' && inputs.force_build || false }}
+          BUILD_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || (github.event_name == 'push' && github.sha || 'dev') }}
+        run: |
+          set -euo pipefail
+
+          current_version="$(jq -r '.version' package.json)"
+          base_version="$(sed -E \
+            -e 's/-(alpha|beta|rc)(\.[0-9]+)?//g' \
+            -e 's/\+[a-zA-Z0-9.-]+//g' <<< "$current_version")"
+          latest_commit_full="$(
+            bash scripts-workflow/get_latest_tauri_commit.bash 2>/dev/null ||
+            git rev-parse HEAD
+          )"
+          latest_commit="$(git rev-parse --short "$latest_commit_full")"
+          version="${base_version}+autobuild.$(date -u +%m%d).${latest_commit}"
+          download_url="https://github.com/${PUBLIC_RELEASE_REPO}/releases/download/${TAG_NAME}"
+          should_run=true
+
+          if [[ "$FORCE_BUILD" != "true" ]]; then
+            published_version="$(
+              curl -fsSL "${download_url}/latest.json" 2>/dev/null |
+                jq -r '.version // empty' 2>/dev/null || true
+            )"
+
+            if [[ "$published_version" == "$version" ]]; then
+              should_run=false
+              existing_assets="$(
+                gh release view "$TAG_NAME" --repo "$PUBLIC_RELEASE_REPO" \
+                  --json assets -q '.assets[].name' 2>/dev/null || true
+              )"
+              expected=(
+                "Celestial_${version}_x64-setup.exe"
+                "Celestial_${version}_x64_portable.zip"
+                "Celestial_${version}_arm64-setup.exe"
+                "Celestial_${version}_arm64_portable.zip"
+                "Celestial_${version}_aarch64.dmg"
+                "Celestial_${version}_x64.dmg"
+                "Celestial_${version}_amd64.AppImage"
+                "Celestial_${version}_amd64.deb"
+                "Celestial-${version}-1.x86_64.rpm"
+              )
+
+              for asset in "${expected[@]}"; do
+                if ! grep -Fxq "$asset" <<< "$existing_assets" ||
+                   ! grep -Fxq "${asset}.sha256" <<< "$existing_assets"; then
+                  echo "Missing release asset: $asset"
+                  should_run=true
+                fi
+              done
+            fi
+          fi
+
+          echo "build_ref=$BUILD_REF" >> "$GITHUB_OUTPUT"
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "download_url=$download_url" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Development AutoBuild"
+            echo "- Ref: \`$BUILD_REF\`"
+            echo "- Version: \`$version\`"
+            echo "- Build required: \`$should_run\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  windows:
+    name: Windows ${{ matrix.arch }}
+    needs: prepare
+    if: needs.prepare.outputs.should_run == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            target: x86_64-pc-windows-msvc
+          - arch: ARM64
+            target: aarch64-pc-windows-msvc
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.build_ref }}
+          fetch-depth: 1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: dev-windows-${{ matrix.target }}
+          workspaces: . -> target
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies and sidecars
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run prebuild ${{ matrix.target }}
+          pnpm release-version ${{ needs.prepare.outputs.version }}
+
+      - name: Build NSIS installer
+        shell: bash
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        run: pnpm tauri build --target ${{ matrix.target }} --bundles nsis
+
+      - name: Collect installer and updater files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          find target/${{ matrix.target }}/release/bundle/nsis -type f \
+            \( -name '*.exe' -o -name '*.zip' -o -name '*.sig' \) \
+            -exec cp {} release-assets/ \;
+
+      - name: Build portable archive
+        run: node .github/scripts/create-portable.mjs "${{ matrix.target }}" "${{ needs.prepare.outputs.version }}" release-assets
+
+      - name: Generate SHA-256 files
+        run: node .github/scripts/checksum-assets.mjs release-assets
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-${{ matrix.arch }}
+          path: release-assets/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    needs: prepare
+    if: needs.prepare.outputs.should_run == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: Apple Silicon
+            runner: macos-latest
+            target: aarch64-apple-darwin
+          - arch: Intel x64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.build_ref }}
+          fetch-depth: 1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: dev-macos-${{ matrix.target }}
+          workspaces: . -> target
+
+      - name: Configure OpenSSL
+        shell: bash
+        run: |
+          brew install openssl@3 || true
+          openssl_prefix="$(brew --prefix openssl@3)"
+          echo "OPENSSL_DIR=$openssl_prefix" >> "$GITHUB_ENV"
+          echo "OPENSSL_INCLUDE_DIR=$openssl_prefix/include" >> "$GITHUB_ENV"
+          echo "OPENSSL_LIB_DIR=$openssl_prefix/lib" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$openssl_prefix/lib/pkgconfig" >> "$GITHUB_ENV"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies and sidecars
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run prebuild ${{ matrix.target }}
+          pnpm release-version ${{ needs.prepare.outputs.version }}
+
+      - name: Build unsigned DMG
+        shell: bash
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        run: pnpm tauri build --target ${{ matrix.target }} --bundles app,dmg
+
+      - name: Collect DMG and updater files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          find target/${{ matrix.target }}/release/bundle -type f \
+            \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.sig' \) \
+            -exec cp {} release-assets/ \;
+
+      - name: Generate SHA-256 files
+        run: node .github/scripts/checksum-assets.mjs release-assets
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos-${{ matrix.target }}
+          path: release-assets/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
+  linux:
+    name: Linux x64
+    needs: prepare
+    if: needs.prepare.outputs.should_run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.build_ref }}
+          fetch-depth: 1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxslt1.1 \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: dev-linux-x86_64
+          workspaces: . -> target
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies and sidecars
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run prebuild x86_64-unknown-linux-gnu
+          pnpm release-version ${{ needs.prepare.outputs.version }}
+
+      - name: Build AppImage, DEB, and RPM
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        run: pnpm tauri build --target x86_64-unknown-linux-gnu --bundles appimage,deb,rpm
+
+      - name: Collect packages and updater files
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          find target/x86_64-unknown-linux-gnu/release/bundle -type f \
+            \( -name '*.AppImage' -o -name '*.AppImage.tar.gz' -o \
+               -name '*.deb' -o -name '*.rpm' -o -name '*.sig' \) \
+            -exec cp {} release-assets/ \;
+
+      - name: Generate SHA-256 files
+        run: node .github/scripts/checksum-assets.mjs release-assets
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux-x64
+          path: release-assets/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
+  publish:
+    name: Publish partial or complete AutoBuild release
+    needs: [prepare, windows, macos, linux]
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.build_ref }}
+          fetch-depth: 1
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download successful build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Inspect available assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          find release-assets -maxdepth 1 -type f -printf '%f\n' | sort
+          find release-assets -maxdepth 1 -type f \
+            ! -name '*.sha256' ! -name '*.sig' | grep -q .
+
+      - name: Generate release page
+        run: >-
+          node .github/scripts/generate-release-body.mjs
+          release-assets
+          release.txt
+          "${{ needs.prepare.outputs.download_url }}"
+          "${{ needs.prepare.outputs.version }}"
+
+      - name: Publish releases and updater manifest
+        id: publish
+        shell: bash
+        env:
+          TAG_NAME: ${{ env.TAG_NAME }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_NAME: ${{ env.RELEASE_NAME }}
+          PRIVATE_REPO: ${{ github.repository }}
+          PUBLIC_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLIC_RELEASE_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+        run: |
+          bash .github/scripts/publish-autobuild-release.bash
+          echo "published=true" >> "$GITHUB_OUTPUT"
+
+      - name: Publish summary
+        run: |
+          cat release.txt >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo
+            echo "Build results: Windows=${{ needs.windows.result }}, macOS=${{ needs.macos.result }}, Linux=${{ needs.linux.result }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  notify:
+    name: Notify Telegram
+    needs: [prepare, publish]
+    if: needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+    steps:
+      - name: Send notification when configured
+        if: env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_URL: https://github.com/${{ env.PUBLIC_RELEASE_REPO }}/releases/tag/${{ env.TAG_NAME }}
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_TEST_CHAT_ID || '@celestial_ddev' }}
+        shell: bash
+        run: |
+          message="$(printf '🚀 Celestial %s dev autobuild is available\n%s' "$VERSION" "$RELEASE_URL")"
+          curl --fail --silent --show-error \
+            --request POST \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${message}" \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
