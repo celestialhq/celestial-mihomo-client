@@ -401,9 +401,7 @@ pub fn run() {
         }
         #[allow(unused_variables)]
         tauri::RunEvent::ExitRequested { api, code, .. } => {
-            if module::lightweight::is_in_lightweight_mode()
-                && !handle::Handle::global().is_exiting()
-            {
+            if module::lightweight::is_in_lightweight_mode() && !handle::Handle::global().is_exiting() {
                 api.prevent_exit();
             } else if code.is_none() {
                 api.prevent_exit();

@@ -302,11 +302,20 @@ impl PrfItem {
         };
 
         let status_code = resp.status();
+        let header = resp.headers();
+        let hwid_active = header_is_true(header, "x-hwid-active");
+
+        if hwid_active && header_is_true(header, "x-hwid-max-devices-reached") {
+            bail!("HWID device limit reached for this subscription")
+        }
+
+        if hwid_active && header_is_true(header, "x-hwid-not-supported") {
+            bail!("subscription server requires the x-hwid request header")
+        }
+
         if !status_code.is_success() {
             bail!("failed to fetch remote profile with status {status_code}")
         }
-
-        let header = resp.headers();
 
         // parse the Subscription UserInfo
         let extra;
@@ -610,4 +619,28 @@ fn fix_dirty_url(input: &str) -> Result<Url> {
     }
 
     Ok(url)
+}
+
+fn header_is_true(headers: &reqwest::header::HeaderMap, name: &str) -> bool {
+    headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::header_is_true;
+    use reqwest::header::{HeaderMap, HeaderValue};
+
+    #[test]
+    fn parses_hwid_response_flags_case_insensitively() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-hwid-active", HeaderValue::from_static("TRUE"));
+        headers.insert("x-hwid-max-devices-reached", HeaderValue::from_static("false"));
+
+        assert!(header_is_true(&headers, "x-hwid-active"));
+        assert!(!header_is_true(&headers, "x-hwid-max-devices-reached"));
+        assert!(!header_is_true(&headers, "x-hwid-not-supported"));
+    }
 }

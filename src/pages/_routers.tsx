@@ -2,7 +2,6 @@ import DnsRoundedIcon from '@mui/icons-material/DnsRounded'
 import ForkRightRoundedIcon from '@mui/icons-material/ForkRightRounded'
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded'
 import LanguageRoundedIcon from '@mui/icons-material/LanguageRounded'
-import ManageAccountsRoundedIcon from '@mui/icons-material/ManageAccountsRounded'
 import NotificationsRoundedIcon from '@mui/icons-material/NotificationsRounded'
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded'
 import SubjectRoundedIcon from '@mui/icons-material/SubjectRounded'
@@ -16,7 +15,6 @@ import ProfilesSvg from '@/assets/image/itemicon/profiles.svg?react'
 import ProxiesSvg from '@/assets/image/itemicon/proxies.svg?react'
 import RulesSvg from '@/assets/image/itemicon/rules.svg?react'
 import SettingsSvg from '@/assets/image/itemicon/settings.svg?react'
-import { getSubscriptionManagementEligibility } from '@/services/subscription-management'
 
 import Layout from './_layout'
 import ConnectionsPage from './connections'
@@ -26,7 +24,6 @@ import ProfilesPage from './profiles'
 import ProxiesPage from './proxies'
 import RulesPage from './rules'
 import SettingsPage from './settings'
-import SubscriptionManagementPage from './subscription-management'
 
 export const navItems = [
   {
@@ -46,14 +43,6 @@ export const navItems = [
     path: '/profile',
     icon: [<DnsRoundedIcon key="mui" />, <ProfilesSvg key="svg" />],
     Component: ProfilesPage,
-  },
-  {
-    label: 'layout.components.navigation.tabs.subscriptionManagement',
-    path: '/subscription-management',
-    icon: [<ManageAccountsRoundedIcon key="mui" />, <SettingsSvg key="svg" />],
-    Component: SubscriptionManagementPage,
-    visible: (profile?: IProfileItem) =>
-      Boolean(getSubscriptionManagementEligibility(profile)),
   },
   {
     label: 'layout.components.navigation.tabs.connections',

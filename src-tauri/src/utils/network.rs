@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::{config::Config, utils::dirs};
 use anyhow::Result;
 use base64::{Engine as _, engine::general_purpose};
 use reqwest::{
@@ -168,7 +168,7 @@ impl NetworkManager {
         tls_root_mode: TlsRootMode,
     ) -> Result<HttpResponse> {
         let mut parsed = Url::parse(url)?;
-        let mut extra_headers = HeaderMap::new();
+        let mut extra_headers = subscription_headers()?;
 
         if !parsed.username().is_empty()
             && let Some(pass) = parsed.password()
@@ -305,5 +305,67 @@ impl NetworkManager {
                 }),
             Err(err) => Err(err),
         }
+    }
+}
+
+fn subscription_headers() -> Result<HeaderMap> {
+    let metadata = tauri_plugin_clash_verge_sysinfo::device_metadata();
+    Ok(build_subscription_headers(dirs::subscription_hwid()?, &metadata))
+}
+
+fn build_subscription_headers(hwid: &str, metadata: &tauri_plugin_clash_verge_sysinfo::DeviceMetadata) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+
+    headers.insert("x-hwid", safe_header_value(hwid));
+    headers.insert("x-device-os", safe_header_value(&metadata.os));
+    headers.insert("x-ver-os", safe_header_value(&metadata.os_version));
+    headers.insert(
+        "x-device-model",
+        safe_header_value(if metadata.model.trim().is_empty() {
+            "Unknown"
+        } else {
+            &metadata.model
+        }),
+    );
+
+    headers
+}
+
+fn safe_header_value(value: &str) -> HeaderValue {
+    let sanitized: std::string::String = value
+        .chars()
+        .take(200)
+        .map(|character| {
+            if character.is_ascii_graphic() || character == ' ' {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect();
+
+    HeaderValue::from_str(sanitized.trim()).unwrap_or_else(|_| HeaderValue::from_static("Unknown"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_subscription_headers;
+    use tauri_plugin_clash_verge_sysinfo::DeviceMetadata;
+
+    #[test]
+    fn builds_expected_subscription_headers() {
+        let headers = build_subscription_headers(
+            "celestial-test-hwid",
+            &DeviceMetadata {
+                os: "Windows".into(),
+                os_version: "11".into(),
+                model: "ASUS Test Model".into(),
+            },
+        );
+
+        assert_eq!(headers["x-hwid"], "celestial-test-hwid");
+        assert_eq!(headers["x-device-os"], "Windows");
+        assert_eq!(headers["x-ver-os"], "11");
+        assert_eq!(headers["x-device-model"], "ASUS Test Model");
     }
 }

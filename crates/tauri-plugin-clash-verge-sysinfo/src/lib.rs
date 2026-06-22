@@ -23,6 +23,196 @@ pub struct SysInfo {
     system_arch: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct DeviceMetadata {
+    pub os: String,
+    pub os_version: String,
+    pub model: String,
+}
+
+pub fn device_metadata() -> DeviceMetadata {
+    DeviceMetadata {
+        os: System::name().unwrap_or_else(|| std::env::consts::OS.into()),
+        os_version: System::os_version()
+            .or_else(System::long_os_version)
+            .unwrap_or_else(|| "Unknown".into()),
+        model: device_model(),
+    }
+}
+
+pub fn hardware_fingerprint_components() -> Vec<String> {
+    let mut components = platform_hardware_identifiers();
+    let metadata = device_metadata();
+
+    push_component(&mut components, "os", metadata.os);
+    push_component(&mut components, "arch", System::cpu_arch());
+    push_component(&mut components, "model", metadata.model);
+
+    components.sort();
+    components.dedup();
+    components
+}
+
+fn push_component(components: &mut Vec<String>, label: &str, value: impl AsRef<str>) {
+    let value = value.as_ref().trim();
+    if !value.is_empty() && !value.eq_ignore_ascii_case("unknown") && !value.eq_ignore_ascii_case("null") {
+        components.push(format!("{label}={value}"));
+    }
+}
+
+#[cfg(windows)]
+fn platform_hardware_identifiers() -> Vec<String> {
+    use winreg::{RegKey, enums::HKEY_LOCAL_MACHINE};
+
+    let mut components = Vec::new();
+    if let Ok(cryptography) = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(r"SOFTWARE\Microsoft\Cryptography")
+        && let Ok(machine_guid) = cryptography.get_value::<String, _>("MachineGuid")
+    {
+        push_component(&mut components, "machine_guid", machine_guid);
+    }
+
+    if let Ok(bios) = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(r"HARDWARE\DESCRIPTION\System\BIOS") {
+        for (label, name) in [
+            ("system_manufacturer", "SystemManufacturer"),
+            ("system_product", "SystemProductName"),
+            ("system_family", "SystemFamily"),
+            ("system_sku", "SystemSKU"),
+            ("baseboard_manufacturer", "BaseBoardManufacturer"),
+            ("baseboard_product", "BaseBoardProduct"),
+            ("bios_vendor", "BIOSVendor"),
+        ] {
+            if let Ok(value) = bios.get_value::<String, _>(name) {
+                push_component(&mut components, label, value);
+            }
+        }
+    }
+
+    components
+}
+
+#[cfg(target_os = "macos")]
+fn platform_hardware_identifiers() -> Vec<String> {
+    let mut components = Vec::new();
+
+    if let Ok(output) = std::process::Command::new("ioreg")
+        .args(["-rd1", "-c", "IOPlatformExpertDevice"])
+        .output()
+        && output.status.success()
+        && let Ok(text) = String::from_utf8(output.stdout)
+    {
+        for line in text.lines() {
+            for (label, key) in [
+                ("platform_uuid", "IOPlatformUUID"),
+                ("platform_serial", "IOPlatformSerialNumber"),
+            ] {
+                if line.contains(key)
+                    && let Some(value) = line.split('=').nth(1)
+                {
+                    push_component(&mut components, label, value.trim().trim_matches('"'));
+                }
+            }
+        }
+    }
+
+    components
+}
+
+#[cfg(target_os = "linux")]
+fn platform_hardware_identifiers() -> Vec<String> {
+    let mut components = Vec::new();
+
+    for (label, path) in [
+        ("machine_id", "/etc/machine-id"),
+        ("dbus_machine_id", "/var/lib/dbus/machine-id"),
+        ("product_uuid", "/sys/devices/virtual/dmi/id/product_uuid"),
+        ("product_serial", "/sys/devices/virtual/dmi/id/product_serial"),
+        ("board_serial", "/sys/devices/virtual/dmi/id/board_serial"),
+        ("board_name", "/sys/devices/virtual/dmi/id/board_name"),
+        ("board_vendor", "/sys/devices/virtual/dmi/id/board_vendor"),
+        ("chassis_serial", "/sys/devices/virtual/dmi/id/chassis_serial"),
+    ] {
+        if let Ok(value) = std::fs::read_to_string(path) {
+            push_component(&mut components, label, value);
+        }
+    }
+
+    components
+}
+
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+fn platform_hardware_identifiers() -> Vec<String> {
+    let mut components = Vec::new();
+    if let Some(host_name) = System::host_name() {
+        push_component(&mut components, "host", host_name);
+    }
+    components
+}
+
+#[cfg(windows)]
+fn device_model() -> String {
+    use winreg::{RegKey, enums::HKEY_LOCAL_MACHINE};
+
+    let bios = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey(r"HARDWARE\DESCRIPTION\System\BIOS")
+        .ok();
+    let manufacturer = bios
+        .as_ref()
+        .and_then(|key| key.get_value::<String, _>("SystemManufacturer").ok());
+    let product = bios
+        .as_ref()
+        .and_then(|key| key.get_value::<String, _>("SystemProductName").ok());
+
+    [manufacturer, product]
+        .into_iter()
+        .flatten()
+        .filter(|part| !part.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim()
+        .to_owned()
+}
+
+#[cfg(target_os = "macos")]
+fn device_model() -> String {
+    std::process::Command::new("sysctl")
+        .args(["-n", "hw.model"])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .map(|model| model.trim().to_owned())
+        .filter(|model| !model.is_empty())
+        .unwrap_or_else(|| System::host_name().unwrap_or_else(|| "Mac".into()))
+}
+
+#[cfg(target_os = "linux")]
+fn device_model() -> String {
+    let manufacturer = std::fs::read_to_string("/sys/devices/virtual/dmi/id/sys_vendor")
+        .ok()
+        .map(|value| value.trim().to_owned());
+    let product = std::fs::read_to_string("/sys/devices/virtual/dmi/id/product_name")
+        .ok()
+        .map(|value| value.trim().to_owned());
+
+    let model = [manufacturer, product]
+        .into_iter()
+        .flatten()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    if model.is_empty() {
+        System::host_name().unwrap_or_else(|| std::env::consts::ARCH.into())
+    } else {
+        model
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+fn device_model() -> String {
+    System::host_name().unwrap_or_else(|| std::env::consts::ARCH.into())
+}
+
 impl Default for SysInfo {
     #[inline]
     fn default() -> Self {

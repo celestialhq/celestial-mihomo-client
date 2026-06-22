@@ -17,6 +17,7 @@ libc = "0.2.183"
 
 [target.'cfg(windows)'.dependencies]
 deelevate = { workspace = true }
+winreg = "0.56.0"
 
 [lints]
 workspace = true

@@ -188,7 +188,6 @@ export interface TranslationResources {
             proxies: string
             rules: string
             settings: string
-            subscriptionManagement: string
             unlock: string
           }
         }

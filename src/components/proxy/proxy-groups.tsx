@@ -176,7 +176,7 @@ export const ProxyGroups = (props: Props) => {
     count: renderList.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 56,
-    overscan: 15,
+    overscan: 8,
     getItemKey: (index) => renderList[index]?.key ?? index,
   })
   const virtualItems = virtualizer.getVirtualItems()

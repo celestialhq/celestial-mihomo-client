@@ -1083,7 +1083,7 @@ dependencies = [
 
 [[package]]
 name = "celestial"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -1133,6 +1133,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml_ng",
+ "sha2 0.10.9",
  "smartstring",
  "sysproxy",
  "tauri",
@@ -7742,6 +7743,7 @@ dependencies = [
  "sysinfo",
  "tauri",
  "tauri-plugin-clipboard-manager",
+ "winreg 0.56.0",
 ]
 
 [[package]]

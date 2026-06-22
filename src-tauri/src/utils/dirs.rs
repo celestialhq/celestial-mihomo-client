@@ -1,8 +1,10 @@
 use crate::core::{CoreManager, handle, manager::RunningMode};
 use anyhow::Result;
 use async_trait::async_trait;
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use clash_verge_logging::{Type, logging};
 use once_cell::sync::OnceCell;
+use sha2::{Digest as _, Sha256};
 #[cfg(unix)]
 use std::iter;
 use std::{fs, path::PathBuf};
@@ -19,6 +21,7 @@ pub static APP_ID: &str = "io.github.pius-pp.celestial-mihomo-client.dev";
 pub static BACKUP_DIR: &str = "celestial-backup-dev";
 
 pub static PORTABLE_FLAG: OnceCell<bool> = OnceCell::new();
+static SUBSCRIPTION_HWID: OnceCell<String> = OnceCell::new();
 
 pub static CLASH_CONFIG: &str = "config.yaml";
 pub static VERGE_CONFIG: &str = "celestial.yaml";
@@ -138,6 +141,41 @@ pub fn profiles_path() -> Result<PathBuf> {
     Ok(app_home_dir()?.join(PROFILE_YAML))
 }
 
+/// Stable hardware-bound identifier for subscription requests.
+///
+/// Raw system and hardware identifiers never leave the device. Only a salted
+/// SHA-256 digest is persisted and sent to subscription providers.
+pub fn subscription_hwid() -> Result<&'static str> {
+    SUBSCRIPTION_HWID
+        .get_or_try_init(|| {
+            let app_dir = app_home_dir()?;
+            let hwid_path = app_dir.join(".hwid");
+            let components = tauri_plugin_clash_verge_sysinfo::hardware_fingerprint_components();
+            let hwid = hardware_hwid(&components)?;
+
+            fs::create_dir_all(&app_dir).map_err(|e| anyhow::anyhow!("Failed to create app data directory: {e}"))?;
+            fs::write(&hwid_path, &hwid).map_err(|e| anyhow::anyhow!("Failed to persist subscription HWID: {e}"))?;
+
+            Ok(hwid)
+        })
+        .map(String::as_str)
+}
+
+fn hardware_hwid(components: &[String]) -> Result<String> {
+    if components.is_empty() {
+        return Err(anyhow::anyhow!("No stable hardware identifiers are available"));
+    }
+
+    let mut hasher = Sha256::new();
+    hasher.update(b"celestial-subscription-hwid-v1\0");
+    for component in components {
+        hasher.update(component.as_bytes());
+        hasher.update(b"\0");
+    }
+
+    Ok(format!("celestial-hw-v1-{}", URL_SAFE_NO_PAD.encode(hasher.finalize())))
+}
+
 #[cfg(target_os = "macos")]
 pub fn service_path() -> Result<PathBuf> {
     let res_dir = app_resources_dir()?;
@@ -247,6 +285,33 @@ impl PathBufExec for PathBuf {
             tokio::fs::remove_file(self).await?;
             logging!(info, Type::File, "Removed file: {:?}", self);
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::hardware_hwid;
+    use anyhow::Result;
+
+    #[test]
+    fn hardware_hwid_is_deterministic_and_versioned() -> Result<()> {
+        let components = vec!["machine_guid=abc".to_owned(), "baseboard_product=board".to_owned()];
+
+        let first = hardware_hwid(&components)?;
+        let second = hardware_hwid(&components)?;
+
+        assert_eq!(first, second);
+        assert!(first.starts_with("celestial-hw-v1-"));
+        Ok(())
+    }
+
+    #[test]
+    fn hardware_hwid_changes_with_hardware_components() -> Result<()> {
+        let first = hardware_hwid(&["product_uuid=one".to_owned()])?;
+        let second = hardware_hwid(&["product_uuid=two".to_owned()])?;
+
+        assert_ne!(first, second);
         Ok(())
     }
 }

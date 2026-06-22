@@ -41,7 +41,6 @@ import { NoticeManager } from '@/components/layout/notice-manager'
 import { UpdateButton } from '@/components/layout/update-button'
 import { WindowControls } from '@/components/layout/window-controller'
 import { useI18n } from '@/hooks/use-i18n'
-import { useProfiles } from '@/hooks/use-profiles'
 import { useVerge } from '@/hooks/use-verge'
 import { ensureRemoteNotificationsPolling } from '@/services/remote-notifications'
 import getSystem from '@/utils/get-system'
@@ -116,7 +115,6 @@ const Layout = () => {
   const { t } = useTranslation()
   const { theme } = useCustomTheme()
   const { verge, mutateVerge, patchVerge } = useVerge()
-  const { current: currentProfile } = useProfiles()
   const { language } = verge ?? {}
   const navCollapsed = verge?.collapse_navbar ?? false
   const sidebarCollapsed = navCollapsed
@@ -158,14 +156,6 @@ const Layout = () => {
     [patchVerge],
   )
 
-  const visibleNavItems = useMemo(
-    () =>
-      navItems.filter((item) => {
-        return !item.visible || item.visible(currentProfile)
-      }),
-    [currentProfile],
-  )
-
   const {
     menuOrder,
     navItemMap,
@@ -174,7 +164,7 @@ const Layout = () => {
     resetMenuOrder,
   } = useNavMenuOrder({
     enabled: menuUnlocked,
-    items: visibleNavItems,
+    items: navItems,
     storedOrder: verge?.menu_order,
     onOptimisticUpdate: handleMenuOrderOptimisticUpdate,
     onPersist: handleMenuOrderPersist,
