@@ -43,6 +43,7 @@ export default defineConfig([
             'src/polyfills/*.js',
             'scripts/*.mjs',
             'scripts-workflow/*.mjs',
+            '.github/scripts/*.mjs',
           ],
         },
       },
@@ -140,7 +141,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['scripts/*.mjs', 'scripts-workflow/*.mjs'],
+    files: ['scripts/*.mjs', 'scripts-workflow/*.mjs', '.github/scripts/*.mjs'],
 
     languageOptions: {
       globals: {
