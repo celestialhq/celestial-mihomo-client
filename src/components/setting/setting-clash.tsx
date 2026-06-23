@@ -191,7 +191,10 @@ const SettingClash = ({ onError }: Props) => {
           onFormat={(e: any) => e.target.value}
           onChange={(e) => onChangeData({ 'log-level': e })}
           onGuard={(e) => {
-            setClashLog((pre: any) => ({ ...pre, logLevel: e }))
+            setClashLog((pre: any) => ({
+              ...pre,
+              logLevel: String(e).toUpperCase() as LogLevel,
+            }))
             return patchClash({ 'log-level': e })
           }}
         >

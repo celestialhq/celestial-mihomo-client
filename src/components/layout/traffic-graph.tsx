@@ -1,6 +1,5 @@
 import { useTheme } from '@mui/material'
 import { useEffect, useImperativeHandle, useRef, type Ref } from 'react'
-import { Traffic } from 'tauri-plugin-mihomo-api'
 
 const maxPoint = 30
 
@@ -14,10 +13,18 @@ const downLineAlpha = 1
 const downLineWidth = 4
 const frameIntervalMs = 1000 / 15
 
-const defaultList = Array(maxPoint + 2).fill({ up: 0, down: 0 })
+interface TrafficPoint {
+  up: number
+  down: number
+}
+
+const defaultList: TrafficPoint[] = Array(maxPoint + 2).fill({
+  up: 0,
+  down: 0,
+})
 
 export interface TrafficRef {
-  appendData: (data: Traffic) => void
+  appendData: (data: TrafficPoint) => void
   toggleStyle: () => void
 }
 
@@ -29,15 +36,15 @@ type TrafficValueKey = 'up' | 'down'
 export function TrafficGraph({ ref }: { ref?: Ref<TrafficRef> }) {
   const countRef = useRef(0)
   const styleRef = useRef(true)
-  const listRef = useRef<Traffic[]>(defaultList)
+  const listRef = useRef<TrafficPoint[]>(defaultList)
   const canvasRef = useRef<HTMLCanvasElement>(null!)
 
-  const cacheRef = useRef<Traffic | null>(null)
+  const cacheRef = useRef<TrafficPoint | null>(null)
 
   const { palette } = useTheme()
 
   useImperativeHandle(ref, () => ({
-    appendData: (data: Traffic) => {
+    appendData: (data: TrafficPoint) => {
       cacheRef.current = data
     },
     toggleStyle: () => {
@@ -106,7 +113,7 @@ export function TrafficGraph({ ref }: { ref?: Ref<TrafficRef> }) {
     }
 
     const drawBezier = (
-      list: Traffic[],
+      list: TrafficPoint[],
       valueKey: TrafficValueKey,
       offset: number,
     ) => {
@@ -130,7 +137,7 @@ export function TrafficGraph({ ref }: { ref?: Ref<TrafficRef> }) {
     }
 
     const drawLine = (
-      list: Traffic[],
+      list: TrafficPoint[],
       valueKey: TrafficValueKey,
       offset: number,
     ) => {
