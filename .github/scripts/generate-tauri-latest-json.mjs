@@ -4,6 +4,7 @@ const assetsJsonPath = process.argv[2] || 'release-assets.json'
 const outputPath = process.argv[3] || 'latest.json'
 const version = requiredEnv('VERSION')
 const updateVersion = process.env.UPDATE_VERSION || version
+const buildCommit = process.env.BUILD_COMMIT || ''
 const notes = process.env.NOTES_FILE
   ? await fs.readFile(process.env.NOTES_FILE, 'utf8')
   : ''
@@ -48,6 +49,7 @@ await fs.writeFile(
   `${JSON.stringify(
     {
       version: updateVersion,
+      ...(buildCommit ? { build_commit: buildCommit } : {}),
       notes,
       pub_date: new Date().toISOString(),
       platforms,

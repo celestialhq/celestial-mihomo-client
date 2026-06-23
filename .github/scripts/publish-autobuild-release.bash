@@ -80,7 +80,8 @@ GH_TOKEN="$PUBLIC_RELEASE_TOKEN" gh api \
   "repos/$PUBLIC_REPO/releases/tags/$TAG_NAME" > release-assets.json
 
 set +e
-VERSION="$VERSION" NOTES_FILE="$RELEASE_BODY_PATH" \
+VERSION="$VERSION" BUILD_COMMIT="${BUILD_COMMIT:-}" \
+  NOTES_FILE="$RELEASE_BODY_PATH" \
   node .github/scripts/generate-tauri-latest-json.mjs \
   release-assets.json latest.json
 latest_status=$?

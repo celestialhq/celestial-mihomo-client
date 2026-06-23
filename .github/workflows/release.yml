@@ -350,7 +350,14 @@ jobs:
   publish:
     name: Publish release
     needs: [prepare, windows, macos, linux]
-    if: always() && needs.prepare.result == 'success'
+    if: >-
+      always() &&
+      needs.prepare.result == 'success' &&
+      (
+        needs.windows.result == 'success' ||
+        needs.macos.result == 'success' ||
+        needs.linux.result == 'success'
+      )
     runs-on: ubuntu-latest
     outputs:
       published: ${{ steps.publish.outputs.published }}

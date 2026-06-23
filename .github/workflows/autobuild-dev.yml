@@ -15,6 +15,13 @@ on:
         type: boolean
   push:
     branches: [dev]
+    paths-ignore:
+      - '.old-github/**'
+      - '.github/README.md'
+      - 'docs/**'
+      - 'newdesign/**'
+      - 'newdesign2/**'
+      - '**/*.md'
 
 permissions:
   contents: write
@@ -42,6 +49,7 @@ jobs:
       build_ref: ${{ steps.meta.outputs.build_ref }}
       should_run: ${{ steps.meta.outputs.should_run }}
       version: ${{ steps.meta.outputs.version }}
+      build_commit: ${{ steps.meta.outputs.build_commit }}
       download_url: ${{ steps.meta.outputs.download_url }}
     steps:
       - name: Checkout repository
@@ -69,17 +77,34 @@ jobs:
             git rev-parse HEAD
           )"
           latest_commit="$(git rev-parse --short "$latest_commit_full")"
-          version="${base_version}+autobuild.$(date -u +%m%d).${latest_commit}"
           download_url="https://github.com/${PUBLIC_RELEASE_REPO}/releases/download/${TAG_NAME}"
+          version="${base_version}+autobuild.$(date -u +%m%d).${latest_commit}"
           should_run=true
 
           if [[ "$FORCE_BUILD" != "true" ]]; then
+            published_metadata="$(
+              curl -fsSL "${download_url}/latest.json" 2>/dev/null || true
+            )"
             published_version="$(
-              curl -fsSL "${download_url}/latest.json" 2>/dev/null |
-                jq -r '.version // empty' 2>/dev/null || true
+              jq -r '.version // empty' <<< "$published_metadata" 2>/dev/null || true
+            )"
+            published_build_commit="$(
+              jq -r '.build_commit // empty' <<< "$published_metadata" 2>/dev/null || true
             )"
 
-            if [[ "$published_version" == "$version" ]]; then
+            # Compatibility with metadata published before build_commit was
+            # added. Autobuild versions end with the short build commit.
+            if [[ -z "$published_build_commit" ]]; then
+              published_build_commit="$(
+                sed -nE 's/.*\+autobuild\.[0-9]{4}\.([0-9a-f]+)$/\1/p' \
+                  <<< "$published_version"
+              )"
+            fi
+
+            if [[ -n "$published_version" ]] &&
+               [[ "$published_build_commit" == "$latest_commit_full" ||
+                  "$published_build_commit" == "$latest_commit" ]]; then
+              version="$published_version"
               should_run=false
               existing_assets="$(
                 gh release view "$TAG_NAME" --repo "$PUBLIC_RELEASE_REPO" \
@@ -110,12 +135,15 @@ jobs:
           echo "build_ref=$BUILD_REF" >> "$GITHUB_OUTPUT"
           echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build_commit=$latest_commit_full" >> "$GITHUB_OUTPUT"
           echo "download_url=$download_url" >> "$GITHUB_OUTPUT"
 
           {
             echo "### Development AutoBuild"
             echo "- Ref: \`$BUILD_REF\`"
             echo "- Version: \`$version\`"
+            echo "- Build commit: \`$latest_commit_full\`"
+            echo "- Published build commit: \`${published_build_commit:-none}\`"
             echo "- Build required: \`$should_run\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -377,7 +405,15 @@ jobs:
   publish:
     name: Publish partial or complete AutoBuild release
     needs: [prepare, windows, macos, linux]
-    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.should_run == 'true'
+    if: >-
+      always() &&
+      needs.prepare.result == 'success' &&
+      needs.prepare.outputs.should_run == 'true' &&
+      (
+        needs.windows.result == 'success' ||
+        needs.macos.result == 'success' ||
+        needs.linux.result == 'success'
+      )
     runs-on: ubuntu-latest
     outputs:
       published: ${{ steps.publish.outputs.published }}
@@ -422,6 +458,7 @@ jobs:
         env:
           TAG_NAME: ${{ env.TAG_NAME }}
           VERSION: ${{ needs.prepare.outputs.version }}
+          BUILD_COMMIT: ${{ needs.prepare.outputs.build_commit }}
           RELEASE_NAME: ${{ env.RELEASE_NAME }}
           PRIVATE_REPO: ${{ github.repository }}
           PUBLIC_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
