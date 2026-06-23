@@ -40,11 +40,13 @@
     },
 
     {
-      "description": "Group Tauri npm packages and Rust crates together",
+      "description": "Prioritize Tauri updates",
       "extends": ["monorepo:tauri"],
       "groupName": "tauri monorepo",
       "groupSlug": "tauri",
-      "matchUpdateTypes": ["digest", "patch", "minor", "major"]
+      "matchUpdateTypes": ["digest", "patch", "minor", "major"],
+      "prPriority": 10,
+      "minimumReleaseAge": null
     },
 
     {
