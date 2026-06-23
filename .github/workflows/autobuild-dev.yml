@@ -35,7 +35,7 @@ env:
   TAG_NAME: autobuild
   RELEASE_NAME: Celestial AutoBuild
   PUBLIC_RELEASE_REPO: pius-pp/celestial-mihomo-client-public
-  RUST_TOOLCHAIN: '1.91.0'
+  RUST_TOOLCHAIN: '1.95.0'
   NODE_VERSION: '24.15.0'
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: short
