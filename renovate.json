@@ -1,9 +1,15 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", ":disableDependencyDashboard"],
+  "extends": [
+    "config:recommended",
+    ":disableDependencyDashboard"
+  ],
+
   "baseBranchPatterns": ["dev"],
+
   "enabledManagers": ["cargo", "npm", "github-actions"],
+
   "labels": ["dependencies"],
+
   "ignorePaths": [
     "**/node_modules/**",
     "**/bower_components/**",
@@ -14,7 +20,9 @@
     "**/__fixtures__/**",
     "shared/**"
   ],
+
   "rangeStrategy": "replace",
+
   "packageRules": [
     {
       "matchUpdateTypes": ["patch"],
@@ -30,27 +38,62 @@
       "matchDepTypes": ["engines", "packageManager"],
       "enabled": false
     },
+
     {
-      "description": "Group all cargo dependencies into a single PR",
-      "matchManagers": ["cargo"],
-      "groupName": "cargo dependencies"
+      "description": "Group Tauri npm packages and Rust crates together",
+      "extends": ["monorepo:tauri"],
+      "groupName": "tauri monorepo",
+      "groupSlug": "tauri",
+      "matchUpdateTypes": ["digest", "patch", "minor", "major"]
     },
+
     {
-      "description": "Group all npm dependencies into a single PR",
-      "matchManagers": ["npm"],
-      "groupName": "npm dependencies"
+      "description": "Group custom mihomo Tauri plugin API and Rust plugin together",
+      "matchDepNames": [
+        "tauri-plugin-mihomo-api",
+        "tauri-plugin-mihomo"
+      ],
+      "groupName": "tauri plugin mihomo",
+      "groupSlug": "tauri-plugin-mihomo",
+      "matchUpdateTypes": ["digest", "patch", "minor", "major"]
     },
+
     {
-      "description": "Group all GitHub Actions updates into a single PR",
+      "description": "Group React packages together",
+      "matchDepNames": ["react", "react-dom", "@types/react", "@types/react-dom"],
+      "groupName": "react packages",
+      "groupSlug": "react"
+    },
+
+    {
+      "description": "Group MUI packages together",
+      "matchPackageNames": ["@mui/**", "@emotion/**"],
+      "groupName": "mui packages",
+      "groupSlug": "mui"
+    },
+
+    {
+      "description": "Group TanStack packages together",
+      "matchPackageNames": ["@tanstack/**"],
+      "groupName": "tanstack packages",
+      "groupSlug": "tanstack"
+    },
+
+    {
+      "description": "Group GitHub Actions updates into a single PR",
       "matchManagers": ["github-actions"],
-      "groupName": "github actions"
+      "groupName": "github actions",
+      "groupSlug": "github-actions"
     }
   ],
+
   "postUpdateOptions": ["pnpmDedupe"],
+
   "ignoreDeps": ["criterion"],
+
   "lockFileMaintenance": {
     "enabled": true,
-    "description": "Force update lockfile to track latest commits of git dependencies",
+    "description": "Refresh lockfiles and git dependency refs",
     "schedule": ["before 5am on monday"]
   }
 }
