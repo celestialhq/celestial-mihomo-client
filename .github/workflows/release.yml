@@ -4,7 +4,7 @@ on:
   push:
     tags:
       - 'v*.*.*'
-      - 'testv*.*.*'
+      - 'rc-v*.*.*'
   workflow_dispatch:
     inputs:
       tag_name:
@@ -13,7 +13,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 concurrency:
@@ -37,7 +37,7 @@ jobs:
       tag_name: ${{ steps.meta.outputs.tag_name }}
       version: ${{ steps.meta.outputs.version }}
       release_name: ${{ steps.meta.outputs.release_name }}
-      is_test: ${{ steps.meta.outputs.is_test }}
+      is_rc: ${{ steps.meta.outputs.is_rc }}
       is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
       download_url: ${{ steps.meta.outputs.download_url }}
     steps:
@@ -56,15 +56,15 @@ jobs:
           set -euo pipefail
 
           package_version="$(jq -r '.version' package.json)"
-          if [[ "$TAG_REF" =~ ^testv[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            expected_tag="testv${package_version}"
-            release_name="Celestial TEST ${TAG_REF}"
-            is_test=true
+          if [[ "$TAG_REF" =~ ^rc-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            expected_tag="rc-v${package_version}"
+            release_name="Celestial RC v${package_version}"
+            is_rc=true
             is_prerelease=true
           elif [[ "$TAG_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             expected_tag="v${package_version}"
             release_name="Celestial ${TAG_REF}"
-            is_test=false
+            is_rc=false
             is_prerelease=false
           else
             echo "Unsupported tag format: $TAG_REF"
@@ -87,7 +87,7 @@ jobs:
           echo "tag_name=$TAG_REF" >> "$GITHUB_OUTPUT"
           echo "version=$package_version" >> "$GITHUB_OUTPUT"
           echo "release_name=$release_name" >> "$GITHUB_OUTPUT"
-          echo "is_test=$is_test" >> "$GITHUB_OUTPUT"
+          echo "is_rc=$is_rc" >> "$GITHUB_OUTPUT"
           echo "is_prerelease=$is_prerelease" >> "$GITHUB_OUTPUT"
           echo "download_url=https://github.com/${PUBLIC_RELEASE_REPO}/releases/download/${TAG_REF}" >> "$GITHUB_OUTPUT"
 
@@ -95,7 +95,7 @@ jobs:
             echo "### Release metadata"
             echo "- Tag: \`$TAG_REF\`"
             echo "- Version: \`$package_version\`"
-            echo "- Test release: \`$is_test\`"
+            echo "- RC release: \`$is_rc\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
   windows:
@@ -390,7 +390,7 @@ jobs:
 
       - name: Generate release page
         env:
-          RELEASE_KIND: ${{ needs.prepare.outputs.is_test == 'true' && 'test' || 'stable' }}
+          RELEASE_KIND: ${{ needs.prepare.outputs.is_rc == 'true' && 'rc' || 'stable' }}
         run: >-
           node .github/scripts/generate-release-body.mjs
           release-assets
@@ -407,7 +407,9 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
           RELEASE_NAME: ${{ needs.prepare.outputs.release_name }}
           IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
+          PRIVATE_REPO: ${{ github.repository }}
           PUBLIC_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUBLIC_RELEASE_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
         run: |
           bash .github/scripts/publish-stable-release.bash
@@ -424,7 +426,7 @@ jobs:
   notify:
     name: Notify Telegram
     needs: [prepare, windows, macos, linux, publish]
-    if: always() && needs.publish.result == 'success' && needs.prepare.outputs.is_test != 'true'
+    if: always() && needs.publish.result == 'success' && needs.prepare.outputs.is_rc != 'true'
     runs-on: ubuntu-latest
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

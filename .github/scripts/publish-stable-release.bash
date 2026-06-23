@@ -5,15 +5,20 @@ set -euo pipefail
 : "${VERSION:?VERSION is required}"
 : "${RELEASE_NAME:?RELEASE_NAME is required}"
 : "${IS_PRERELEASE:?IS_PRERELEASE is required}"
+: "${PRIVATE_REPO:?PRIVATE_REPO is required}"
 : "${PUBLIC_REPO:?PUBLIC_REPO is required}"
+: "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
 : "${PUBLIC_RELEASE_TOKEN:?PUBLIC_RELEASE_TOKEN is required}"
 
 ASSETS_DIR="${ASSETS_DIR:-release-assets}"
 RELEASE_BODY_PATH="${RELEASE_BODY_PATH:-release.txt}"
 
 ensure_draft_release() {
-  if GH_TOKEN="$PUBLIC_RELEASE_TOKEN" gh release view "$TAG_NAME" \
-    --repo "$PUBLIC_REPO" >/dev/null 2>&1; then
+  local repo="$1"
+  local token="$2"
+
+  if GH_TOKEN="$token" gh release view "$TAG_NAME" \
+    --repo "$repo" >/dev/null 2>&1; then
     return
   fi
 
@@ -22,8 +27,8 @@ ensure_draft_release() {
     prerelease_flag=(--prerelease)
   fi
 
-  GH_TOKEN="$PUBLIC_RELEASE_TOKEN" gh release create "$TAG_NAME" \
-    --repo "$PUBLIC_REPO" \
+  GH_TOKEN="$token" gh release create "$TAG_NAME" \
+    --repo "$repo" \
     --target main \
     --title "$RELEASE_NAME" \
     --notes-file "$RELEASE_BODY_PATH" \
@@ -32,19 +37,23 @@ ensure_draft_release() {
 }
 
 clean_release_assets() {
+  local repo="$1"
+  local token="$2"
   local names
-  names="$(GH_TOKEN="$PUBLIC_RELEASE_TOKEN" gh release view "$TAG_NAME" \
-    --repo "$PUBLIC_REPO" --json assets -q '.assets[].name' 2>/dev/null || true)"
+  names="$(GH_TOKEN="$token" gh release view "$TAG_NAME" \
+    --repo "$repo" --json assets -q '.assets[].name' 2>/dev/null || true)"
 
   while IFS= read -r name; do
     [[ -z "$name" ]] && continue
     [[ "$name" == *"$VERSION"* ]] && continue
-    GH_TOKEN="$PUBLIC_RELEASE_TOKEN" gh release delete-asset \
-      "$TAG_NAME" "$name" --repo "$PUBLIC_REPO" --yes || true
+    GH_TOKEN="$token" gh release delete-asset \
+      "$TAG_NAME" "$name" --repo "$repo" --yes || true
   done <<< "$names"
 }
 
 upload_release_assets() {
+  local repo="$1"
+  local token="$2"
   shopt -s nullglob
   local files=("$ASSETS_DIR"/*)
   shopt -u nullglob
@@ -53,8 +62,38 @@ upload_release_assets() {
     exit 1
   }
 
-  GH_TOKEN="$PUBLIC_RELEASE_TOKEN" gh release upload \
-    "$TAG_NAME" "${files[@]}" --repo "$PUBLIC_REPO" --clobber
+  GH_TOKEN="$token" gh release upload \
+    "$TAG_NAME" "${files[@]}" --repo "$repo" --clobber
+}
+
+finalize_release() {
+  local repo="$1"
+  local token="$2"
+
+  GH_TOKEN="$token" gh release edit "$TAG_NAME" \
+    --repo "$repo" \
+    --title "$RELEASE_NAME" \
+    --notes-file "$RELEASE_BODY_PATH"
+
+  local release_id
+  release_id="$(GH_TOKEN="$token" gh api \
+    "repos/$repo/releases/tags/$TAG_NAME" --jq '.id')"
+
+  if [[ "$IS_PRERELEASE" == "true" ]]; then
+    GH_TOKEN="$token" gh api \
+      --method PATCH \
+      "repos/$repo/releases/$release_id" \
+      -F draft=false \
+      -F prerelease=true \
+      -f make_latest=false >/dev/null
+  else
+    GH_TOKEN="$token" gh api \
+      --method PATCH \
+      "repos/$repo/releases/$release_id" \
+      -F draft=false \
+      -F prerelease=false \
+      -f make_latest=true >/dev/null
+  fi
 }
 
 publish_stable_updater() {
@@ -86,39 +125,16 @@ publish_stable_updater() {
     --repo "$PUBLIC_REPO" --clobber
 }
 
-finalize_release() {
-  GH_TOKEN="$PUBLIC_RELEASE_TOKEN" gh release edit "$TAG_NAME" \
-    --repo "$PUBLIC_REPO" \
-    --title "$RELEASE_NAME" \
-    --notes-file "$RELEASE_BODY_PATH"
-
-  local release_id
-  release_id="$(GH_TOKEN="$PUBLIC_RELEASE_TOKEN" gh api \
-    "repos/$PUBLIC_REPO/releases/tags/$TAG_NAME" --jq '.id')"
-
-  if [[ "$IS_PRERELEASE" == "true" ]]; then
-    GH_TOKEN="$PUBLIC_RELEASE_TOKEN" gh api \
-      --method PATCH \
-      "repos/$PUBLIC_REPO/releases/$release_id" \
-      -F draft=false \
-      -F prerelease=true \
-      -f make_latest=false >/dev/null
-  else
-    GH_TOKEN="$PUBLIC_RELEASE_TOKEN" gh api \
-      --method PATCH \
-      "repos/$PUBLIC_REPO/releases/$release_id" \
-      -F draft=false \
-      -F prerelease=false \
-      -f make_latest=true >/dev/null
-  fi
-}
-
-ensure_draft_release
-clean_release_assets
-upload_release_assets
+ensure_draft_release "$PRIVATE_REPO" "$GITHUB_TOKEN"
+ensure_draft_release "$PUBLIC_REPO" "$PUBLIC_RELEASE_TOKEN"
+clean_release_assets "$PRIVATE_REPO" "$GITHUB_TOKEN"
+clean_release_assets "$PUBLIC_REPO" "$PUBLIC_RELEASE_TOKEN"
+upload_release_assets "$PRIVATE_REPO" "$GITHUB_TOKEN"
+upload_release_assets "$PUBLIC_REPO" "$PUBLIC_RELEASE_TOKEN"
 
 if [[ "$IS_PRERELEASE" != "true" ]]; then
   publish_stable_updater
 fi
 
-finalize_release
+finalize_release "$PRIVATE_REPO" "$GITHUB_TOKEN"
+finalize_release "$PUBLIC_REPO" "$PUBLIC_RELEASE_TOKEN"

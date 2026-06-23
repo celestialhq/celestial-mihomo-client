@@ -83,11 +83,11 @@ function findBadge(pattern, label, color, labelColor = '555') {
 
 function releaseNotice() {
   if (releaseKind === 'stable') return []
-  if (releaseKind === 'test') {
+  if (releaseKind === 'rc') {
     return [
       '> [!WARNING]',
-      '> This is a test release. It is intended for release validation and may',
-      '> be replaced or removed.',
+      '> This is a release candidate. It may still contain regressions and is',
+      '> intended for final validation before the stable release.',
       '',
     ]
   }
