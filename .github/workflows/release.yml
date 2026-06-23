@@ -23,7 +23,7 @@ concurrency:
 env:
   PUBLIC_RELEASE_REPO: pius-pp/celestial-mihomo-client-public
   RELEASE_SOURCE_BRANCH: main
-  RUST_TOOLCHAIN: '1.91.0'
+  RUST_TOOLCHAIN: '1.95.0'
   NODE_VERSION: '24.15.0'
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: short
