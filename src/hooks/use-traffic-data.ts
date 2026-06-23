@@ -1,13 +1,25 @@
-import { MihomoWebSocket, Traffic } from 'tauri-plugin-mihomo-api'
+import { MihomoWebSocket, type Traffic } from 'tauri-plugin-mihomo-api'
 
 import { useMihomoWsSubscription } from './use-mihomo-ws-subscription'
 import { useTrafficMonitorEnhanced } from './use-traffic-monitor'
 
-const FALLBACK_TRAFFIC: Traffic = { up: 0, down: 0 }
+const FALLBACK_TRAFFIC: Traffic = {
+  up: 0,
+  down: 0,
+  upTotal: 0,
+  downTotal: 0,
+}
 const DUPLICATE_TRAFFIC_WINDOW_MS = 50
 
 let lastTrafficSignature = ''
 let lastTrafficTimestamp = 0
+
+const normalizeTraffic = (traffic: Partial<Traffic>): Traffic => ({
+  up: traffic.up ?? 0,
+  down: traffic.down ?? 0,
+  upTotal: traffic.upTotal ?? 0,
+  downTotal: traffic.downTotal ?? 0,
+})
 
 const shouldSkipDuplicateTraffic = (traffic: Traffic) => {
   const now = Date.now()
@@ -46,7 +58,7 @@ export const useTrafficData = (options?: { enabled?: boolean }) => {
         }
 
         try {
-          const parsed = JSON.parse(data) as Traffic
+          const parsed = normalizeTraffic(JSON.parse(data) as Partial<Traffic>)
           if (shouldSkipDuplicateTraffic(parsed)) {
             return
           }
