@@ -441,8 +441,8 @@ jobs:
 
   notify:
     name: Notify Telegram
-    needs: [prepare, publish]
-    if: needs.publish.result == 'success'
+    needs: [prepare, windows, macos, linux, publish]
+    if: always() && needs.publish.result == 'success'
     runs-on: ubuntu-latest
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -453,9 +453,27 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
           RELEASE_URL: https://github.com/${{ env.PUBLIC_RELEASE_REPO }}/releases/tag/${{ env.TAG_NAME }}
           TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_TEST_CHAT_ID || '@celestial_ddev' }}
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+          MACOS_RESULT: ${{ needs.macos.result }}
+          LINUX_RESULT: ${{ needs.linux.result }}
         shell: bash
         run: |
-          message="$(printf '🚀 Celestial %s dev autobuild is available\n%s' "$VERSION" "$RELEASE_URL")"
+          format_status() {
+            if [[ "$2" == "success" ]]; then
+              printf '%s: OK' "$1"
+            else
+              printf '%s: NOT BUILT (%s)' "$1" "$2"
+            fi
+          }
+
+          message="$(
+            printf 'Celestial %s dev autobuild is available\n%s\n\n%s\n%s\n%s' \
+              "$VERSION" \
+              "$RELEASE_URL" \
+              "$(format_status Windows "$WINDOWS_RESULT")" \
+              "$(format_status macOS "$MACOS_RESULT")" \
+              "$(format_status Linux "$LINUX_RESULT")"
+          )"
           curl --fail --silent --show-error \
             --request POST \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
