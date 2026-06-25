@@ -584,9 +584,9 @@ const SERVICE_URL_PREFIX =
 let SERVICE_VERSION
 
 const SERVICE_BINARIES = [
-  'clash-verge-service',
-  'clash-verge-service-install',
-  'clash-verge-service-uninstall',
+  'celestial-service',
+  'celestial-service-install',
+  'celestial-service-uninstall',
 ]
 
 function serviceFileInfo(name) {
