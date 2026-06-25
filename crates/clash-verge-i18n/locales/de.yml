@@ -1,31 +1,4 @@
 _version: 1
-notifications:
-  dashboardToggled:
-    title: Übersicht
-    body: Die Sichtbarkeit der Übersicht wurde aktualisiert.
-  clashModeChanged:
-    title: Moduswechsel
-    body: Auf {mode} umgeschaltet.
-  systemProxyToggled:
-    title: Systemproxy
-    'on': System proxy has been enabled.
-    'off': System proxy has been disabled.
-  tunModeToggled:
-    title: TUN-Modus
-    'on': TUN mode has been enabled.
-    'off': TUN mode has been disabled.
-  lightweightModeEntered:
-    title: Leichtmodus
-    body: Leichtmodus aktiviert.
-  profilesReactivated:
-    title: Profile
-    body: Profil reaktiviert.
-  appQuit:
-    title: Beenden steht bevor
-    body: Celestial wird gleich beendet.
-  appHidden:
-    title: Anwendung ausgeblendet
-    body: Celestial läuft im Hintergrund.
 service:
   adminInstallPrompt: Für die Installation des Clash-Verge-Dienstes sind Administratorrechte erforderlich.
   adminUninstallPrompt: Für die Deinstallation des Clash-Verge-Dienstes sind Administratorrechte erforderlich.

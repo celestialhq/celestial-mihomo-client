@@ -1,31 +1,4 @@
 _version: 1
-notifications:
-  dashboardToggled:
-    title: Panel
-    body: La visibilidad del panel se ha actualizado.
-  clashModeChanged:
-    title: Cambio de modo
-    body: Cambiado a {mode}.
-  systemProxyToggled:
-    title: Proxy del sistema
-    'on': System proxy has been enabled.
-    'off': System proxy has been disabled.
-  tunModeToggled:
-    title: Modo TUN
-    'on': TUN mode has been enabled.
-    'off': TUN mode has been disabled.
-  lightweightModeEntered:
-    title: Modo ligero
-    body: Se ha entrado en el modo ligero.
-  profilesReactivated:
-    title: Perfiles
-    body: Perfil reactivado.
-  appQuit:
-    title: A punto de salir
-    body: Celestial está a punto de salir.
-  appHidden:
-    title: Aplicación oculta
-    body: Celestial se está ejecutando en segundo plano.
 service:
   adminInstallPrompt: Instalar el servicio de Celestial requiere privilegios de administrador.
   adminUninstallPrompt: Desinstalar el servicio de Celestial requiere privilegios de administrador.

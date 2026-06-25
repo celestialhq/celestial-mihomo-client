@@ -1,6 +1,5 @@
 use crate::process::AsyncHandler;
 use crate::singleton;
-use crate::utils::notification::{NotificationEvent, notify_event};
 use crate::utils::window_manager::WindowManager;
 use crate::{config::Config, core::handle, feat, module::lightweight::entry_lightweight_mode};
 use anyhow::{Result, bail};
@@ -112,50 +111,42 @@ impl Hotkey {
             HotkeyFunction::OpenOrCloseDashboard => {
                 AsyncHandler::spawn(async move || {
                     crate::feat::open_or_close_dashboard().await;
-                    notify_event(NotificationEvent::DashboardToggled).await;
                 });
             }
             HotkeyFunction::ClashModeRule => {
                 AsyncHandler::spawn(async move || {
                     feat::change_clash_mode("rule".into()).await;
-                    notify_event(NotificationEvent::ClashModeChanged { mode: "Rule" }).await;
                 });
             }
             HotkeyFunction::ClashModeGlobal => {
                 AsyncHandler::spawn(async move || {
                     feat::change_clash_mode("global".into()).await;
-                    notify_event(NotificationEvent::ClashModeChanged { mode: "Global" }).await;
                 });
             }
             HotkeyFunction::ClashModeDirect => {
                 AsyncHandler::spawn(async move || {
                     feat::change_clash_mode("direct".into()).await;
-                    notify_event(NotificationEvent::ClashModeChanged { mode: "Direct" }).await;
                 });
             }
             HotkeyFunction::ToggleSystemProxy => {
                 AsyncHandler::spawn(async move || {
-                    let is_proxy_enabled = feat::toggle_system_proxy().await;
-                    notify_event(NotificationEvent::SystemProxyToggled(is_proxy_enabled)).await;
+                    feat::toggle_system_proxy().await;
                 });
             }
             HotkeyFunction::ToggleTunMode => {
                 AsyncHandler::spawn(async move || {
-                    let is_tun_enable = feat::toggle_tun_mode(None).await;
-                    notify_event(NotificationEvent::TunModeToggled(is_tun_enable)).await;
+                    feat::toggle_tun_mode(None).await;
                 });
             }
             HotkeyFunction::EntryLightweightMode => {
                 AsyncHandler::spawn(async move || {
                     entry_lightweight_mode().await;
-                    notify_event(NotificationEvent::LightweightModeEntered).await;
                 });
             }
             HotkeyFunction::ReactivateProfiles => {
                 AsyncHandler::spawn(async move || match feat::enhance_profiles().await {
                     Ok((true, _)) => {
                         handle::Handle::refresh_clash();
-                        notify_event(NotificationEvent::ProfilesReactivated).await;
                     }
                     Ok((false, msg)) => {
                         let message = if msg.is_empty() {
@@ -184,7 +175,6 @@ impl Hotkey {
             }
             HotkeyFunction::Quit => {
                 AsyncHandler::spawn(async move || {
-                    notify_event(NotificationEvent::AppQuit).await;
                     feat::quit().await;
                 });
             }
@@ -192,7 +182,6 @@ impl Hotkey {
             HotkeyFunction::Hide => {
                 AsyncHandler::spawn(async move || {
                     feat::hide().await;
-                    notify_event(NotificationEvent::AppHidden).await;
                 });
             }
         }

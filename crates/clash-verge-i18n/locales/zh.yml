@@ -1,31 +1,4 @@
 _version: 1
-notifications:
-  dashboardToggled:
-    title: 仪表板
-    body: 仪表板显示状态已更新。
-  clashModeChanged:
-    title: 模式切换
-    body: 已切换至 {mode}。
-  systemProxyToggled:
-    title: 系统代理
-    'on': 系统代理已启用。
-    'off': 系统代理已禁用。
-  tunModeToggled:
-    title: TUN 模式
-    'on': TUN 模式已开启。
-    'off': TUN 模式已关闭。
-  lightweightModeEntered:
-    title: 轻量模式
-    body: 已进入轻量模式。
-  profilesReactivated:
-    title: 订阅
-    body: 订阅已激活。
-  appQuit:
-    title: 即将退出
-    body: Celestial 即将退出。
-  appHidden:
-    title: 应用已隐藏
-    body: Celestial 正在后台运行。
 service:
   adminInstallPrompt: 安装 Celestial 服务需要管理员权限
   adminUninstallPrompt: 卸载 Celestial 服务需要管理员权限

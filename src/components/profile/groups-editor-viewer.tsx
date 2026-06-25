@@ -32,7 +32,7 @@ import {
   cancelIdleCallback,
   requestIdleCallback,
 } from 'foxact/request-idle-callback'
-import yaml from 'js-yaml'
+import * as yaml from 'js-yaml'
 import {
   startTransition,
   useCallback,

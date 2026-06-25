@@ -1,31 +1,4 @@
 _version: 1
-notifications:
-  dashboardToggled:
-    title: Gösterge Paneli
-    body: Gösterge panelinin görünürlüğü güncellendi.
-  clashModeChanged:
-    title: Mod Değişimi
-    body: '{mode} moduna geçildi.'
-  systemProxyToggled:
-    title: Sistem Vekil'i
-    'on': System proxy has been enabled.
-    'off': System proxy has been disabled.
-  tunModeToggled:
-    title: TUN Modu
-    'on': TUN mode has been enabled.
-    'off': TUN mode has been disabled.
-  lightweightModeEntered:
-    title: Hafif Mod
-    body: Hafif moda geçildi.
-  profilesReactivated:
-    title: Profiller
-    body: Profil yeniden etkinleştirildi.
-  appQuit:
-    title: Çıkış Yapılmak Üzere
-    body: Celestial kapanmak üzere.
-  appHidden:
-    title: Uygulama Gizlendi
-    body: Celestial arka planda çalışıyor.
 service:
   adminInstallPrompt: Celestial hizmetini kurmak için yönetici ayrıcalıkları gerekir.
   adminUninstallPrompt: Celestial hizmetini kaldırmak için yönetici ayrıcalıkları gerekir.

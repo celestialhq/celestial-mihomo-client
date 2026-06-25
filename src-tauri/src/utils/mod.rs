@@ -6,7 +6,6 @@ pub mod init;
 #[cfg(target_os = "linux")]
 pub mod linux;
 pub mod network;
-pub mod notification;
 pub mod resolve;
 #[cfg(target_os = "windows")]
 pub mod schtasks;

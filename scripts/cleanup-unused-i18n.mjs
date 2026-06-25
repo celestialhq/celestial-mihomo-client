@@ -4,7 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
-import yaml from 'js-yaml'
+import * as yaml from 'js-yaml'
 import ts from 'typescript'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -1026,7 +1026,6 @@ function loadBackendLocales() {
       data = isPlainObject(parsed) ? parsed : {}
     } catch (error) {
       console.warn(`Warning: failed to parse ${localePath}: ${error.message}`)
-      data = {}
     }
 
     locales.push({
@@ -1055,6 +1054,7 @@ function ensureBackup(localePath) {
     } catch (error) {
       throw new Error(
         `Failed to recycle existing backup for ${path.basename(localePath)}: ${error.message}`,
+        { cause: error },
       )
     }
   }

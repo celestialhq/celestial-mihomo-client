@@ -1,31 +1,4 @@
 _version: 1
-notifications:
-  dashboardToggled:
-    title: داشبورد
-    body: وضعیت نمایش داشبورد به‌روزرسانی شد.
-  clashModeChanged:
-    title: تغییر حالت
-    body: به {mode} تغییر کرد.
-  systemProxyToggled:
-    title: پروکسی سیستم
-    'on': System proxy has been enabled.
-    'off': System proxy has been disabled.
-  tunModeToggled:
-    title: حالت TUN
-    'on': TUN mode has been enabled.
-    'off': TUN mode has been disabled.
-  lightweightModeEntered:
-    title: حالت سبک
-    body: به حالت سبک وارد شد.
-  profilesReactivated:
-    title: پروفایل‌ها
-    body: پروفایل دوباره فعال شد.
-  appQuit:
-    title: در آستانه خروج
-    body: Celestial در آستانه خروج است.
-  appHidden:
-    title: برنامه پنهان شد
-    body: Celestial در پس‌زمینه در حال اجراست.
 service:
   adminInstallPrompt: نصب سرویس Celestial به دسترسی مدیر نیاز دارد.
   adminUninstallPrompt: حذف سرویس Celestial به دسترسی مدیر نیاز دارد.

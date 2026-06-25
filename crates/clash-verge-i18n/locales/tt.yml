@@ -1,31 +1,4 @@
 _version: 1
-notifications:
-  dashboardToggled:
-    title: Идарә панеле
-    body: Идарә панеленең күренеше яңартылды.
-  clashModeChanged:
-    title: Режим алыштыру
-    body: '{mode} режимына күчтел.'
-  systemProxyToggled:
-    title: Системалы прокси
-    'on': System proxy has been enabled.
-    'off': System proxy has been disabled.
-  tunModeToggled:
-    title: TUN режимы
-    'on': TUN mode has been enabled.
-    'off': TUN mode has been disabled.
-  lightweightModeEntered:
-    title: Җиңел режим
-    body: Җиңел режимга күчелде.
-  profilesReactivated:
-    title: Профильләр
-    body: Профиль яңадан активлаштырылды.
-  appQuit:
-    title: Чыгар алдыннан
-    body: Celestial чыгарга җыена.
-  appHidden:
-    title: Кушымта яшерелде
-    body: Celestial фон режимында эшли.
 service:
   adminInstallPrompt: Celestial хезмәтен урнаштыру өчен администратор хокуклары кирәк.
   adminUninstallPrompt: Celestial хезмәтен бетерү өчен администратор хокуклары кирәк.

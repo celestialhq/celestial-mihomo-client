@@ -42,7 +42,6 @@ import { UpdateButton } from '@/components/layout/update-button'
 import { WindowControls } from '@/components/layout/window-controller'
 import { useI18n } from '@/hooks/use-i18n'
 import { useVerge } from '@/hooks/use-verge'
-import { ensureRemoteNotificationsPolling } from '@/services/remote-notifications'
 import getSystem from '@/utils/get-system'
 
 import {
@@ -221,10 +220,6 @@ const Layout = () => {
   )
 
   useLoadingOverlay(themeReady)
-
-  useEffect(() => {
-    ensureRemoteNotificationsPolling()
-  }, [])
 
   const handleNotice = useCallback(
     (payload: [string, string]) => {

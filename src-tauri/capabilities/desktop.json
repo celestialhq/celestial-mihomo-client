@@ -18,7 +18,6 @@
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
     "core:window:allow-set-theme",
-    "notification:default",
     "http:default",
     "http:allow-fetch",
     {

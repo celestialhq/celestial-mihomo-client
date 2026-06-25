@@ -1,26 +1,29 @@
 ## v2.0.0
 
-### Новое
+### New
 
-- Версия приложения, Tauri-конфигурации и Cargo-пакета обновлена до `2.0.0`.
-- Релизная история `main` и рабочая ветка `dev` синхронизированы безопасным merge, без force push и без потери main-only изменений.
-- Обновлён `SECURITY.md` из релизной ветки.
+- Bumped the application, Tauri configuration, and Cargo package version to `2.0.0`.
+- Added the new dev, RC, and stable release/autobuild pipeline with a generated release page, OS download table, asset `.sha256` files, and publishing into `celestialhq/celestial-mihomo-client`.
+- Renamed release-candidate tags from `testv*.*.*` to `rc-v*.*.*`.
+- Moved Celestial Service IPC to `celestialhq/celestial-service-ipc`; prebuild now supports the service release archives and their new asset layout.
 
-### Улучшено
+### Improved
 
-- Обновлены npm/pnpm зависимости до актуальных совместимых версий, уже зафиксированных в lockfile.
-- Обновлён `Cargo.lock` через `cargo update`, включая совместимые обновления Rust/Tauri/git-зависимостей.
-- Renovate config переписан под рабочую ветку `dev`, npm/pnpm, Cargo и GitHub Actions, с отдельной обработкой major-обновлений без automerge.
+- macOS DMG builds remain unsigned, but workflows now pass `TAURI_PRIVATE_KEY` / `TAURI_KEY_PASSWORD` to Tauri updater signing as `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+- Applied Renovate updates for `react-router` 8, `js-yaml` 5, `commander` 15, `lint-staged` 17, `@eslint-react/eslint-plugin` 5, and `rust_iso3166` 0.2.
+- Applied security lockfile updates for `tauri` 2.11.1, `rustls-webpki` 0.103.13, `rkyv` 0.8.16, `tar` 0.4.46, and `dompurify` 3.4.x via `pnpm.overrides`.
 
-### Изменено
+### Changed
 
-- Удалена вкладка «Уведомления» и отдельная страница `/notifications`.
-- Фоновая проверка urgent/system уведомлений сохранена без отдельной вкладки.
+- Removed the current remote/native notification subsystem completely: `notify.json` polling, system push notifications, the Tauri notification plugin, and native hotkey notifications.
+- Kept internal frontend events and in-app toast feedback (`showNotice`) because they are still used for normal UI feedback.
+- Adapted ESLint configuration for `@eslint-react/eslint-plugin` 5 without forcing a UI refactor of existing components.
 
-### Исправлено
+### Fixed
 
-- Исправлен разбор логов ядра для вкладки `/logs`: fallback-логи теперь корректно читаются из форматов `time="..." level=... msg="..."`, `YYYY-MM-DD HH:mm:ss LEVEL ...`, `MM-DD HH:mm:ss LEVEL ...` и plain text.
-- WebSocket-логи ядра теперь принимаются как JSON и как plain text, с нормализацией уровней `WARN/ERR` в `warning/error`.
+- Fixed the macOS build error `A public key has been found, but no private key` in dev/release workflows.
+- Fixed production build compatibility with `js-yaml` 5 by switching imports to namespace imports.
+- Verified stability after major dependency updates: TypeScript typecheck, ESLint, Vite production build, `cargo check`, and `cargo clippy` pass.
 
 ## v1.4.1
 

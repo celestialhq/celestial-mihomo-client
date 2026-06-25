@@ -45,7 +45,6 @@ mod app_init {
         #[allow(unused_mut)]
         let mut builder = builder
             .plugin(tauri_plugin_clash_verge_sysinfo::init())
-            .plugin(tauri_plugin_notification::init())
             .plugin(tauri_plugin_updater::Builder::new().build())
             .plugin(tauri_plugin_clipboard_manager::init())
             .plugin(tauri_plugin_process::init())
@@ -184,7 +183,6 @@ mod app_init {
             cmd::copy_icon_file,
             cmd::download_icon_cache,
             cmd::get_process_icon,
-            cmd::show_remote_notification,
             cmd::open_devtools,
             cmd::exit_app,
             cmd::get_network_interfaces_info,
