@@ -106,7 +106,7 @@ arc-swap = "1.9.0"
 tokio-rustls = "0.26"
 rustls = { version = "0.23", features = ["ring"] }
 webpki-roots = "1.0"
-rust_iso3166 = "0.1.14"
+rust_iso3166 = "0.2.0"
 dark-light = "2.0.0"
 bytes = "1.11.1"
 
