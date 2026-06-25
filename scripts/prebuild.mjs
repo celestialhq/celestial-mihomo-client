@@ -577,7 +577,7 @@ const resolveServicePermission = async () => {
 // =======================
 // Other resource resolvers (service, mmdb, geosite, geoip, enableLoopback)
 // =======================
-const SERVICE_URL = `https://github.com/pius-pp/celestial-service-ipc/releases/download/${SIDECAR_HOST}`
+const SERVICE_URL = `https://github.com/celestialhq/celestial-service-ipc/releases/download/${SIDECAR_HOST}`
 const resolveService = () => {
   const ext = platform === 'win32' ? '.exe' : ''
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
