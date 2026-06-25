@@ -181,6 +181,22 @@ const DEFAULT_DNS_CONFIG = {
   },
 }
 
+function isEmptyYamlDocument(value: string) {
+  return value
+    .split(/\r?\n/)
+    .every((line) => line.trim() === '' || line.trim().startsWith('#'))
+}
+
+function loadYamlDocument(value: string) {
+  if (isEmptyYamlDocument(value)) return null
+
+  return yaml.load(value)
+}
+
+function dumpDnsDocument(config: Record<string, any>) {
+  return yaml.dump(config, { forceQuotes: true })
+}
+
 export function DnsViewer({ ref }: { ref?: Ref<DialogRef> }) {
   const { t } = useTranslation()
   const { clash, mutateClash } = useClash()
@@ -378,7 +394,7 @@ export function DnsViewer({ ref }: { ref?: Ref<DialogRef> }) {
       config.hosts = hosts
     }
 
-    setYamlContent(yaml.dump(config, { forceQuotes: true }))
+    setYamlContent(dumpDnsDocument(config))
   }, [generateDnsConfig, setYamlContent, values.hosts])
 
   // 重置为默认值
@@ -414,14 +430,14 @@ export function DnsViewer({ ref }: { ref?: Ref<DialogRef> }) {
       hosts: '',
     })
 
-    updateYamlFromValues()
-  }, [setValues, updateYamlFromValues])
+    setYamlContent(dumpDnsDocument({ dns: DEFAULT_DNS_CONFIG }))
+  }, [setValues, setYamlContent])
 
   // 从YAML更新表单值
   const updateValuesFromYaml = useCallback(() => {
     try {
-      const parsedYaml = yaml.load(yamlContent) as any
-      if (!parsedYaml) return
+      const parsedYaml = loadYamlDocument(yamlContent) as any
+      if (!parsedYaml || typeof parsedYaml !== 'object') return
 
       skipYamlSyncRef.current = true
       updateValuesFromConfig(parsedYaml)
@@ -470,9 +486,11 @@ export function DnsViewer({ ref }: { ref?: Ref<DialogRef> }) {
 
       if (dnsConfigExists) {
         const dnsConfig = await invoke<string>('get_dns_config_content', {})
-        const config = yaml.load(dnsConfig) as any
+        const config = loadYamlDocument(dnsConfig) as any
 
-        updateValuesFromConfig(config)
+        if (config && typeof config === 'object') {
+          updateValuesFromConfig(config)
+        }
         setYamlContent(dnsConfig)
       } else {
         resetToDefaults()
@@ -516,7 +534,7 @@ export function DnsViewer({ ref }: { ref?: Ref<DialogRef> }) {
         }
       } else {
         // 使用YAML编辑器的值
-        const parsedConfig = yaml.load(yamlContent)
+        const parsedConfig = loadYamlDocument(yamlContent) ?? {}
         if (typeof parsedConfig !== 'object' || parsedConfig === null) {
           throw new Error(t('settings.modals.dns.errors.invalid'))
         }
@@ -582,7 +600,7 @@ export function DnsViewer({ ref }: { ref?: Ref<DialogRef> }) {
 
     // 允许YAML编辑后立即分析和更新表单值
     try {
-      const config = yaml.load(value || '') as any
+      const config = loadYamlDocument(value || '') as any
       if (config && typeof config === 'object') {
         setTimeout(() => {
           updateValuesFromConfig(config)
