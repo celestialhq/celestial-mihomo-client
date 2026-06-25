@@ -1,6 +1,6 @@
 [package]
 name = "celestial"
-version = "1.4.1"
+version = "2.0.0"
 description = "Celestial Mihomo Client"
 authors = ["zzzgydi", "Tunglies", "wonfen", "MystiPanda"]
 license = "GPL-3.0-only"

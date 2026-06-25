@@ -147,20 +147,20 @@ mod tests {
     fn test_delete_proxy_and_references() {
         let config_str = r#"
 proxies:
-- name: "proxy1"
-  type: "ss"
-- name: "proxy2"
-  type: "vmess"
+  - name: "proxy1"
+    type: "ss"
+  - name: "proxy2"
+    type: "vmess"
 proxy-groups:
-- name: "group1"
-  type: "select"
-  proxies:
-    - "proxy1"
-    - "proxy2"
-- name: "group2"
-  type: "select"
-  proxies:
-    - "proxy1"
+  - name: "group1"
+    type: "select"
+    proxies:
+      - "proxy1"
+      - "proxy2"
+  - name: "group2"
+    type: "select"
+    proxies:
+      - "proxy1"
 "#;
         let mut config: Mapping = serde_yaml_ng::from_str(config_str).expect("Failed to parse test config YAML");
 
@@ -225,17 +225,17 @@ proxy-groups:
     fn test_add_new_proxies_to_first_selector_group() {
         let config_str = r#"
 proxies:
-- name: "proxy1"
-  type: "ss"
+  - name: "proxy1"
+    type: "ss"
 proxy-groups:
-- name: "group1"
-  type: "select"
-  proxies:
-    - "proxy1"
-- name: "group2"
-  type: "select"
-  proxies:
-    - "proxy1"
+  - name: "group1"
+    type: "select"
+    proxies:
+      - "proxy1"
+  - name: "group2"
+    type: "select"
+    proxies:
+      - "proxy1"
 "#;
         let mut config: Mapping = serde_yaml_ng::from_str(config_str).expect("Failed to parse test config YAML");
 

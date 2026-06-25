@@ -3,7 +3,7 @@ import dayjs from 'dayjs'
 import { useEffect, useRef } from 'react'
 import { MihomoWebSocket, type LogLevel } from 'tauri-plugin-mihomo-api'
 
-import { getClashLogs } from '@/services/cmds'
+import { getClashLogs, parseClashLogLine } from '@/services/cmds'
 
 import { useClashLog } from './use-clash-log'
 import { useMihomoWsSubscription } from './use-mihomo-ws-subscription'
@@ -45,6 +45,20 @@ const appendLogs = (
     return incoming.slice(incoming.length - MAX_LOG_NUM)
   }
   return base.slice(dropFromBase).concat(incoming)
+}
+
+const normalizeLogItem = (log: ILogItem): ILogItem => {
+  const normalizedType = log.type.toLowerCase()
+
+  return {
+    ...log,
+    type:
+      normalizedType === 'warn'
+        ? 'warning'
+        : normalizedType === 'err'
+          ? 'error'
+          : normalizedType,
+  }
 }
 
 export const useLogData = () => {
@@ -93,7 +107,17 @@ export const useLogData = () => {
           }
 
           try {
-            const parsed = JSON.parse(data) as ILogItem
+            const parsedLog =
+              data.trim().startsWith('{') || data.trim().startsWith('[')
+                ? (JSON.parse(data) as ILogItem)
+                : parseClashLogLine(data)
+
+            if (!parsedLog) {
+              return
+            }
+
+            const parsed = normalizeLogItem(parsedLog)
+
             if (
               allowedTypes.length > 0 &&
               !allowedTypes.includes(parsed.type)
@@ -103,7 +127,7 @@ export const useLogData = () => {
             if (flushTimeStr === null) {
               flushTimeStr = dayjs().format('MM-DD HH:mm:ss')
             }
-            parsed.time = flushTimeStr
+            parsed.time = parsed.time ?? flushTimeStr
             buffer.push(parsed)
             if (buffer.length > MAX_LOG_NUM) {
               buffer.splice(0, buffer.length - MAX_LOG_NUM)

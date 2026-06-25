@@ -220,24 +220,62 @@ export async function calcuProxyProviders() {
   )
 }
 
+const normalizeLogType = (type: string) => {
+  const normalized = type.toLowerCase()
+
+  switch (normalized) {
+    case 'warn':
+      return 'warning'
+    case 'err':
+      return 'error'
+    default:
+      return normalized
+  }
+}
+
+export function parseClashLogLine(log: string): ILogItem | null {
+  const quotedRegex = /time="(.+?)"\s+level=(.+?)\s+msg="(.*?)"/
+  const timestampRegex =
+    /^(\d{4}[-/]\d{2}[-/]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?|\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}|\d{2}:\d{2}:\d{2})\s+([A-Za-z]+)\s+(.+)$/
+
+  const quotedMatch = log.match(quotedRegex)
+  if (quotedMatch) {
+    const [, rawTime, type, payload] = quotedMatch
+    const parsedTime = dayjs(rawTime)
+
+    return {
+      time: parsedTime.isValid()
+        ? parsedTime.format('MM-DD HH:mm:ss')
+        : rawTime,
+      type: normalizeLogType(type),
+      payload,
+    }
+  }
+
+  const timestampMatch = log.match(timestampRegex)
+  if (timestampMatch) {
+    const [, rawTime, type, payload] = timestampMatch
+
+    return {
+      time: rawTime,
+      type: normalizeLogType(type),
+      payload,
+    }
+  }
+
+  return {
+    type: 'info',
+    payload: log,
+  }
+}
+
 export async function getClashLogs() {
-  const regex = /time="(.+?)"\s+level=(.+?)\s+msg="(.+?)"/
-  const newRegex = /(.+?)\s+(.+?)\s+(.+)/
   const logs = await invoke<string[]>('get_clash_logs')
 
   return logs.reduce<ILogItem[]>((acc, log) => {
-    const result = log.match(regex)
-    if (result) {
-      const [_, _time, type, payload] = result
-      const time = dayjs(_time).format('MM-DD HH:mm:ss')
-      acc.push({ time, type, payload })
-      return acc
-    }
-
-    const result2 = log.match(newRegex)
-    if (result2) {
-      const [_, time, type, payload] = result2
-      acc.push({ time, type, payload })
+    const parsed = parseClashLogLine(log)
+    if (parsed) {
+      acc.push(parsed)
     }
     return acc
   }, [])
