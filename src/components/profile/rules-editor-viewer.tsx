@@ -63,6 +63,28 @@ interface Props {
   onSave?: (prev?: string, curr?: string) => void
 }
 
+function isEmptyYamlDocument(value: string) {
+  return value
+    .split(/\r?\n/)
+    .every((line) => line.trim() === '' || line.trim().startsWith('#'))
+}
+
+function loadYamlDocument(value: string) {
+  if (isEmptyYamlDocument(value)) return null
+
+  return yaml.load(value)
+}
+
+async function readOptionalProfileFile(index: string) {
+  if (!index) return ''
+
+  try {
+    return await readProfileFile(index)
+  } catch {
+    return ''
+  }
+}
+
 const portValidator = (value: string): boolean => {
   return new RegExp(
     '^(?:[1-9]\\d{0,3}|[1-5]\\d{4}|6[0-4]\\d{3}|65[0-4]\\d{2}|655[0-2]\\d|6553[0-5])$',
@@ -406,8 +428,8 @@ export const RulesEditorViewer = (props: Props) => {
     }
   }
   const fetchContent = useCallback(async () => {
-    const data = await readProfileFile(property)
-    const obj = yaml.load(data) as ISeqProfileConfig | null
+    const data = await readOptionalProfileFile(property)
+    const obj = loadYamlDocument(data) as ISeqProfileConfig | null
 
     setPrependSeq(obj?.prepend || [])
     setAppendSeq(obj?.append || [])
@@ -422,7 +444,7 @@ export const RulesEditorViewer = (props: Props) => {
       return
     }
 
-    const obj = yaml.load(currData) as ISeqProfileConfig | null
+    const obj = loadYamlDocument(currData) as ISeqProfileConfig | null
     startTransition(() => {
       setPrependSeq(obj?.prepend ?? [])
       setAppendSeq(obj?.append ?? [])
@@ -466,26 +488,34 @@ export const RulesEditorViewer = (props: Props) => {
   }, [prependSeq, appendSeq, deleteSeq])
 
   const fetchProfile = useCallback(async () => {
-    const data = await readProfileFile(profileUid) // 原配置文件
-    const groupsData = await readProfileFile(groupsUid) // groups配置文件
-    const mergeData = await readProfileFile(mergeUid) // merge配置文件
+    const [data, groupsData, mergeData] = await Promise.all([
+      readProfileFile(profileUid),
+      readOptionalProfileFile(groupsUid),
+      readOptionalProfileFile(mergeUid),
+    ])
 
-    const rulesObj = yaml.load(data) as { rules: [] } | null
-
-    const originGroupsObj = yaml.load(data) as {
-      'proxy-groups': IProxyGroupConfig[]
+    const profileObj = loadYamlDocument(data) as {
+      rules?: string[]
+      'proxy-groups'?: IProxyGroupConfig[]
+      'rule-providers'?: Record<string, unknown>
+      'sub-rules'?: Record<string, unknown>
     } | null
-    const originGroups = originGroupsObj?.['proxy-groups'] || []
-    const moreGroupsObj = yaml.load(groupsData) as ISeqProfileConfig | null
-    const rawPrependGroups = moreGroupsObj?.['prepend']
+    const groupsObj = loadYamlDocument(groupsData) as ISeqProfileConfig | null
+    const mergeObj = loadYamlDocument(mergeData) as {
+      'rule-providers'?: Record<string, unknown>
+      'sub-rules'?: Record<string, unknown>
+    } | null
+
+    const originGroups = profileObj?.['proxy-groups'] || []
+    const rawPrependGroups = groupsObj?.['prepend']
     const morePrependGroups = Array.isArray(rawPrependGroups)
       ? (rawPrependGroups as IProxyGroupConfig[])
       : []
-    const rawAppendGroups = moreGroupsObj?.['append']
+    const rawAppendGroups = groupsObj?.['append']
     const moreAppendGroups = Array.isArray(rawAppendGroups)
       ? (rawAppendGroups as IProxyGroupConfig[])
       : []
-    const rawDeleteGroups = moreGroupsObj?.['delete']
+    const rawDeleteGroups = groupsObj?.['delete']
     const moreDeleteGroups: Array<string | { name: string }> = Array.isArray(
       rawDeleteGroups,
     )
@@ -502,31 +532,22 @@ export const RulesEditorViewer = (props: Props) => {
       moreAppendGroups,
     )
 
-    const originRuleSetObj = yaml.load(data) as {
-      'rule-providers': Record<string, unknown>
-    } | null
-    const originRuleSet = originRuleSetObj?.['rule-providers'] || {}
-    const moreRuleSetObj = yaml.load(mergeData) as {
-      'rule-providers': Record<string, unknown>
-    } | null
-    const moreRuleSet = moreRuleSetObj?.['rule-providers'] || {}
-    const ruleSet = Object.assign({}, originRuleSet, moreRuleSet)
-
-    const originSubRuleObj = yaml.load(data) as {
-      'sub-rules': Record<string, unknown>
-    } | null
-    const originSubRule = originSubRuleObj?.['sub-rules'] || {}
-    const moreSubRuleObj = yaml.load(mergeData) as {
-      'sub-rules': Record<string, unknown>
-    } | null
-    const moreSubRule = moreSubRuleObj?.['sub-rules'] || {}
-    const subRule = Object.assign({}, originSubRule, moreSubRule)
+    const ruleSet = Object.assign(
+      {},
+      profileObj?.['rule-providers'] || {},
+      mergeObj?.['rule-providers'] || {},
+    )
+    const subRule = Object.assign(
+      {},
+      profileObj?.['sub-rules'] || {},
+      mergeObj?.['sub-rules'] || {},
+    )
     setProxyPolicyList(
       builtinProxyPolicies.concat(groups.map((group: any) => group.name)),
     )
     setRuleSetList(Object.keys(ruleSet))
     setSubRuleList(Object.keys(subRule))
-    setRuleList(rulesObj?.rules || [])
+    setRuleList(profileObj?.rules || [])
   }, [groupsUid, mergeUid, profileUid])
 
   useEffect(() => {
