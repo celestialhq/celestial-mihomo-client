@@ -23,7 +23,8 @@
     "closeAll": "Alle schließen",
     "clear": "Löschen",
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "more": "More"
   },
   "labels": {
     "updateAt": "Aktualisiert am",

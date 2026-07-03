@@ -130,10 +130,13 @@ export const ProxyGroups = (props: Props) => {
     [selectedGroup, defaultRuleGroup],
   )
 
+  const parentRef = useRef<HTMLDivElement>(null)
+
   const { renderList, onProxies, onHeadState } = useRenderList(
     mode,
     isChainMode,
     activeSelectedGroup,
+    parentRef,
   )
 
   const getGroupHeadState = useCallback(
@@ -159,7 +162,6 @@ export const ProxyGroups = (props: Props) => {
 
   const timeout = verge?.default_latency_timeout || 10000
 
-  const parentRef = useRef<HTMLDivElement>(null)
   const scrollPositionRef = useRef<Record<string, number>>({})
   const scrollTopRef = useRef(0)
   const showScrollTopRef = useRef(false)
@@ -479,8 +481,22 @@ export const ProxyGroups = (props: Props) => {
 
     return (
       <>
-        <Box sx={{ display: 'flex', height: '100%', gap: 2 }}>
-          <Box sx={{ flex: 1, position: 'relative' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            height: '100%',
+            overflowY: { xs: 'auto', sm: 'visible' },
+            gap: 2,
+          }}
+        >
+          <Box
+            sx={{
+              flex: { xs: 'none', sm: 1 },
+              height: { xs: 400, sm: '100%' },
+              position: 'relative',
+            }}
+          >
             {showRuleHeader && (
               <ChainRuleHeader
                 title={t('proxies.page.rules.title')}
@@ -497,7 +513,13 @@ export const ProxyGroups = (props: Props) => {
             <ScrollTopButton show={showScrollTop} onClick={scrollToTop} />
           </Box>
 
-          <Box sx={{ width: '400px', minWidth: '300px' }}>
+          <Box
+            sx={{
+              width: { xs: '100%', sm: '400px' },
+              minWidth: { xs: 0, sm: '300px' },
+              flex: 'none',
+            }}
+          >
             <ProxyChain
               proxyChain={proxyChain}
               onUpdateChain={setProxyChain}

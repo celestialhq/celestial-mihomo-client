@@ -129,8 +129,8 @@ const SX_RESIZE_HANDLE: React.ComponentProps<typeof Box>['sx'] = {
 
 const SX_HEADER_ROW: React.ComponentProps<typeof Box>['sx'] = {
   display: 'flex',
-  borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
-  backgroundColor: (theme) => theme.palette.background.paper,
+  borderBottom: '1px solid var(--border)',
+  backgroundColor: 'var(--card2)',
 }
 
 const SX_HEADER_CELL_BASE: React.ComponentProps<typeof Box>['sx'] = {
@@ -138,19 +138,25 @@ const SX_HEADER_CELL_BASE: React.ComponentProps<typeof Box>['sx'] = {
   alignItems: 'center',
   position: 'relative',
   boxSizing: 'border-box',
-  fontSize: 13,
+  fontSize: 10,
   fontWeight: 600,
-  color: 'text.secondary',
+  fontFamily: "'JetBrains Mono', monospace",
+  letterSpacing: '0.05em',
+  textTransform: 'uppercase',
+  color: 'var(--text2)',
   userSelect: 'none',
   '&:hover': {
-    backgroundColor: (theme) => theme.palette.action.hover,
+    backgroundColor: 'var(--track)',
   },
 }
 
 const SX_DATA_CELL_BASE: React.ComponentProps<typeof Box>['sx'] = {
   boxSizing: 'border-box',
   px: 1,
-  fontSize: 13,
+  fontSize: 12,
+  fontFamily: "'Montserrat', sans-serif",
+  fontWeight: 500,
+  color: 'var(--text)',
   display: 'flex',
   alignItems: 'center',
   whiteSpace: 'nowrap',
@@ -158,15 +164,18 @@ const SX_DATA_CELL_BASE: React.ComponentProps<typeof Box>['sx'] = {
   textOverflow: 'ellipsis',
 }
 
+const NUMERIC_FIELDS = new Set(['download', 'upload', 'dlSpeed', 'ulSpeed'])
+const SPEED_FIELDS = new Set(['dlSpeed', 'ulSpeed'])
+
 const SX_ROW_BASE: React.ComponentProps<typeof Box>['sx'] = {
   display: 'flex',
   position: 'absolute',
   left: 0,
   right: 0,
   cursor: 'pointer',
-  borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
+  borderBottom: '1px solid var(--border)',
   '&:hover': {
-    backgroundColor: (theme) => theme.palette.action.hover,
+    backgroundColor: 'var(--card2)',
   },
 }
 
@@ -263,7 +272,10 @@ const RowComponent = memo(
         {row.getVisibleCells().map((cell) => {
           const meta = cell.column.columnDef.meta as {
             align?: 'left' | 'right'
+            field?: string
           }
+          const isNumeric = !!meta?.field && NUMERIC_FIELDS.has(meta.field)
+          const isSpeed = !!meta?.field && SPEED_FIELDS.has(meta.field)
           return (
             <Box
               key={cell.id}
@@ -275,6 +287,11 @@ const RowComponent = memo(
                   maxWidth: cell.column.columnDef.maxSize,
                   justifyContent:
                     meta?.align === 'right' ? 'flex-end' : 'flex-start',
+                  ...(isNumeric && {
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontWeight: 500,
+                    color: isSpeed ? 'var(--accent)' : 'var(--text2)',
+                  }),
                 },
               ]}
             >

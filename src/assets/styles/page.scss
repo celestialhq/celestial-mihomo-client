@@ -4,19 +4,21 @@
   display: flex;
   flex-direction: column;
   > header {
-    flex: 0 0 58px;
+    flex: 0 0 auto;
+    min-height: 58px;
     width: 100%;
     // max-width: 850px;
     margin: 0 auto;
-    padding: 0 20px;
+    padding: 10px 20px;
     box-sizing: border-box;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    row-gap: 6px;
     justify-content: space-between;
     border-bottom: 1px solid var(--divider-color);
-    background:
-      linear-gradient(180deg, rgba(185, 167, 255, 0.08), rgba(255, 255, 255, 0)),
-      var(--surface-color);
+    background: var(--panel);
+    font-family: 'Montserrat', sans-serif;
   }
 
   .base-container {
@@ -30,17 +32,17 @@
       flex: 1 1 100%;
       width: 100%;
       height: 100%;
-      overflow: auto;
+      overflow-x: hidden;
+      overflow-y: auto;
       padding: 12px 0;
       box-sizing: border-box;
       scrollbar-gutter: stable;
-      background:
-        radial-gradient(circle at 100% 0%, rgba(185, 167, 255, 0.1), transparent 30%),
-        transparent;
+      background: transparent;
 
       .base-content {
         width: calc(100% - 10px * 2);
         margin: 0 auto;
+        overflow: hidden;
       }
     }
 

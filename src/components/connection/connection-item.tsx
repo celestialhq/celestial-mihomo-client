@@ -1,12 +1,5 @@
 import { CloseRounded } from '@mui/icons-material'
-import {
-  styled,
-  ListItem,
-  IconButton,
-  ListItemText,
-  Box,
-  alpha,
-} from '@mui/material'
+import { styled, ListItem, IconButton, ListItemText, Box } from '@mui/material'
 import { useLockFn } from 'ahooks'
 import dayjs from 'dayjs'
 import { useTranslation } from 'react-i18next'
@@ -14,13 +7,15 @@ import { closeConnection } from 'tauri-plugin-mihomo-api'
 
 import parseTraffic from '@/utils/parse-traffic'
 
-const Tag = styled('span')(({ theme }) => ({
-  fontSize: '10px',
-  padding: '0 4px',
-  lineHeight: 1.375,
-  border: '1px solid',
+const Tag = styled('span')(() => ({
+  fontSize: '9px',
+  fontFamily: "'JetBrains Mono', monospace",
+  fontWeight: 600,
+  padding: '1px 4px',
+  lineHeight: 1.4,
+  border: '1px solid var(--border)',
   borderRadius: 4,
-  borderColor: alpha(theme.palette.text.secondary, 0.35),
+  color: 'var(--text2)',
   marginTop: '4px',
   marginRight: '4px',
 }))

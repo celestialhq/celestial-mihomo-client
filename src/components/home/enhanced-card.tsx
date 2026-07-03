@@ -1,10 +1,10 @@
-import { Box, Typography, alpha, useTheme } from '@mui/material'
-import React, { forwardRef, ReactNode } from 'react'
+import { Box } from '@mui/material'
+import { forwardRef, ReactNode } from 'react'
 
 // 自定义卡片组件接口
 interface EnhancedCardProps {
   title: ReactNode
-  icon: ReactNode
+  icon?: ReactNode
   action?: ReactNode
   children: ReactNode
   iconColor?: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success'
@@ -12,112 +12,60 @@ interface EnhancedCardProps {
   noContentPadding?: boolean
 }
 
-// 自定义卡片组件
+// 自定义卡片组件 — flat block matching the Celestial design: mono all-caps
+// label header, no icon chip, plain body. `icon`/`iconColor` are accepted
+// for backward compat but no longer rendered — the mockup's cards carry no
+// icon in their header, only a small mono label.
 export const EnhancedCard = forwardRef<HTMLElement, EnhancedCardProps>(
-  (
-    {
-      title,
-      icon,
-      action,
-      children,
-      iconColor = 'primary',
-      minHeight,
-      noContentPadding = false,
-    },
-    ref,
-  ) => {
-    const theme = useTheme()
-    const isDark = theme.palette.mode === 'dark'
-
-    // 统一的标题截断样式
-    const titleTruncateStyle = {
-      minWidth: 0,
-      maxWidth: '100%',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      whiteSpace: 'nowrap',
-      display: 'block',
-    }
-
+  ({ title, action, children, minHeight, noContentPadding = false }, ref) => {
     return (
       <Box
         sx={{
           height: '100%',
+          width: '100%',
           display: 'flex',
           flexDirection: 'column',
-          borderRadius: 2,
-          border: `1px solid ${alpha(theme.palette.primary.main, isDark ? 0.16 : 0.12)}`,
-          background: isDark
-            ? 'linear-gradient(180deg, rgba(185, 167, 255, 0.08), rgba(255, 255, 255, 0.018)), #101318'
-            : 'background.paper',
-          boxShadow: isDark
-            ? '0 18px 42px rgba(0, 0, 0, 0.26), 0 0 0 1px rgba(255, 255, 255, 0.02)'
-            : '0 18px 42px rgba(15, 23, 42, 0.08)',
+          borderRadius: '11px',
+          border: '1px solid var(--border)',
+          background: 'var(--card)',
+          boxShadow: 'none',
           overflow: 'hidden',
+          padding: '15px',
+          boxSizing: 'border-box',
         }}
         ref={ref}
       >
         <Box
           sx={{
-            px: 2,
-            py: 1,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderBottom: 0,
-            background: isDark
-              ? 'linear-gradient(180deg, rgba(185, 167, 255, 0.075), rgba(255, 255, 255, 0))'
-              : 'linear-gradient(180deg, rgba(237, 244, 250, 0.9), rgba(250, 252, 255, 0))',
+            mb: '12px',
+            flexShrink: 0,
           }}
         >
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              minWidth: 0,
-              flex: 1,
-              overflow: 'hidden',
-            }}
-          >
+          {typeof title === 'string' ? (
             <Box
+              component="span"
               sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 1.5,
-                width: 38,
-                height: 38,
-                mr: 1.5,
-                flexShrink: 0,
-                backgroundColor: isDark
-                  ? alpha(theme.palette[iconColor].main, 0.12)
-                  : alpha(theme.palette[iconColor].main, 0.12),
-                border: isDark
-                  ? `1px solid ${alpha(theme.palette[iconColor].main, 0.2)}`
-                  : 'none',
-                color: theme.palette[iconColor].main,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: '10.5px',
+                fontWeight: 600,
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+                color: 'var(--text2)',
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
+              title={title}
             >
-              {icon}
+              {title}
             </Box>
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              {typeof title === 'string' ? (
-                <Typography
-                  variant="h6"
-                  sx={{
-                    ...titleTruncateStyle,
-                    fontWeight: 'medium',
-                    fontSize: 18,
-                  }}
-                  title={title}
-                >
-                  {title}
-                </Typography>
-              ) : (
-                <Box sx={titleTruncateStyle}>{title}</Box>
-              )}
-            </Box>
-          </Box>
+          ) : (
+            <Box sx={{ minWidth: 0, overflow: 'hidden' }}>{title}</Box>
+          )}
           {action && <Box sx={{ ml: 2, flexShrink: 0 }}>{action}</Box>}
         </Box>
         <Box
@@ -125,7 +73,7 @@ export const EnhancedCard = forwardRef<HTMLElement, EnhancedCardProps>(
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
-            p: noContentPadding ? 0 : 2,
+            p: noContentPadding ? 0 : 0,
             ...(minHeight && { minHeight }),
           }}
         >

@@ -9,7 +9,6 @@ import {
   Avatar,
   Box,
   Button,
-  ButtonGroup,
   Fab,
   IconButton,
   MenuItem,
@@ -320,49 +319,87 @@ const ConnectionsPage = () => {
         borderRadius: '8px',
         minHeight: 0,
       }}
-      header={
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Box sx={{ mx: 1 }}>
-            {t('shared.labels.downloaded')}:{' '}
-            {parseTraffic(connections?.downloadTotal)}
-          </Box>
-          <Box sx={{ mx: 1 }}>
-            {t('shared.labels.uploaded')}:{' '}
-            {parseTraffic(connections?.uploadTotal)}
-          </Box>
-          <IconButton
-            color="inherit"
-            size="small"
-            onClick={() =>
-              setSetting((o) =>
-                o?.layout !== 'table'
-                  ? { ...o, layout: 'table' }
-                  : { ...o, layout: 'list' },
-              )
-            }
-          >
-            {isTableLayout ? (
-              <TableRowsRounded titleAccess={t('shared.actions.listView')} />
-            ) : (
-              <TableChartRounded titleAccess={t('shared.actions.tableView')} />
-            )}
-          </IconButton>
-          <Button size="small" variant="contained" onClick={onCloseAll}>
-            <span style={{ whiteSpace: 'nowrap' }}>
-              {t('shared.actions.closeAll')}
-            </span>
-          </Button>
-        </Box>
-      }
     >
       <Box
         sx={{
           pt: 1,
           mb: 0.5,
           mx: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2,
+          userSelect: 'text',
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '18px',
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--text2)',
+          }}
+        >
+          <span>
+            {t('shared.labels.downloaded')}{' '}
+            <Box component="span" sx={{ color: 'var(--text)', fontSize: 13 }}>
+              {parseTraffic(connections?.downloadTotal)}
+            </Box>
+          </span>
+          <span>
+            {t('shared.labels.uploaded')}{' '}
+            <Box component="span" sx={{ color: 'var(--text)', fontSize: 13 }}>
+              {parseTraffic(connections?.uploadTotal)}
+            </Box>
+          </span>
+        </Box>
+        <IconButton
+          color="inherit"
+          size="small"
+          onClick={() =>
+            setSetting((o) =>
+              o?.layout !== 'table'
+                ? { ...o, layout: 'table' }
+                : { ...o, layout: 'list' },
+            )
+          }
+        >
+          {isTableLayout ? (
+            <TableRowsRounded titleAccess={t('shared.actions.listView')} />
+          ) : (
+            <TableChartRounded titleAccess={t('shared.actions.tableView')} />
+          )}
+        </IconButton>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={onCloseAll}
+          sx={{
+            ml: 'auto',
+            borderColor: 'var(--bad)',
+            color: 'var(--bad)',
+            textTransform: 'none',
+            fontWeight: 600,
+            '&:hover': { borderColor: 'var(--bad)', bgcolor: 'var(--track)' },
+          }}
+        >
+          <span style={{ whiteSpace: 'nowrap' }}>
+            {t('shared.actions.closeAll')}
+          </span>
+        </Button>
+      </Box>
+
+      <Box
+        sx={{
+          mb: 0.5,
+          mx: '10px',
           minHeight: '36px',
           display: 'flex',
           alignItems: 'center',
+          flexWrap: 'wrap',
           gap: 1,
           userSelect: 'text',
           position: 'sticky',
@@ -370,24 +407,60 @@ const ConnectionsPage = () => {
           zIndex: 2,
         }}
       >
-        <ButtonGroup sx={{ mr: 1, flexBasis: 'content' }}>
+        <Box
+          sx={{
+            mr: 1,
+            flexBasis: 'content',
+            display: 'flex',
+            gap: '4px',
+            p: '4px',
+            backgroundColor: 'var(--card2)',
+            borderRadius: '11px',
+          }}
+        >
           <Button
             size="small"
-            variant={connectionsType === 'active' ? 'contained' : 'outlined'}
             onClick={() => setConnectionsType('active')}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              borderRadius: '8px',
+              bgcolor:
+                connectionsType === 'active' ? 'var(--card)' : 'transparent',
+              color:
+                connectionsType === 'active' ? 'var(--text)' : 'var(--text2)',
+              boxShadow: connectionsType === 'active' ? 1 : 'none',
+              '&:hover': {
+                bgcolor:
+                  connectionsType === 'active' ? 'var(--card)' : 'var(--track)',
+              },
+            }}
           >
             {t('connections.components.actions.active')}{' '}
             {connections?.activeConnections.length}
           </Button>
           <Button
             size="small"
-            variant={connectionsType === 'closed' ? 'contained' : 'outlined'}
             onClick={() => setConnectionsType('closed')}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              borderRadius: '8px',
+              bgcolor:
+                connectionsType === 'closed' ? 'var(--card)' : 'transparent',
+              color:
+                connectionsType === 'closed' ? 'var(--text)' : 'var(--text2)',
+              boxShadow: connectionsType === 'closed' ? 1 : 'none',
+              '&:hover': {
+                bgcolor:
+                  connectionsType === 'closed' ? 'var(--card)' : 'var(--track)',
+              },
+            }}
           >
             {t('connections.components.actions.closed')}{' '}
             {connections?.closedConnections.length}
           </Button>
-        </ButtonGroup>
+        </Box>
         {!isTableLayout && (
           <BaseStyledSelect
             value={curOrderOpt}

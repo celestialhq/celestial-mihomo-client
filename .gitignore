@@ -18,3 +18,5 @@ CLAUDE.md
 .vfox/
 .claude
 celestial-orbit
+.design-handoff/
+*-handoff.zip

@@ -1,5 +1,5 @@
 import { CheckCircleOutlineRounded } from '@mui/icons-material'
-import { alpha, Box, ListItemButton, styled, Typography } from '@mui/material'
+import { Box, ListItemButton, styled, Typography } from '@mui/material'
 import { useLockFn } from 'ahooks'
 import { useCallback, useEffect, useReducer } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -94,31 +94,24 @@ export const ProxyItemMini = (props: Props) => {
       onClick={() => onClick?.(proxy.name)}
       sx={[
         {
-          height: 56,
-          borderRadius: 1.5,
+          height: '100%',
+          minHeight: 56,
+          borderRadius: '10px',
           pl: 1.5,
           pr: 1,
           justifyContent: 'space-between',
           alignItems: 'center',
-          transition:
-            'transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease',
+          transition: 'border-color 0.15s ease, background-color 0.15s ease',
         },
-        ({ palette: { mode, primary } }) => {
-          const proxyAccent = '#B9A7FF'
-          const bgcolor =
-            mode === 'light'
-              ? 'rgba(255, 255, 255, 0.92)'
-              : 'rgba(20, 19, 31, 0.92)'
+        () => {
           const showDelay = delayValue > 0
-          const selectColor = mode === 'light' ? primary.main : proxyAccent
 
           return {
             '&:hover .the-check': { display: !showDelay ? 'block' : 'none' },
             '&:hover .the-delay': { display: showDelay ? 'block' : 'none' },
             '&:hover .the-icon': { display: 'none' },
             '&:hover': {
-              transform: 'translateY(-1px)',
-              borderColor: alpha(proxyAccent, 0.38),
+              borderColor: 'var(--border2)',
             },
             '& .the-pin, & .the-unpin': {
               position: 'absolute',
@@ -128,20 +121,15 @@ export const ProxyItemMini = (props: Props) => {
             },
             '& .the-unpin': { filter: 'grayscale(1)' },
             '&.Mui-selected': {
-              width: `calc(100% + 3px)`,
-              marginLeft: `-3px`,
-              borderLeft: `3px solid ${selectColor}`,
-              bgcolor:
-                mode === 'light'
-                  ? alpha(primary.main, 0.15)
-                  : alpha(proxyAccent, 0.2),
+              border: '1.5px solid var(--accent)',
+              bgcolor: 'var(--accent-bg)',
             },
-            backgroundColor: bgcolor,
-            border: `1px solid ${alpha(proxyAccent, selected ? 0.34 : 0.1)}`,
-            boxShadow:
-              mode === 'light'
-                ? '0 8px 18px rgba(15, 23, 42, 0.05)'
-                : '0 10px 24px rgba(0, 0, 0, 0.16)',
+            '&.Mui-selected:hover': {
+              borderColor: 'var(--accent)',
+            },
+            backgroundColor: 'var(--card)',
+            border: '1px solid var(--border)',
+            boxShadow: 'none',
           }
         },
       ]}
@@ -227,7 +215,13 @@ export const ProxyItemMini = (props: Props) => {
           </Box>
         )}
       </Box>
-      <Box sx={{ ml: 0.5, color: '#B9A7FF', display: isPreset ? 'none' : '' }}>
+      <Box
+        sx={{
+          ml: 0.5,
+          color: 'var(--accent)',
+          display: isPreset ? 'none' : '',
+        }}
+      >
         {delayValue === -2 && (
           <Widget>
             <BaseLoading />
@@ -242,10 +236,10 @@ export const ProxyItemMini = (props: Props) => {
               e.stopPropagation()
               onDelay()
             }}
-            sx={({ palette }) => ({
+            sx={{
               display: 'none', // hover 时显示
-              ':hover': { bgcolor: alpha(palette.primary.main, 0.15) },
-            })}
+              ':hover': { bgcolor: 'var(--track)' },
+            }}
           >
             Check
           </Widget>
@@ -261,12 +255,12 @@ export const ProxyItemMini = (props: Props) => {
               e.stopPropagation()
               onDelay()
             }}
-            sx={({ palette }) => ({
+            sx={{
               color: delayManager.formatDelayColor(delayValue, timeout),
               ...(!proxy.provider
-                ? { ':hover': { bgcolor: alpha(palette.primary.main, 0.15) } }
+                ? { ':hover': { bgcolor: 'var(--track)' } }
                 : {}),
-            })}
+            }}
           >
             {delayManager.formatDelay(delayValue, timeout)}
           </Widget>
@@ -299,25 +293,26 @@ export const ProxyItemMini = (props: Props) => {
   )
 }
 
-const Widget = styled(Box)(({ theme: { typography } }) => ({
-  padding: '2px 4px',
-  fontSize: 14,
-  fontFamily: typography.fontFamily,
+const Widget = styled(Box)(() => ({
+  padding: '3px 6px',
+  fontSize: 12,
+  fontFamily: "'JetBrains Mono', monospace",
+  fontWeight: 600,
   borderRadius: '4px',
 }))
 
 const TypeBox = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'component',
-})<{ component?: React.ElementType }>(({ theme: { palette, typography } }) => ({
+})<{ component?: React.ElementType }>(() => ({
   display: 'inline-block',
-  border: '1px solid #ccc',
-  borderColor: alpha('#B9A7FF', palette.mode === 'dark' ? 0.34 : 0.24),
-  color: alpha('#B9A7FF', palette.mode === 'dark' ? 0.76 : 0.58),
+  border: '1px solid var(--border)',
+  color: 'var(--text2)',
   borderRadius: 4,
-  fontSize: 10,
-  fontFamily: typography.fontFamily,
+  fontSize: 9,
+  fontFamily: "'JetBrains Mono', monospace",
+  fontWeight: 600,
   marginRight: '4px',
   marginTop: 'auto',
-  padding: '0 4px',
-  lineHeight: 1.5,
+  padding: '1px 4px',
+  lineHeight: 1.4,
 }))

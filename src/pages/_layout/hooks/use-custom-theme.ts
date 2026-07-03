@@ -7,8 +7,8 @@ import { Theme as TauriOsTheme } from '@tauri-apps/api/window'
 import { useEffect, useMemo } from 'react'
 
 import { useVerge } from '@/hooks/use-verge'
-import { defaultDarkTheme } from '@/pages/_theme'
-import { useSetThemeMode } from '@/services/states'
+import { defaultDarkTheme, defaultTheme } from '@/pages/_theme'
+import { useSetThemeMode, useThemeMode } from '@/services/states'
 
 const CSS_INJECTION_SCOPE_ROOT = '[data-css-injection-root]'
 const CSS_INJECTION_SCOPE_LIMIT =
@@ -68,25 +68,85 @@ ${css}
 export const useCustomTheme = () => {
   const appWindow: WebviewWindow = useMemo(() => getCurrentWebviewWindow(), [])
   const { verge } = useVerge()
-  const { theme_setting } = verge ?? {}
-  const mode = 'dark' as const
+  const { theme_setting, theme_mode } = verge ?? {}
   const setMode = useSetThemeMode()
+  const resolvedMode = useThemeMode()
+  const mode = resolvedMode ?? 'dark'
   const userBackgroundImage = theme_setting?.background_image || ''
   const hasUserBackground = !!userBackgroundImage
 
   useEffect(() => {
-    setMode('dark')
-    appWindow.setTheme('dark' as TauriOsTheme).catch((err) => {
-      console.error('Failed to force dark window theme:', err)
-    })
-  }, [appWindow, setMode])
+    const resolveMode = (): 'light' | 'dark' => {
+      if (theme_mode === 'light' || theme_mode === 'dark') return theme_mode
+      return window.matchMedia?.('(prefers-color-scheme: dark)').matches
+        ? 'dark'
+        : 'light'
+    }
+
+    const applyMode = () => {
+      const resolved = resolveMode()
+      setMode(resolved)
+      appWindow.setTheme(resolved as TauriOsTheme).catch((err) => {
+        console.error('Failed to sync window theme:', err)
+      })
+    }
+
+    applyMode()
+
+    if (theme_mode === 'system' || !theme_mode) {
+      const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+      media?.addEventListener('change', applyMode)
+      return () => media?.removeEventListener('change', applyMode)
+    }
+  }, [appWindow, setMode, theme_mode])
 
   const theme = useMemo(() => {
     const setting = theme_setting || {}
-    const dt = defaultDarkTheme
-    const surfaceColor = '#101318'
-    const elevatedSurfaceColor = '#171B22'
-    const dividerColor = 'rgba(185, 167, 255, 0.16)'
+    const dt = mode === 'light' ? defaultTheme : defaultDarkTheme
+    const tokens =
+      mode === 'light'
+        ? {
+            bg: '#EEEDEB',
+            panel: '#FFFFFF',
+            railbg: '#FFFFFF',
+            card: '#FFFFFF',
+            card2: '#F6F6F4',
+            border: 'rgba(0, 0, 0, 0.1)',
+            border2: 'rgba(0, 0, 0, 0.18)',
+            text2: '#7C7C82',
+            text3: '#A8A7A3',
+            accentBg: '#EEF0FF',
+            track: 'rgba(0, 0, 0, 0.08)',
+            good: '#1F9D57',
+            bad: '#D64545',
+            selectColor: '#FFFFFF',
+            scrollbarBg: '#EEEDEB',
+            scrollbarThumb: 'rgba(0, 0, 0, 0.22)',
+            scrollbarThumbHover: 'rgba(0, 0, 0, 0.34)',
+          }
+        : {
+            bg: '#0D0D0F',
+            panel: '#141417',
+            railbg: '#141417',
+            card: '#1A1A1F',
+            card2: '#101013',
+            border: 'rgba(255, 255, 255, 0.08)',
+            border2: 'rgba(255, 255, 255, 0.16)',
+            text2: '#8B8B94',
+            text3: '#5C5C65',
+            accentBg: 'rgba(123, 134, 255, 0.15)',
+            track: 'rgba(255, 255, 255, 0.1)',
+            good: '#3ECF8E',
+            bad: '#FF6B6B',
+            selectColor: '#0D0D0F',
+            scrollbarBg: '#0D0D0F',
+            scrollbarThumb: 'rgba(255, 255, 255, 0.14)',
+            scrollbarThumbHover: 'rgba(255, 255, 255, 0.24)',
+          }
+    const surfaceColor = tokens.card
+    const elevatedSurfaceColor = tokens.card2
+    const dividerColor = tokens.border
+    const accentColor = setting.primary_color || dt.primary_color
     let muiTheme: MuiTheme
 
     try {
@@ -96,7 +156,7 @@ export const useCustomTheme = () => {
         },
         palette: {
           mode,
-          primary: { main: setting.primary_color || dt.primary_color },
+          primary: { main: accentColor },
           secondary: { main: setting.secondary_color || dt.secondary_color },
           info: { main: setting.info_color || dt.info_color },
           error: { main: setting.error_color || dt.error_color },
@@ -112,11 +172,11 @@ export const useCustomTheme = () => {
             default: dt.background_color,
           },
         },
-        shape: { borderRadius: 8 },
+        shape: { borderRadius: 10 },
         shadows: [
           'none',
-          '0 18px 38px rgba(0, 0, 0, 0.28)',
-          ...Array(23).fill('0 20px 44px rgba(0, 0, 0, 0.34)'),
+          '0 4px 12px rgba(0, 0, 0, 0.14)',
+          ...Array(23).fill('0 8px 20px rgba(0, 0, 0, 0.18)'),
         ] as Shadows,
         typography: {
           fontFamily: setting.font_family
@@ -129,25 +189,25 @@ export const useCustomTheme = () => {
               {
                 props: { variant: 'contained', color: 'primary' },
                 style: {
-                  background:
-                    'linear-gradient(135deg, #E9E2FF 0%, #B9A7FF 100%)',
-                  color: '#071018',
-                  boxShadow: '0 10px 24px rgba(185, 167, 255, 0.18)',
+                  background: accentColor,
+                  color: '#FFFFFF',
+                  boxShadow: 'none',
                 },
               },
               {
                 props: { variant: 'outlined', color: 'primary' },
                 style: {
-                  borderColor: 'rgba(185, 167, 255, 0.38)',
-                  color: '#E9E2FF',
+                  borderColor: dividerColor,
+                  color: accentColor,
                 },
               },
             ],
             styleOverrides: {
               root: {
-                borderRadius: 8,
+                borderRadius: 9,
                 textTransform: 'none',
-                fontWeight: 800,
+                fontWeight: 700,
+                boxShadow: 'none',
               },
             },
           },
@@ -198,7 +258,7 @@ export const useCustomTheme = () => {
             default: dt.background_color,
           },
         },
-        shape: { borderRadius: 8 },
+        shape: { borderRadius: 10 },
         typography: { fontFamily: dt.font_family },
       })
     }
@@ -206,8 +266,22 @@ export const useCustomTheme = () => {
     const rootEle = document.documentElement
     if (rootEle) {
       const backgroundColor = dt.background_color
-      const selectColor = '#B9A7FF'
-      const scrollColor = 'rgba(185, 167, 255, 0.34)'
+      rootEle.style.setProperty('--bg', tokens.bg)
+      rootEle.style.setProperty('--panel', tokens.panel)
+      rootEle.style.setProperty('--railbg', tokens.railbg)
+      rootEle.style.setProperty('--card', tokens.card)
+      rootEle.style.setProperty('--card2', tokens.card2)
+      rootEle.style.setProperty('--border', tokens.border)
+      rootEle.style.setProperty('--border2', tokens.border2)
+      rootEle.style.setProperty('--text', muiTheme.palette.text.primary)
+      rootEle.style.setProperty('--text2', tokens.text2)
+      rootEle.style.setProperty('--text3', tokens.text3)
+      rootEle.style.setProperty('--accent', accentColor)
+      rootEle.style.setProperty('--accent-bg', tokens.accentBg)
+      rootEle.style.setProperty('--track', tokens.track)
+      rootEle.style.setProperty('--good', tokens.good)
+      rootEle.style.setProperty('--bad', tokens.bad)
+
       rootEle.style.setProperty('--divider-color', dividerColor)
       rootEle.style.setProperty('--background-color', backgroundColor)
       rootEle.style.setProperty('--surface-color', surfaceColor)
@@ -215,34 +289,25 @@ export const useCustomTheme = () => {
         '--surface-color-elevated',
         elevatedSurfaceColor,
       )
-      rootEle.style.setProperty('--celestial-main', '#B9A7FF')
-      rootEle.style.setProperty('--celestial-soft', 'rgba(185, 167, 255, 0.16)')
-      rootEle.style.setProperty('--proxy-accent', '#B9A7FF')
-      rootEle.style.setProperty(
-        '--proxy-accent-soft',
-        'rgba(185, 167, 255, 0.16)',
-      )
+      rootEle.style.setProperty('--celestial-main', accentColor)
+      rootEle.style.setProperty('--celestial-soft', tokens.accentBg)
+      rootEle.style.setProperty('--proxy-accent', accentColor)
+      rootEle.style.setProperty('--proxy-accent-soft', tokens.accentBg)
       rootEle.style.setProperty('--text-primary', muiTheme.palette.text.primary)
       rootEle.style.setProperty(
         '--text-secondary',
         muiTheme.palette.text.secondary,
       )
-      rootEle.style.setProperty('--selection-color', selectColor)
-      rootEle.style.setProperty('--scroller-color', scrollColor)
+      rootEle.style.setProperty('--selection-color', tokens.selectColor)
+      rootEle.style.setProperty('--scroller-color', tokens.border2)
       rootEle.style.setProperty('--primary-main', muiTheme.palette.primary.main)
       rootEle.style.setProperty(
         '--background-color-alpha',
         alpha(muiTheme.palette.primary.main, 0.14),
       )
-      rootEle.style.setProperty(
-        '--window-border-color',
-        'rgba(185, 167, 255, 0.16)',
-      )
-      rootEle.style.setProperty('--scrollbar-bg', '#070B12')
-      rootEle.style.setProperty(
-        '--scrollbar-thumb',
-        'rgba(185, 167, 255, 0.28)',
-      )
+      rootEle.style.setProperty('--window-border-color', tokens.border)
+      rootEle.style.setProperty('--scrollbar-bg', tokens.scrollbarBg)
+      rootEle.style.setProperty('--scrollbar-thumb', tokens.scrollbarThumb)
       rootEle.style.setProperty(
         '--user-background-image',
         hasUserBackground ? `url('${userBackgroundImage}')` : 'none',
@@ -274,7 +339,7 @@ export const useCustomTheme = () => {
       }
       const effectiveInjectedCss = scopedCss ?? setting.css_injection ?? ''
       const globalStyles = `
-        /* 修复滚动条样式 */
+        /* scrollbar */
         ::-webkit-scrollbar {
           width: 8px;
           height: 8px;
@@ -285,18 +350,12 @@ export const useCustomTheme = () => {
           border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-          background-color: rgba(185, 167, 255, 0.52);
+          background-color: ${tokens.scrollbarThumbHover};
         }
 
-        /* 背景图处理 */
+        /* flat background, optional user image */
         body {
-          background:
-            linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px),
-            radial-gradient(circle at 82% 8%, rgba(185,167,255,0.18), transparent 24%),
-            radial-gradient(circle at 12% 86%, rgba(255,255,255,0.07), transparent 28%),
-            var(--background-color);
-          background-size: 34px 34px, 34px 34px, auto, auto, auto;
+          background: var(--background-color);
           ${
             hasUserBackground
               ? `
@@ -311,31 +370,28 @@ export const useCustomTheme = () => {
           }
         }
 
-        /* 修复可能的白色边框 */
         .MuiPaper-root {
           border-color: var(--window-border-color) !important;
         }
 
         .MuiButton-containedPrimary {
-          color: #071018 !important;
+          color: #FFFFFF !important;
         }
 
         .MuiIconButton-root {
-          border-radius: 8px;
+          border-radius: 9px;
         }
 
         .MuiChip-root {
-          font-weight: 800;
+          font-weight: 700;
         }
 
-        /* 确保模态框和对话框也使用暗色主题 */
         .MuiDialog-paper {
           background-color: ${surfaceColor} !important;
           border: 1px solid var(--divider-color);
-          border-radius: 8px !important;
+          border-radius: 12px !important;
         }
 
-        /* 移除可能的白色点或线条 */
         * {
           outline: none !important;
         }

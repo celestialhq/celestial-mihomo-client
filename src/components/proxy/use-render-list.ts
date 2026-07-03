@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { RefObject, useEffect, useMemo } from 'react'
 
 import { useRuntimeConfig } from '@/hooks/use-clash'
 import { useVerge } from '@/hooks/use-verge'
@@ -68,16 +68,17 @@ export interface IRenderItem {
   testUrl?: string
 }
 
-// 优化列布局计算
+// 优化列布局计算 — matches the Celestial design's card grid
+// (grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)), gap 9px)
+const CARD_MIN_WIDTH = 220
+const CARD_GAP = 9
+
 const calculateColumns = (width: number, configCol: number): number => {
   if (configCol > 0 && configCol < 6) return configCol
+  if (width <= 0) return 1
 
-  if (width > 1920) return 5
-  if (width > 1450) return 4
-  if (width > 1024) return 3
-  if (width > 900) return 2
-  if (width >= 600) return 2
-  return 1
+  const columns = Math.floor((width + CARD_GAP) / (CARD_MIN_WIDTH + CARD_GAP))
+  return Math.min(6, Math.max(1, columns))
 }
 
 // 优化分组逻辑
@@ -97,12 +98,13 @@ export const useRenderList = (
   mode: string,
   isChainMode?: boolean,
   selectedGroup?: string | null,
+  containerRef?: RefObject<HTMLElement | null>,
 ) => {
   // 使用全局数据提供者
   const { proxies: proxiesData } = useProxiesData()
   const { refreshProxy } = useAppRefreshers()
   const { verge } = useVerge()
-  const { width } = useWindowWidth()
+  const { width } = useWindowWidth(containerRef)
   const [headStates, setHeadState] = useHeadStateNew()
   const latencyTimeout = verge?.default_latency_timeout
 

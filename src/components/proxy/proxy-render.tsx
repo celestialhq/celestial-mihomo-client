@@ -4,7 +4,6 @@ import {
   InboxRounded,
 } from '@mui/icons-material'
 import {
-  alpha,
   Box,
   ListItemText,
   ListItemButton,
@@ -18,7 +17,6 @@ import { useTranslation } from 'react-i18next'
 
 import { useIconCache } from '@/hooks/use-icon-cache'
 import { useVerge } from '@/hooks/use-verge'
-import { useThemeMode } from '@/services/states'
 
 import { ProxyHead } from './proxy-head'
 import { ProxyItem } from './proxy-item'
@@ -53,12 +51,6 @@ export const ProxyRender = memo(function ProxyRender(props: RenderProps) {
   const { type, group, headState, proxy, proxyCol } = item
   const { verge } = useVerge()
   const enable_group_icon = verge?.enable_group_icon ?? true
-  const mode = useThemeMode()
-  const isDark = mode === 'light' ? false : true
-  const proxyAccent = '#B9A7FF'
-  const itembackgroundcolor = isDark
-    ? 'linear-gradient(180deg, rgba(185, 167, 255, 0.09), rgba(255, 255, 255, 0.014)), #11121A'
-    : 'linear-gradient(135deg, #ffffff, #f8fbff)'
   const iconCachePath = useIconCache({
     icon: group.icon,
     cacheKey: group.name.replaceAll(' ', ''),
@@ -88,28 +80,19 @@ export const ProxyRender = memo(function ProxyRender(props: RenderProps) {
       <ListItemButton
         dense
         style={{
-          background: itembackgroundcolor,
+          background: 'var(--card)',
           height: '100%',
           margin: '8px 8px',
-          borderRadius: '8px',
+          borderRadius: '10px',
         }}
-        sx={(theme) => ({
-          border: `1px solid ${alpha(proxyAccent, 0.16)}`,
-          boxShadow:
-            theme.palette.mode === 'light'
-              ? '0 10px 24px rgba(15, 23, 42, 0.06)'
-              : '0 14px 30px rgba(0, 0, 0, 0.24), 0 0 22px rgba(185, 167, 255, 0.04)',
-          transition:
-            'transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease',
+        sx={{
+          border: '1px solid var(--border)',
+          boxShadow: 'none',
+          transition: 'border-color 0.15s ease',
           '&:hover': {
-            transform: 'translateY(-1px)',
-            borderColor: alpha(proxyAccent, 0.34),
-            boxShadow:
-              theme.palette.mode === 'light'
-                ? '0 14px 30px rgba(15, 23, 42, 0.09)'
-                : '0 18px 36px rgba(0, 0, 0, 0.3)',
+            borderColor: 'var(--border2)',
           },
-        })}
+        }}
         onClick={() => onHeadState(group.name, { open: !headState?.open })}
       >
         {enable_group_icon &&
@@ -171,12 +154,9 @@ export const ProxyRender = memo(function ProxyRender(props: RenderProps) {
               label={`${group.all.length}`}
               sx={{
                 mr: 1,
-                backgroundColor: (theme) =>
-                  alpha(
-                    proxyAccent,
-                    theme.palette.mode === 'dark' ? 0.18 : 0.1,
-                  ),
-                color: proxyAccent,
+                backgroundColor: 'var(--card2)',
+                color: 'var(--text2)',
+                fontFamily: "'JetBrains Mono', monospace",
               }}
             />
           </Tooltip>
@@ -235,12 +215,12 @@ export const ProxyRender = memo(function ProxyRender(props: RenderProps) {
     return (
       <Box
         sx={{
-          height: 56,
+          minHeight: 56,
           display: 'grid',
-          gap: 1,
+          gap: '9px',
           pl: 2,
           pr: 2,
-          pb: 1,
+          pb: '9px',
           gridTemplateColumns: `repeat(${item.col! || 2}, 1fr)`,
         }}
       >
@@ -253,7 +233,8 @@ export const ProxyRender = memo(function ProxyRender(props: RenderProps) {
 })
 
 const StyledPrimary = styled('span')`
-  font-size: 16px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.5;
   overflow: hidden;
@@ -268,14 +249,15 @@ const StyledSubtitle = styled('span')`
   white-space: nowrap;
 `
 
-const StyledTypeBox = styled(Box)(({ theme }) => ({
+const StyledTypeBox = styled(Box)(() => ({
   display: 'inline-block',
-  border: '1px solid #ccc',
-  borderColor: alpha('#B9A7FF', theme.palette.mode === 'dark' ? 0.46 : 0.5),
-  color: alpha('#B9A7FF', theme.palette.mode === 'dark' ? 0.88 : 0.8),
+  border: '1px solid var(--border)',
+  color: 'var(--text2)',
   borderRadius: 4,
-  fontSize: 10,
-  padding: '0 4px',
+  fontSize: 9,
+  fontFamily: "'JetBrains Mono', monospace",
+  fontWeight: 600,
+  padding: '1px 4px',
   lineHeight: 1.5,
   marginRight: '8px',
 }))

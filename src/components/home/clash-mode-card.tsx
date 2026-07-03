@@ -104,45 +104,26 @@ export const ClashModeCard = () => {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 1,
-    bgcolor: mode === currentModeKey ? 'primary.main' : 'background.paper',
-    color: mode === currentModeKey ? 'primary.contrastText' : 'text.primary',
-    borderRadius: 1.5,
-    transition: 'all 0.2s ease-in-out',
+    bgcolor: mode === currentModeKey ? 'var(--accent)' : 'transparent',
+    color: mode === currentModeKey ? '#fff' : 'var(--text2)',
+    border: '1px solid var(--border)',
+    borderRadius: '9px',
+    transition: 'background-color 0.15s ease, color 0.15s ease',
     position: 'relative',
-    overflow: 'visible',
-    '&:hover': {
-      transform: 'translateY(-1px)',
-      boxShadow: 1,
-    },
-    '&:active': {
-      transform: 'translateY(1px)',
-    },
-    '&::after':
-      mode === currentModeKey
-        ? {
-            content: '""',
-            position: 'absolute',
-            bottom: -16,
-            left: '50%',
-            width: 2,
-            height: 16,
-            bgcolor: 'primary.main',
-            transform: 'translateX(-50%)',
-          }
-        : {},
+    boxShadow: 'none',
   })
 
   // 描述样式
   const descriptionStyles = {
     width: '95%',
     textAlign: 'center',
-    color: 'text.secondary',
+    color: 'var(--text2)',
     p: 0.8,
-    borderRadius: 1,
-    borderColor: 'primary.main',
+    borderRadius: '8px',
+    borderColor: 'var(--border)',
     borderWidth: 1,
     borderStyle: 'solid',
-    backgroundColor: 'background.paper',
+    backgroundColor: 'var(--card2)',
     wordBreak: 'break-word',
     hyphens: 'auto',
   }
@@ -164,7 +145,7 @@ export const ClashModeCard = () => {
         {modeList.map((mode) => (
           <Paper
             key={mode}
-            elevation={mode === currentModeKey ? 2 : 0}
+            elevation={0}
             onClick={() => onChangeMode(mode)}
             sx={buttonStyles(mode)}
           >
@@ -173,7 +154,8 @@ export const ClashModeCard = () => {
               variant="body2"
               sx={{
                 textTransform: 'capitalize',
-                fontWeight: mode === currentModeKey ? 600 : 400,
+                fontWeight: 600,
+                fontFamily: "'Montserrat', sans-serif",
               }}
             >
               {t(MODE_META[mode].label)}

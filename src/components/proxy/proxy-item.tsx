@@ -1,6 +1,5 @@
 import { CheckCircleOutlineRounded } from '@mui/icons-material'
 import {
-  alpha,
   Box,
   ListItem,
   ListItemButton,
@@ -28,20 +27,23 @@ interface Props {
 
 const Widget = styled(Box)(() => ({
   padding: '3px 6px',
-  fontSize: 14,
+  fontSize: 12,
+  fontFamily: "'JetBrains Mono', monospace",
+  fontWeight: 600,
   borderRadius: '4px',
 }))
 
-const TypeBox = styled('span')(({ theme }) => ({
+const TypeBox = styled('span')(() => ({
   display: 'inline-block',
-  border: '1px solid #ccc',
-  borderColor: alpha(theme.palette.text.secondary, 0.36),
-  color: alpha(theme.palette.text.secondary, 0.42),
+  border: '1px solid var(--border)',
+  color: 'var(--text2)',
   borderRadius: 4,
-  fontSize: 10,
+  fontSize: 9,
+  fontFamily: "'JetBrains Mono', monospace",
+  fontWeight: 600,
   marginRight: '4px',
-  padding: '0 2px',
-  lineHeight: 1.25,
+  padding: '1px 4px',
+  lineHeight: 1.4,
 }))
 
 export const ProxyItem = (props: Props) => {
@@ -120,18 +122,11 @@ export const ProxyItem = (props: Props) => {
         onClick={() => onClick?.(proxy.name)}
         sx={[
           {
-            borderRadius: 1.5,
+            borderRadius: '10px',
             px: 1.25,
-            transition:
-              'transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease',
+            transition: 'border-color 0.15s ease, background-color 0.15s ease',
           },
-          ({ palette: { mode, primary } }) => {
-            const proxyAccent = '#B9A7FF'
-            const bgcolor =
-              mode === 'light'
-                ? 'rgba(255, 255, 255, 0.92)'
-                : 'rgba(20, 19, 31, 0.92)'
-            const selectColor = mode === 'light' ? primary.main : proxyAccent
+          () => {
             const showDelay = delayValue > 0
 
             return {
@@ -139,24 +134,18 @@ export const ProxyItem = (props: Props) => {
               '&:hover .the-delay': { display: showDelay ? 'block' : 'none' },
               '&:hover .the-icon': { display: 'none' },
               '&:hover': {
-                transform: 'translateY(-1px)',
-                borderColor: alpha(proxyAccent, 0.38),
+                borderColor: 'var(--border2)',
               },
               '&.Mui-selected': {
-                width: `calc(100% + 3px)`,
-                marginLeft: `-3px`,
-                borderLeft: `3px solid ${selectColor}`,
-                bgcolor:
-                  mode === 'light'
-                    ? alpha(primary.main, 0.15)
-                    : alpha(proxyAccent, 0.2),
+                border: '1.5px solid var(--accent)',
+                bgcolor: 'var(--accent-bg)',
               },
-              backgroundColor: bgcolor,
-              border: `1px solid ${alpha(proxyAccent, selected ? 0.34 : 0.1)}`,
-              boxShadow:
-                mode === 'light'
-                  ? '0 8px 18px rgba(15, 23, 42, 0.05)'
-                  : '0 10px 24px rgba(0, 0, 0, 0.16)',
+              '&.Mui-selected:hover': {
+                borderColor: 'var(--accent)',
+              },
+              backgroundColor: 'var(--card)',
+              border: '1px solid var(--border)',
+              boxShadow: 'none',
               marginBottom: '8px',
               minHeight: '44px',
             }
@@ -194,7 +183,7 @@ export const ProxyItem = (props: Props) => {
         <ListItemIcon
           sx={{
             justifyContent: 'flex-end',
-            color: '#B9A7FF',
+            color: 'var(--accent)',
             display: isPreset ? 'none' : '',
           }}
         >
@@ -213,10 +202,10 @@ export const ProxyItem = (props: Props) => {
                 e.stopPropagation()
                 onDelay()
               }}
-              sx={({ palette }) => ({
+              sx={{
                 display: 'none', // hover 时显示
-                ':hover': { bgcolor: alpha(palette.primary.main, 0.15) },
-              })}
+                ':hover': { bgcolor: 'var(--track)' },
+              }}
             >
               Check
             </Widget>
@@ -232,12 +221,12 @@ export const ProxyItem = (props: Props) => {
                 e.stopPropagation()
                 onDelay()
               }}
-              sx={({ palette }) => ({
+              sx={{
                 color: delayManager.formatDelayColor(delayValue, timeout),
                 ...(!proxy.provider
-                  ? { ':hover': { bgcolor: alpha(palette.primary.main, 0.15) } }
+                  ? { ':hover': { bgcolor: 'var(--track)' } }
                   : {}),
-              })}
+              }}
             >
               {delayManager.formatDelay(delayValue, timeout)}
             </Widget>

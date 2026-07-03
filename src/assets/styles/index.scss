@@ -5,8 +5,9 @@
 body {
   margin: 0;
   font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
-    'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+    'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
+    'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
 
   user-select: none;
@@ -16,19 +17,37 @@ body {
 }
 
 :root {
-  --primary-main: #b9a7ff;
-  --celestial-main: #b9a7ff;
-  --celestial-soft: rgba(185, 167, 255, 0.16);
-  --proxy-accent: #b9a7ff;
-  --proxy-accent-soft: rgba(185, 167, 255, 0.16);
-  --text-primary: #f3f8ff;
+  /* Celestial design-system tokens (dark, matches mockup defaults) */
+  --bg: #0d0d0f;
+  --panel: #141417;
+  --railbg: #141417;
+  --card: #1a1a1f;
+  --card2: #101013;
+  --border: rgba(255, 255, 255, 0.08);
+  --border2: rgba(255, 255, 255, 0.16);
+  --text: #f3f3f5;
+  --text2: #8b8b94;
+  --text3: #5c5c65;
+  --accent: #7b86ff;
+  --accent-bg: rgba(123, 134, 255, 0.15);
+  --track: rgba(255, 255, 255, 0.1);
+  --good: #3ecf8e;
+  --bad: #ff6b6b;
+
+  /* Legacy var names kept as aliases so existing consumers keep working */
+  --primary-main: var(--accent);
+  --celestial-main: var(--accent);
+  --celestial-soft: var(--accent-bg);
+  --proxy-accent: var(--accent);
+  --proxy-accent-soft: var(--accent-bg);
+  --text-primary: var(--text);
   --selection-color: #071018;
-  --scroller-color: rgba(185, 167, 255, 0.34);
-  --background-color: #070b12;
-  --surface-color: #101318;
-  --surface-color-elevated: #171b22;
-  --background-color-alpha: rgba(185, 167, 255, 0.12);
-  --border-radius: 8px;
+  --scroller-color: var(--border2);
+  --background-color: var(--bg);
+  --surface-color: var(--card);
+  --surface-color-elevated: var(--card2);
+  --background-color-alpha: var(--accent-bg);
+  --border-radius: 10px;
 }
 
 ::selection {

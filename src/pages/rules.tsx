@@ -63,35 +63,48 @@ const RulesPage = () => {
         flexDirection: 'column',
         overflow: 'auto',
       }}
-      header={
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <ProviderButton />
-        </Box>
-      }
     >
       <Box
         sx={{
           pt: 1,
           mb: 0.5,
           mx: '10px',
-          height: '36px',
+          minHeight: '36px',
           display: 'flex',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 1,
         }}
       >
-        <BaseSearchBox onSearch={(match) => setMatch(() => match)} />
+        <Box sx={{ flex: '1 1 160px' }}>
+          <BaseSearchBox onSearch={(match) => setMatch(() => match)} />
+        </Box>
+        <ProviderButton />
       </Box>
 
       {filteredRules && filteredRules.length > 0 ? (
         <>
-          <VirtualList
-            ref={virtuosoRef}
-            count={filteredRules.length}
-            estimateSize={40}
-            renderItem={(i) => <RuleItem value={filteredRules[i]} />}
-            style={{ flex: 1 }}
-            onScroll={handleScroll}
-          />
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              mx: '10px',
+              display: 'flex',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              backgroundColor: 'var(--card)',
+            }}
+          >
+            <VirtualList
+              ref={virtuosoRef}
+              count={filteredRules.length}
+              estimateSize={40}
+              renderItem={(i) => <RuleItem value={filteredRules[i]} />}
+              style={{ flex: 1 }}
+              onScroll={handleScroll}
+            />
+          </Box>
           <ScrollTopButton onClick={scrollToTop} show={showScrollTop} />
         </>
       ) : (

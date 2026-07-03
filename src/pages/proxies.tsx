@@ -6,6 +6,10 @@ import { useTranslation } from 'react-i18next'
 import { closeAllConnections } from 'tauri-plugin-mihomo-api'
 
 import { BasePage, TooltipIcon } from '@/components/base'
+import {
+  segmentedButtonSx,
+  segmentedGroupSx,
+} from '@/components/base/segmented-sx'
 import { ProviderButton } from '@/components/proxy/provider-button'
 import { ProxyGroups } from '@/components/proxy/proxy-groups'
 import { useVerge } from '@/hooks/use-verge'
@@ -135,7 +139,12 @@ const ProxyPage = () => {
   return (
     <BasePage
       full
-      contentStyle={{ height: '101.5%' }}
+      contentStyle={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+      }}
       title={
         isChainMode ? (
           <Box
@@ -155,46 +164,60 @@ const ProxyPage = () => {
           t('proxies.page.title.default')
         )
       }
-      header={
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <ProviderButton />
-
-          <ButtonGroup size="small">
-            {modeList.map((mode) => (
-              <Button
-                key={mode}
-                variant={mode === curMode ? 'contained' : 'outlined'}
-                onClick={() => onChangeMode(mode)}
-                sx={{ textTransform: 'capitalize' }}
-              >
-                {t(`proxies.page.modes.${mode}`)}
-              </Button>
-            ))}
-          </ButtonGroup>
-
-          <Button
-            size="small"
-            variant={isChainMode ? 'contained' : 'outlined'}
-            onClick={onToggleChainMode}
-            sx={{ ml: 1 }}
-            startIcon={
-              isChainMode ? (
-                <LanRounded fontSize="small" />
-              ) : (
-                <LanOutlined fontSize="small" />
-              )
-            }
-          >
-            {t('proxies.page.actions.toggleChain')}
-          </Button>
-        </Box>
-      }
     >
-      <ProxyGroups
-        mode={curMode ?? 'rule'}
-        isChainMode={isChainMode}
-        chainConfigData={chainConfigData}
-      />
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 1,
+          mx: '10px',
+          mb: 1,
+          flex: 'none',
+        }}
+      >
+        <ButtonGroup size="small" disableElevation sx={segmentedGroupSx}>
+          {modeList.map((mode) => (
+            <Button
+              key={mode}
+              onClick={() => onChangeMode(mode)}
+              sx={segmentedButtonSx(mode === curMode)}
+            >
+              {t(`proxies.page.modes.${mode}`)}
+            </Button>
+          ))}
+        </ButtonGroup>
+
+        <Button
+          size="small"
+          onClick={onToggleChainMode}
+          sx={{
+            ...segmentedGroupSx,
+            ...segmentedButtonSx(isChainMode),
+          }}
+          startIcon={
+            isChainMode ? (
+              <LanRounded fontSize="small" />
+            ) : (
+              <LanOutlined fontSize="small" />
+            )
+          }
+        >
+          {t('proxies.page.actions.toggleChain')}
+        </Button>
+
+        <Box sx={{ ml: 'auto' }}>
+          <ProviderButton />
+        </Box>
+      </Box>
+
+      <Box sx={{ flex: 1, minHeight: 0 }}>
+        <ProxyGroups
+          mode={curMode ?? 'rule'}
+          isChainMode={isChainMode}
+          chainConfigData={chainConfigData}
+        />
+      </Box>
     </BasePage>
   )
 }

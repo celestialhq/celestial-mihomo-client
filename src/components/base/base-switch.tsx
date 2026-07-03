@@ -8,19 +8,19 @@ export const Switch = styled((props: SwitchProps) => (
     {...props}
   />
 ))(({ theme }) => ({
-  width: 42,
-  height: 26,
+  width: 40,
+  height: 23,
   padding: 0,
   marginRight: 1,
   '& .MuiSwitch-switchBase': {
     padding: 0,
-    margin: 2,
-    transitionDuration: '300ms',
+    margin: 3,
+    transitionDuration: '150ms',
     '&.Mui-checked': {
-      transform: 'translateX(16px)',
+      transform: 'translateX(17px)',
       color: '#fff',
       '& + .MuiSwitch-track': {
-        backgroundColor: theme.palette.mode === 'light' ? '#4D9EEA' : '#B9A7FF',
+        backgroundColor: 'var(--accent)',
         opacity: 1,
         border: 0,
       },
@@ -29,7 +29,6 @@ export const Switch = styled((props: SwitchProps) => (
       },
     },
     '&.Mui-focusVisible .MuiSwitch-thumb': {
-      color: '#33cf4d',
       border: '6px solid #fff',
     },
     '&.Mui-disabled .MuiSwitch-thumb': {
@@ -44,16 +43,16 @@ export const Switch = styled((props: SwitchProps) => (
   },
   '& .MuiSwitch-thumb': {
     boxSizing: 'border-box',
-    width: 22,
-    height: 22,
+    width: 17,
+    height: 17,
+    boxShadow: 'none',
   },
   '& .MuiSwitch-track': {
-    borderRadius: 26 / 2,
-    backgroundColor:
-      theme.palette.mode === 'light' ? '#BBBBBB' : 'rgba(185, 167, 255, 0.18)',
+    borderRadius: 12,
+    backgroundColor: 'var(--track)',
     opacity: 1,
     transition: theme.transitions.create(['background-color'], {
-      duration: 500,
+      duration: 150,
     }),
   },
 }))

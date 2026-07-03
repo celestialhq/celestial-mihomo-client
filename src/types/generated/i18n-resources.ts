@@ -1228,6 +1228,7 @@ export interface TranslationResources {
         enable: string
         hideDetails: string
         listView: string
+        more: string
         new: string
         next: string
         pause: string
