@@ -220,7 +220,8 @@ impl WindowManager {
 
         let mut operations_successful = true;
 
-        // 1. 如果窗口最小化，先取消最小化
+        // 1. 如果窗口最小化，先取消最小化 (no minimize concept on mobile)
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         if window.is_minimized().unwrap_or(false) {
             logging!(info, Type::Window, "窗口已最小化，正在取消最小化");
             if let Err(e) = window.unminimize() {

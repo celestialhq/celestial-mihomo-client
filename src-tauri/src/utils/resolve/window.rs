@@ -27,6 +27,9 @@ const fn restored_window_size_is_too_small(width: u32, height: u32) -> bool {
     width < MINIMAL_WIDTH as u32 || height < MINIMAL_HEIGHT as u32
 }
 
+// Resizable/centerable multi-window management is a desktop concept — a
+// mobile Activity is always fullscreen, so there's no size to "restore".
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn restore_default_size_if_needed(window: &WebviewWindow) {
     let Ok(size) = window.outer_size() else {
         return;
@@ -43,6 +46,9 @@ fn restore_default_size_if_needed(window: &WebviewWindow) {
     logging_error!(Type::Window, window.center());
 }
 
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn restore_default_size_if_needed(_window: &WebviewWindow) {}
+
 /// 构建新的 WebView 窗口
 pub async fn build_new_window() -> Result<WebviewWindow, String> {
     let app_handle = handle::Handle::app_handle();
@@ -58,10 +64,18 @@ pub async fn build_new_window() -> Result<WebviewWindow, String> {
         _ => None,
     };
 
+    // `dark-light` only has real OS detection on windows/macos/linux; on
+    // other targets (including android/ios) `detect()` returns a plain
+    // `Mode` (not a `Result`) from a stub fallback.
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    let detected_theme: Option<SystemTheme> = detect_system_theme().ok();
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    let detected_theme: Option<SystemTheme> = Some(detect_system_theme());
+
     let prefers_dark_background = match resolved_theme {
         Some(Theme::Dark) => true,
         Some(Theme::Light) => false,
-        _ => !matches!(detect_system_theme().ok(), Some(SystemTheme::Light)),
+        _ => !matches!(detected_theme, Some(SystemTheme::Light)),
     };
 
     let background_color = if prefers_dark_background {
@@ -77,22 +91,31 @@ pub async fn build_new_window() -> Result<WebviewWindow, String> {
         "main", /* the unique window label */
         tauri::WebviewUrl::App(start_page.into()),
     )
-    .title("Celestial")
-    .center()
-    .decorations(DEFAULT_DECORATIONS)
-    .fullscreen(false)
-    .inner_size(DEFAULT_WIDTH, DEFAULT_HEIGHT)
-    .min_inner_size(MINIMAL_WIDTH, MINIMAL_HEIGHT)
-    .visible(false) // 等待主题色准备好后再展示，避免启动色差
-    .initialization_script(&initial_script)
-    .on_page_load(move |window, payload| {
-        if payload.event() != PageLoadEvent::Finished {
-            return;
-        }
+    .title("Celestial");
 
-        logging_error!(Type::Window, window.show());
-        logging_error!(Type::Window, window.set_focus());
-    });
+    // Sizing/centering/decorations are desktop-window concepts; a mobile
+    // Activity is always fullscreen and chromeless.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        builder = builder
+            .center()
+            .decorations(DEFAULT_DECORATIONS)
+            .fullscreen(false)
+            .inner_size(DEFAULT_WIDTH, DEFAULT_HEIGHT)
+            .min_inner_size(MINIMAL_WIDTH, MINIMAL_HEIGHT);
+    }
+
+    builder = builder
+        .visible(false) // 等待主题色准备好后再展示，避免启动色差
+        .initialization_script(&initial_script)
+        .on_page_load(move |window, payload| {
+            if payload.event() != PageLoadEvent::Finished {
+                return;
+            }
+
+            logging_error!(Type::Window, window.show());
+            logging_error!(Type::Window, window.set_focus());
+        });
 
     if let Some(theme) = resolved_theme {
         builder = builder.theme(Some(theme));

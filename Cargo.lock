@@ -7699,7 +7699,6 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-mihomo"
 version = "0.5.4"
-source = "git+https://github.com/pius-pp/tauri-plugin-mihomo?branch=main#ff75ee3edd61923e6c76a7f3cf3c3fbd0f8e22c0"
 dependencies = [
  "base64 0.22.1",
  "bytes",

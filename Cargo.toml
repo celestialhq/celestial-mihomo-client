@@ -79,6 +79,15 @@ bitflags = { version = "2.11.0" }
 deelevate = "0.2.0"
 # *********************************
 
+# Upstream `tauri-plugin-mihomo` (github:pius-pp/tauri-plugin-mihomo) ships an
+# incomplete android/ directory — it's missing build.gradle.kts, settings.gradle,
+# and the Kotlin plugin class, so Gradle can't resolve it as an Android library
+# module ("No matching variant of project :tauri-plugin-mihomo was found").
+# Patched locally in vendor/tauri-plugin-mihomo with the missing scaffolding
+# (Rust source is untouched) until this is fixed upstream.
+[patch."https://github.com/pius-pp/tauri-plugin-mihomo"]
+tauri-plugin-mihomo = { path = "vendor/tauri-plugin-mihomo" }
+
 [workspace.lints.clippy]
 correctness = { level = "deny", priority = -1 }
 suspicious = { level = "deny", priority = -1 }

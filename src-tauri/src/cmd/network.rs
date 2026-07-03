@@ -1,63 +1,87 @@
 use super::CmdResult;
 use crate::cmd::StringifyErr as _;
 use crate::core::sysopt::Sysopt;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use clash_verge_logging::{Type, logging};
 use gethostname::gethostname;
 use network_interface::NetworkInterface;
 use serde_yaml_ng::Mapping;
 use std::net::TcpListener;
-use sysproxy::{Autoproxy, Sysproxy};
 use tauri_plugin_clash_verge_sysinfo;
 
-/// get the system proxy
+/// get the system proxy — not a concept on mobile, only VPN/TUN mode exists there.
 #[tauri::command]
 pub async fn get_sys_proxy() -> CmdResult<Mapping> {
-    logging!(debug, Type::Network, "异步获取系统代理配置");
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        use sysproxy::Sysproxy;
 
-    Sysopt::global().wait_idle().await;
-    let sys_proxy = Sysproxy::get_system_proxy().stringify_err()?;
-    let Sysproxy {
-        ref host,
-        ref bypass,
-        ref port,
-        ref enable,
-    } = sys_proxy;
+        logging!(debug, Type::Network, "异步获取系统代理配置");
 
-    let mut map = Mapping::new();
-    map.insert("enable".into(), (*enable).into());
-    map.insert("server".into(), format!("{}:{}", host, port).into());
-    map.insert("bypass".into(), bypass.as_str().into());
+        Sysopt::global().wait_idle().await;
+        let sys_proxy = Sysproxy::get_system_proxy().stringify_err()?;
+        let Sysproxy {
+            ref host,
+            ref bypass,
+            ref port,
+            ref enable,
+        } = sys_proxy;
 
-    logging!(
-        debug,
-        Type::Network,
-        "返回系统代理配置: enable={}, {}:{}",
-        sys_proxy.enable,
-        sys_proxy.host,
-        sys_proxy.port
-    );
-    Ok(map)
+        let mut map = Mapping::new();
+        map.insert("enable".into(), (*enable).into());
+        map.insert("server".into(), format!("{}:{}", host, port).into());
+        map.insert("bypass".into(), bypass.as_str().into());
+
+        logging!(
+            debug,
+            Type::Network,
+            "返回系统代理配置: enable={}, {}:{}",
+            sys_proxy.enable,
+            sys_proxy.host,
+            sys_proxy.port
+        );
+        return Ok(map);
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        Sysopt::global().wait_idle().await;
+        let mut map = Mapping::new();
+        map.insert("enable".into(), false.into());
+        Ok(map)
+    }
 }
 
-/// 获取自动代理配置
+/// 获取自动代理配置 — not a concept on mobile.
 #[tauri::command]
 pub async fn get_auto_proxy() -> CmdResult<Mapping> {
-    Sysopt::global().wait_idle().await;
-    let auto_proxy = Autoproxy::get_auto_proxy().stringify_err()?;
-    let Autoproxy { ref enable, ref url } = auto_proxy;
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        use sysproxy::Autoproxy;
 
-    let mut map = Mapping::new();
-    map.insert("enable".into(), (*enable).into());
-    map.insert("url".into(), url.as_str().into());
+        Sysopt::global().wait_idle().await;
+        let auto_proxy = Autoproxy::get_auto_proxy().stringify_err()?;
+        let Autoproxy { ref enable, ref url } = auto_proxy;
 
-    logging!(
-        debug,
-        Type::Network,
-        "返回自动代理配置（缓存）: enable={}, url={}",
-        auto_proxy.enable,
-        auto_proxy.url
-    );
-    Ok(map)
+        let mut map = Mapping::new();
+        map.insert("enable".into(), (*enable).into());
+        map.insert("url".into(), url.as_str().into());
+
+        logging!(
+            debug,
+            Type::Network,
+            "返回自动代理配置（缓存）: enable={}, url={}",
+            auto_proxy.enable,
+            auto_proxy.url
+        );
+        return Ok(map);
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        Sysopt::global().wait_idle().await;
+        let mut map = Mapping::new();
+        map.insert("enable".into(), false.into());
+        Ok(map)
+    }
 }
 
 /// 获取系统主机名

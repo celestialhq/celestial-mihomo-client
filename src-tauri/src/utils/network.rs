@@ -7,6 +7,7 @@ use reqwest::{
 };
 use smartstring::alias::String;
 use std::{sync::Arc, time::Duration};
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use sysproxy::Sysproxy;
 use tauri::Url;
 
@@ -243,6 +244,8 @@ impl NetworkManager {
                 };
                 Some(format!("http://127.0.0.1:{port}"))
             }
+            // No system-wide proxy concept on mobile — only VPN/TUN mode exists there.
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             ProxyType::System => {
                 if let Ok(p @ Sysproxy { enable: true, .. }) = Sysproxy::get_system_proxy() {
                     Some(format!("http://{}:{}", p.host, p.port))
@@ -250,6 +253,8 @@ impl NetworkManager {
                     None
                 }
             }
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            ProxyType::System => None,
         };
 
         let mut headers = HeaderMap::new();
