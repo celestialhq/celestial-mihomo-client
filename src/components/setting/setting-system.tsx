@@ -54,52 +54,56 @@ const SettingSystem = ({ onError }: Props) => {
         />
       )}
 
-      <SettingItem label={t('settings.sections.system.fields.autoLaunch')}>
-        <GuardState
-          value={enable_auto_launch ?? false}
-          valueProps="checked"
-          onCatch={onError}
-          onFormat={onSwitchFormat}
-          onChange={(e) => {
-            onChangeData({ enable_auto_launch: e })
-          }}
-          onGuard={async (e) => {
-            try {
-              // 先触发UI更新立即看到反馈
-              onChangeData({ enable_auto_launch: e })
-              await patchVerge({ enable_auto_launch: e })
-              return Promise.resolve()
-            } catch (error) {
-              // 如果出错，恢复原始状态
-              onChangeData({ enable_auto_launch: !e })
-              return Promise.reject(error)
-            }
-          }}
-        >
-          <Switch edge="end" />
-        </GuardState>
-      </SettingItem>
+      {!IS_SINGLE_MODE_PLATFORM && (
+        <>
+          <SettingItem label={t('settings.sections.system.fields.autoLaunch')}>
+            <GuardState
+              value={enable_auto_launch ?? false}
+              valueProps="checked"
+              onCatch={onError}
+              onFormat={onSwitchFormat}
+              onChange={(e) => {
+                onChangeData({ enable_auto_launch: e })
+              }}
+              onGuard={async (e) => {
+                try {
+                  // 先触发UI更新立即看到反馈
+                  onChangeData({ enable_auto_launch: e })
+                  await patchVerge({ enable_auto_launch: e })
+                  return Promise.resolve()
+                } catch (error) {
+                  // 如果出错，恢复原始状态
+                  onChangeData({ enable_auto_launch: !e })
+                  return Promise.reject(error)
+                }
+              }}
+            >
+              <Switch edge="end" />
+            </GuardState>
+          </SettingItem>
 
-      <SettingItem
-        label={t('settings.sections.system.fields.silentStart')}
-        extra={
-          <TooltipIcon
-            title={t('settings.sections.system.tooltips.silentStart')}
-            sx={{ opacity: '0.7' }}
-          />
-        }
-      >
-        <GuardState
-          value={enable_silent_start ?? false}
-          valueProps="checked"
-          onCatch={onError}
-          onFormat={onSwitchFormat}
-          onChange={(e) => onChangeData({ enable_silent_start: e })}
-          onGuard={(e) => patchVerge({ enable_silent_start: e })}
-        >
-          <Switch edge="end" />
-        </GuardState>
-      </SettingItem>
+          <SettingItem
+            label={t('settings.sections.system.fields.silentStart')}
+            extra={
+              <TooltipIcon
+                title={t('settings.sections.system.tooltips.silentStart')}
+                sx={{ opacity: '0.7' }}
+              />
+            }
+          >
+            <GuardState
+              value={enable_silent_start ?? false}
+              valueProps="checked"
+              onCatch={onError}
+              onFormat={onSwitchFormat}
+              onChange={(e) => onChangeData({ enable_silent_start: e })}
+              onGuard={(e) => patchVerge({ enable_silent_start: e })}
+            >
+              <Switch edge="end" />
+            </GuardState>
+          </SettingItem>
+        </>
+      )}
     </SettingList>
   )
 }

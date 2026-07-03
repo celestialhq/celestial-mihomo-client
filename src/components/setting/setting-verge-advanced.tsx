@@ -15,6 +15,7 @@ import {
 } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 import { checkUpdateSafe as checkUpdate } from '@/services/update'
+import getSystem from '@/utils/get-system'
 import { version } from '@root/package.json'
 
 import { BackupViewer } from './mods/backup-viewer'
@@ -25,6 +26,10 @@ import { LiteModeViewer } from './mods/lite-mode-viewer'
 import { MiscViewer } from './mods/misc-viewer'
 import { SettingItem, SettingList } from './mods/setting-comp'
 import { UpdateViewer } from './mods/update-viewer'
+
+// Global hotkeys, lightweight/tray mode, and self-updates (Play Store's
+// job) are all desktop-only concepts.
+const IS_MOBILE_PLATFORM = getSystem() === 'android'
 
 interface Props {
   onError?: (err: Error) => void
@@ -74,12 +79,12 @@ const SettingVergeAdvanced = ({ onError: _ }: Props) => {
   return (
     <SettingList title={t('settings.components.verge.advanced.title')}>
       <ConfigViewer ref={configRef} />
-      <HotkeyViewer ref={hotkeyRef} />
+      {!IS_MOBILE_PLATFORM && <HotkeyViewer ref={hotkeyRef} />}
       <MiscViewer ref={miscRef} />
       <LayoutViewer ref={layoutRef} />
-      <UpdateViewer ref={updateRef} />
+      {!IS_MOBILE_PLATFORM && <UpdateViewer ref={updateRef} />}
       <BackupViewer ref={backupRef} />
-      <LiteModeViewer ref={liteModeRef} />
+      {!IS_MOBILE_PLATFORM && <LiteModeViewer ref={liteModeRef} />}
 
       <SettingItem
         onClick={() => backupRef.current?.open()}
@@ -118,26 +123,32 @@ const SettingVergeAdvanced = ({ onError: _ }: Props) => {
         label={t('settings.components.verge.advanced.fields.openLogsDir')}
       />
 
-      <SettingItem
-        onClick={onCheckUpdate}
-        label={t('settings.components.verge.advanced.fields.checkUpdates')}
-      />
+      {!IS_MOBILE_PLATFORM && (
+        <SettingItem
+          onClick={onCheckUpdate}
+          label={t('settings.components.verge.advanced.fields.checkUpdates')}
+        />
+      )}
 
       <SettingItem
         onClick={openDevTools}
         label={t('settings.components.verge.advanced.fields.openDevTools')}
       />
 
-      <SettingItem
-        label={t('settings.components.verge.advanced.fields.liteModeSettings')}
-        extra={
-          <TooltipIcon
-            title={t('settings.components.verge.advanced.tooltips.liteMode')}
-            sx={{ opacity: '0.7' }}
-          />
-        }
-        onClick={() => liteModeRef.current?.open()}
-      />
+      {!IS_MOBILE_PLATFORM && (
+        <SettingItem
+          label={t(
+            'settings.components.verge.advanced.fields.liteModeSettings',
+          )}
+          extra={
+            <TooltipIcon
+              title={t('settings.components.verge.advanced.tooltips.liteMode')}
+              sx={{ opacity: '0.7' }}
+            />
+          }
+          onClick={() => liteModeRef.current?.open()}
+        />
+      )}
 
       <SettingItem
         onClick={() => {

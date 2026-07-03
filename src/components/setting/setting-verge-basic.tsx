@@ -27,6 +27,7 @@ interface Props {
 }
 
 const OS = getSystem()
+const IS_MOBILE_PLATFORM = OS === 'android'
 
 const languageOptions = supportedLanguages.map((code) => {
   const labels: { [key: string]: string } = {
@@ -79,7 +80,7 @@ const SettingVergeBasic = ({ onError }: Props) => {
   return (
     <SettingList title={t('settings.components.verge.basic.title')}>
       <ConfigViewer ref={configRef} />
-      <HotkeyViewer ref={hotkeyRef} />
+      {!IS_MOBILE_PLATFORM && <HotkeyViewer ref={hotkeyRef} />}
       <MiscViewer ref={miscRef} />
       <LayoutViewer ref={layoutRef} />
       <UpdateViewer ref={updateRef} />
@@ -116,7 +117,7 @@ const SettingVergeBasic = ({ onError }: Props) => {
         </GuardState>
       </SettingItem>
 
-      {OS !== 'linux' && (
+      {OS !== 'linux' && !IS_MOBILE_PLATFORM && (
         <SettingItem
           label={t('settings.components.verge.basic.fields.trayClickEvent')}
         >
@@ -150,28 +151,30 @@ const SettingVergeBasic = ({ onError }: Props) => {
         </SettingItem>
       )}
 
-      <SettingItem
-        label={t('settings.components.verge.basic.fields.copyEnvType')}
-        extra={
-          <TooltipIcon icon={ContentCopyRounded} onClick={onCopyClashEnv} />
-        }
-      >
-        <GuardState
-          value={env_type ?? (OS === 'windows' ? 'powershell' : 'bash')}
-          onCatch={onError}
-          onFormat={(e: any) => e.target.value}
-          onChange={(e) => onChangeData({ env_type: e })}
-          onGuard={(e) => patchVerge({ env_type: e })}
+      {!IS_MOBILE_PLATFORM && (
+        <SettingItem
+          label={t('settings.components.verge.basic.fields.copyEnvType')}
+          extra={
+            <TooltipIcon icon={ContentCopyRounded} onClick={onCopyClashEnv} />
+          }
         >
-          <Select size="small" sx={{ width: 140, '> div': { py: '7.5px' } }}>
-            <MenuItem value="bash">Bash</MenuItem>
-            <MenuItem value="fish">Fish</MenuItem>
-            <MenuItem value="nushell">Nushell</MenuItem>
-            <MenuItem value="cmd">CMD</MenuItem>
-            <MenuItem value="powershell">PowerShell</MenuItem>
-          </Select>
-        </GuardState>
-      </SettingItem>
+          <GuardState
+            value={env_type ?? (OS === 'windows' ? 'powershell' : 'bash')}
+            onCatch={onError}
+            onFormat={(e: any) => e.target.value}
+            onChange={(e) => onChangeData({ env_type: e })}
+            onGuard={(e) => patchVerge({ env_type: e })}
+          >
+            <Select size="small" sx={{ width: 140, '> div': { py: '7.5px' } }}>
+              <MenuItem value="bash">Bash</MenuItem>
+              <MenuItem value="fish">Fish</MenuItem>
+              <MenuItem value="nushell">Nushell</MenuItem>
+              <MenuItem value="cmd">CMD</MenuItem>
+              <MenuItem value="powershell">PowerShell</MenuItem>
+            </Select>
+          </GuardState>
+        </SettingItem>
+      )}
 
       <SettingItem
         label={t('settings.components.verge.basic.fields.startPage')}
@@ -195,58 +198,60 @@ const SettingVergeBasic = ({ onError }: Props) => {
         </GuardState>
       </SettingItem>
 
-      <SettingItem
-        label={t('settings.components.verge.basic.fields.startupScript')}
-      >
-        <GuardState
-          value={startup_script ?? ''}
-          onCatch={onError}
-          onFormat={(e: any) => e.target.value}
-          onChange={(e) => onChangeData({ startup_script: e })}
-          onGuard={(e) => patchVerge({ startup_script: e })}
+      {!IS_MOBILE_PLATFORM && (
+        <SettingItem
+          label={t('settings.components.verge.basic.fields.startupScript')}
         >
-          <Input
-            value={startup_script}
-            disabled
-            disableUnderline
-            sx={{ width: 230 }}
-            endAdornment={
-              <>
-                <Button
-                  onClick={async () => {
-                    const selected = await open({
-                      directory: false,
-                      multiple: false,
-                      filters: [
-                        {
-                          name: 'Shell Script',
-                          extensions: ['sh', 'bat', 'ps1'],
-                        },
-                      ],
-                    })
-                    if (selected) {
-                      onChangeData({ startup_script: `${selected}` })
-                      patchVerge({ startup_script: `${selected}` })
-                    }
-                  }}
-                >
-                  {t('settings.components.verge.basic.actions.browse')}
-                </Button>
-                {startup_script && (
+          <GuardState
+            value={startup_script ?? ''}
+            onCatch={onError}
+            onFormat={(e: any) => e.target.value}
+            onChange={(e) => onChangeData({ startup_script: e })}
+            onGuard={(e) => patchVerge({ startup_script: e })}
+          >
+            <Input
+              value={startup_script}
+              disabled
+              disableUnderline
+              sx={{ width: 230 }}
+              endAdornment={
+                <>
                   <Button
                     onClick={async () => {
-                      onChangeData({ startup_script: '' })
-                      patchVerge({ startup_script: '' })
+                      const selected = await open({
+                        directory: false,
+                        multiple: false,
+                        filters: [
+                          {
+                            name: 'Shell Script',
+                            extensions: ['sh', 'bat', 'ps1'],
+                          },
+                        ],
+                      })
+                      if (selected) {
+                        onChangeData({ startup_script: `${selected}` })
+                        patchVerge({ startup_script: `${selected}` })
+                      }
                     }}
                   >
-                    {t('shared.actions.clear')}
+                    {t('settings.components.verge.basic.actions.browse')}
                   </Button>
-                )}
-              </>
-            }
-          ></Input>
-        </GuardState>
-      </SettingItem>
+                  {startup_script && (
+                    <Button
+                      onClick={async () => {
+                        onChangeData({ startup_script: '' })
+                        patchVerge({ startup_script: '' })
+                      }}
+                    >
+                      {t('shared.actions.clear')}
+                    </Button>
+                  )}
+                </>
+              }
+            ></Input>
+          </GuardState>
+        </SettingItem>
+      )}
 
       <SettingItem
         onClick={() => layoutRef.current?.open()}
@@ -258,10 +263,12 @@ const SettingVergeBasic = ({ onError }: Props) => {
         label={t('settings.components.verge.basic.fields.misc')}
       />
 
-      <SettingItem
-        onClick={() => hotkeyRef.current?.open()}
-        label={t('settings.components.verge.basic.fields.hotkeySetting')}
-      />
+      {!IS_MOBILE_PLATFORM && (
+        <SettingItem
+          onClick={() => hotkeyRef.current?.open()}
+          label={t('settings.components.verge.basic.fields.hotkeySetting')}
+        />
+      )}
     </SettingList>
   )
 }
