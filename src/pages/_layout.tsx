@@ -113,6 +113,7 @@ const SortableNavMenuItem = ({ item, label }: SortableNavMenuItemProps) => {
 dayjs.extend(relativeTime)
 
 const OS = getSystem()
+const isMobilePlatform = OS === 'android'
 
 const Layout = () => {
   const { t } = useTranslation()
@@ -130,9 +131,10 @@ const Layout = () => {
   const themeReady = useMemo(() => Boolean(theme), [theme])
 
   const paperRef = useRef<HTMLDivElement>(null)
-  const [isMobile, setIsMobile] = useState(false)
+  const [isMobile, setIsMobile] = useState(isMobilePlatform)
 
   useEffect(() => {
+    if (isMobilePlatform) return
     const el = paperRef.current
     if (!el) return
     const measure = () => {
@@ -224,19 +226,21 @@ const Layout = () => {
   }, [navCollapsed, patchVerge])
 
   const customTitlebar = useMemo(
-    () => (
-      <div className="the_titlebar">
-        <div className="the_titlebar__brand" data-tauri-drag-region="true">
-          <img className="the-titlebar-cloud" src={logoUrl} alt="" />
-          <span>Celestial</span>
+    () =>
+      // No window chrome concept on a fullscreen single-Activity mobile app.
+      isMobilePlatform ? null : (
+        <div className="the_titlebar">
+          <div className="the_titlebar__brand" data-tauri-drag-region="true">
+            <img className="the-titlebar-cloud" src={logoUrl} alt="" />
+            <span>Celestial</span>
+          </div>
+          <div
+            className="the_titlebar-drag-region"
+            data-tauri-drag-region="true"
+          />
+          <WindowControls />
         </div>
-        <div
-          className="the_titlebar-drag-region"
-          data-tauri-drag-region="true"
-        />
-        <WindowControls />
-      </div>
-    ),
+      ),
     [],
   )
 

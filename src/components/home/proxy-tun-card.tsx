@@ -13,8 +13,12 @@ import { useSystemProxyState } from '@/hooks/use-system-proxy-state'
 import { useSystemState } from '@/hooks/use-system-state'
 import { useVerge } from '@/hooks/use-verge'
 import { showNotice } from '@/services/notice-service'
+import getSystem from '@/utils/get-system'
 
 const LOCAL_STORAGE_TAB_KEY = 'celestial-proxy-active-tab'
+// No system-wide proxy concept on Android — VPN/TUN is the only connection
+// mode there, so there's nothing to switch between.
+const IS_SINGLE_MODE_PLATFORM = getSystem() === 'android'
 
 interface TabButtonProps {
   isActive: boolean
@@ -119,8 +123,10 @@ const TabDescription: FC<TabDescriptionProps> = memo(
 
 export const ProxyTunCard: FC = () => {
   const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState<string>(
-    () => localStorage.getItem(LOCAL_STORAGE_TAB_KEY) || 'system',
+  const [activeTab, setActiveTab] = useState<string>(() =>
+    IS_SINGLE_MODE_PLATFORM
+      ? 'tun'
+      : localStorage.getItem(LOCAL_STORAGE_TAB_KEY) || 'system',
   )
 
   const { verge } = useVerge()
@@ -160,31 +166,33 @@ export const ProxyTunCard: FC = () => {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-      <Stack
-        direction="row"
-        spacing={1}
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          position: 'relative',
-          zIndex: 2,
-        }}
-      >
-        <TabButton
-          isActive={activeTab === 'system'}
-          onClick={() => handleTabChange('system')}
-          icon={ComputerRounded}
-          label={t('settings.sections.system.toggles.systemProxy')}
-          hasIndicator={systemProxyIndicator}
-        />
-        <TabButton
-          isActive={activeTab === 'tun'}
-          onClick={() => handleTabChange('tun')}
-          icon={TroubleshootRounded}
-          label={t('settings.sections.system.toggles.tunMode')}
-          hasIndicator={enable_tun_mode && isTunModeAvailable}
-        />
-      </Stack>
+      {!IS_SINGLE_MODE_PLATFORM && (
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            position: 'relative',
+            zIndex: 2,
+          }}
+        >
+          <TabButton
+            isActive={activeTab === 'system'}
+            onClick={() => handleTabChange('system')}
+            icon={ComputerRounded}
+            label={t('settings.sections.system.toggles.systemProxy')}
+            hasIndicator={systemProxyIndicator}
+          />
+          <TabButton
+            isActive={activeTab === 'tun'}
+            onClick={() => handleTabChange('tun')}
+            icon={TroubleshootRounded}
+            label={t('settings.sections.system.toggles.tunMode')}
+            hasIndicator={enable_tun_mode && isTunModeAvailable}
+          />
+        </Stack>
+      )}
 
       <Box
         sx={{

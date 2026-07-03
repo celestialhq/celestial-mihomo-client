@@ -49,6 +49,21 @@ enum TlsRootMode {
     StaticWebpkiRoots,
 }
 
+// `rustls-platform-verifier` needs a JNI-hosted Android TrustManager to be
+// registered at startup before it can be used; without that init step it
+// panics (not a catchable `Err`) on first use, which bypasses the normal
+// fall-back-to-static-roots retry logic entirely. We don't do that init yet,
+// so default straight to the static webpki root store on mobile.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+const fn default_tls_root_mode() -> TlsRootMode {
+    TlsRootMode::PlatformVerifier
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+const fn default_tls_root_mode() -> TlsRootMode {
+    TlsRootMode::StaticWebpkiRoots
+}
+
 pub struct NetworkManager;
 
 impl Default for NetworkManager {
@@ -154,7 +169,7 @@ impl NetworkManager {
             timeout_secs,
             user_agent,
             accept_invalid_certs,
-            TlsRootMode::PlatformVerifier,
+            default_tls_root_mode(),
         )
         .await
     }
@@ -287,7 +302,7 @@ impl NetworkManager {
                 timeout_secs,
                 user_agent.clone(),
                 accept_invalid_certs,
-                TlsRootMode::PlatformVerifier,
+                default_tls_root_mode(),
             )
             .await;
 

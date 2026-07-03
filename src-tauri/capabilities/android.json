@@ -1,0 +1,35 @@
+{
+  "identifier": "android-capability",
+  "description": "permissions for the Android build",
+  "local": true,
+  "platforms": ["android"],
+  "windows": ["main"],
+  "webviews": ["main"],
+  "permissions": [
+    "core:default",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-exists",
+    {
+      "identifier": "fs:scope",
+      "allow": ["$APPDATA/**", "$RESOURCE/../**", "**"]
+    },
+    "fs:allow-app-read",
+    "fs:allow-app-read-recursive",
+    "fs:allow-app-write",
+    "fs:allow-app-write-recursive",
+    "fs:allow-appcache-read",
+    "fs:allow-appcache-read-recursive",
+    "fs:allow-appconfig-read",
+    "fs:allow-appconfig-read-recursive",
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-ask",
+    "dialog:allow-message",
+    "process:allow-restart",
+    "process:allow-exit",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
+    "deep-link:default"
+  ]
+}
