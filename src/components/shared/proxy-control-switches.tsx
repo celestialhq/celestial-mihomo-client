@@ -20,6 +20,13 @@ import { useSystemProxyState } from '@/hooks/use-system-proxy-state'
 import { useSystemState } from '@/hooks/use-system-state'
 import { useVerge } from '@/hooks/use-verge'
 import { showNotice } from '@/services/notice-service'
+import getSystem from '@/utils/get-system'
+
+// The privileged-helper "service" install flow is a desktop-only concept
+// (elevated TUN permissions via runas/pkexec/osascript) — Android grants
+// VPN access via a one-time permission dialog instead, so there's nothing
+// to install here.
+const IS_SINGLE_MODE_PLATFORM = getSystem() === 'android'
 
 interface ProxySwitchProps {
   label?: string
@@ -236,23 +243,27 @@ const ProxyControlSwitches = ({
                 <>
                   <TooltipIcon
                     title={t(
-                      'settings.sections.proxyControl.tooltips.tunUnavailable',
+                      IS_SINGLE_MODE_PLATFORM
+                        ? 'settings.sections.proxyControl.tooltips.tunUnavailableMobile'
+                        : 'settings.sections.proxyControl.tooltips.tunUnavailable',
                     )}
                     icon={WarningRounded}
                     sx={{ color: 'warning.main', ml: 1 }}
                   />
-                  <TooltipIcon
-                    title={t(
-                      'settings.sections.proxyControl.actions.installService',
-                    )}
-                    icon={BuildRounded}
-                    color="primary"
-                    onClick={onInstallService}
-                    sx={{ ml: 1 }}
-                  />
+                  {!IS_SINGLE_MODE_PLATFORM && (
+                    <TooltipIcon
+                      title={t(
+                        'settings.sections.proxyControl.actions.installService',
+                      )}
+                      icon={BuildRounded}
+                      color="primary"
+                      onClick={onInstallService}
+                      sx={{ ml: 1 }}
+                    />
+                  )}
                 </>
               )}
-              {isServiceOk && (
+              {isServiceOk && !IS_SINGLE_MODE_PLATFORM && (
                 <TooltipIcon
                   title={t(
                     'settings.sections.proxyControl.actions.uninstallService',

@@ -2,6 +2,7 @@ use anyhow::Result;
 use scopeguard::defer;
 use smartstring::alias::String;
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri_plugin_shell::ShellExt as _;
 use tokio::fs;
 
@@ -236,6 +237,18 @@ impl CoreConfigValidator {
         let clash_core = Config::verge().await.latest_arc().get_valid_clash_core();
         logging!(info, Type::Validate, "使用内核: {}", clash_core);
 
+        // No sidecar binary is bundled on mobile (no subprocess spawning is
+        // possible there anyway) — nothing to validate against yet, so treat
+        // the config as accepted rather than surfacing a "binary not found"
+        // OS error. Real validation returns once the core runs in-process.
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        {
+            logging!(info, Type::Validate, "移动端跳过子进程验证（尚无内核）");
+            return Ok((true, String::new()));
+        }
+
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        {
         let app_handle = handle::Handle::app_handle();
         let app_dir = dirs::app_home_dir()?;
         let app_dir_str = dirs::path_to_str(&app_dir)?;
@@ -281,6 +294,7 @@ impl CoreConfigValidator {
             logging!(info, Type::Validate, "验证成功");
             logging!(info, Type::Validate, "-------- 验证结束 --------");
             Ok((true, String::new()))
+        }
         }
     }
 

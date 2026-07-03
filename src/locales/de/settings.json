@@ -32,7 +32,8 @@
       "tooltips": {
         "systemProxy": "Ändern Sie die Proxy-Einstellungen des Betriebssystems. Wenn die Aktivierung fehlschlägt, können Sie die Proxy-Einstellungen des Betriebssystems manuell ändern.",
         "tunMode": "Der TUN-Modus (Virtual Network Interface) übernimmt den gesamten Systemverkehr. Wenn dieser Modus aktiviert ist, muss der Systemproxy nicht geöffnet werden.",
-        "tunUnavailable": "TUN-Modus erfordert Service-Modus oder Administrator-Modus"
+        "tunUnavailable": "TUN-Modus erfordert Service-Modus oder Administrator-Modus",
+        "tunUnavailableMobile": "TUN-Modus ist unter Android noch nicht verfügbar"
       },
       "actions": {
         "installService": "Service installieren",

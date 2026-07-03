@@ -155,7 +155,9 @@ export const ProxyTunCard: FC = () => {
     } else {
       return {
         text: !isTunModeAvailable
-          ? t('home.components.proxyTun.status.tunModeServiceRequired')
+          ? IS_SINGLE_MODE_PLATFORM
+            ? t('settings.sections.proxyControl.tooltips.tunUnavailableMobile')
+            : t('home.components.proxyTun.status.tunModeServiceRequired')
           : enable_tun_mode
             ? t('home.components.proxyTun.status.tunModeEnabled')
             : t('home.components.proxyTun.status.tunModeDisabled'),
