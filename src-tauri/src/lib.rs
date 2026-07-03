@@ -55,7 +55,7 @@ mod app_init {
             .plugin(
                 tauri_plugin_mihomo::Builder::new()
                     .protocol(tauri_plugin_mihomo::models::Protocol::LocalSocket)
-                    .socket_path(crate::config::IClashTemp::guard_external_controller_ipc())
+                    .socket_path(mihomo_socket_path())
                     .pool_config(
                         tauri_plugin_mihomo::IpcPoolConfigBuilder::new()
                             .min_connections(3)
@@ -84,6 +84,24 @@ mod app_init {
             builder = builder.plugin(tauri_plugin_devtools::init());
         }
         builder
+    }
+
+    /// The mihomo plugin's socket path is computed as part of building the
+    /// plugin list, which runs before `.setup()` (and thus before
+    /// `APP_HANDLE` is set) — `IClashTemp::guard_external_controller_ipc()`
+    /// resolves the app data dir via `Handle::app_handle()`, which panics
+    /// this early. On desktop this happens to only matter in non-portable
+    /// installs; on mobile there's no core process behind this socket yet
+    /// anyway (LocalSocket transport is Phase 2 — needs an Android-native
+    /// replacement), so use a static placeholder instead of touching Handle.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    fn mihomo_socket_path() -> String {
+        crate::config::IClashTemp::guard_external_controller_ipc()
+    }
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    fn mihomo_socket_path() -> String {
+        "/dev/null/celestial-mihomo.sock".to_string()
     }
 
     /// Setup deep link handling
@@ -238,6 +256,14 @@ mod app_init {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Android's native crash dump only shows libc/libhoudini frames under
+    // emulator ARM translation, not Rust frames — force a real backtrace
+    // into RustStdoutStderr (logcat) so panics are actually diagnosable.
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    std::panic::set_hook(Box::new(|info| {
+        eprintln!("{info}\n{}", std::backtrace::Backtrace::force_capture());
+    }));
+
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     if app_init::init_singleton_check().is_err() {
         return;
