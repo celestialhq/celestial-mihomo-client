@@ -1,0 +1,4 @@
+# cgo build outputs (.so/.h/.a) — rebuilt from source, not tracked
+golang/wrapper/*.so
+golang/wrapper/*.h
+golang/wrapper/*.a
