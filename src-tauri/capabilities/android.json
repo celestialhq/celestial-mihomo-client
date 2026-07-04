@@ -7,6 +7,7 @@
   "webviews": ["main"],
   "permissions": [
     "core:default",
+    "mihomo:default",
     "fs:allow-read-file",
     "fs:allow-write-file",
     "fs:allow-exists",
