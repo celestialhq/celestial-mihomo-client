@@ -1,0 +1,15 @@
+[package]
+name = "tauri-plugin-celestial-vpn"
+version = "0.1.0"
+edition = "2021"
+description = "Android VpnService integration for the embedded mihomo core"
+links = "tauri-plugin-celestial-vpn"
+
+[dependencies]
+tauri = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = "2"
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

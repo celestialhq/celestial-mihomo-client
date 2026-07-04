@@ -1169,6 +1169,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",
+ "tauri-plugin-celestial-vpn",
  "tauri-plugin-clash-verge-sysinfo",
  "tauri-plugin-clipboard-manager",
  "tauri-plugin-deep-link",
@@ -7532,6 +7533,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "459383cebc193cdd03d1ba4acc40f2c408a7abce419d64bdcd2d745bc2886f70"
 dependencies = [
  "auto-launch",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "tauri-plugin-celestial-vpn"
+version = "0.1.0"
+dependencies = [
  "serde",
  "serde_json",
  "tauri",
