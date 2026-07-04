@@ -43,6 +43,23 @@ fn build_mihomo_wrapper() {
     std::fs::create_dir_all(&jni_libs_dir).expect("failed to create jniLibs output dir");
     let so_path = jni_libs_dir.join("libmihomo_wrapper.so");
 
+    // constant.Version defaults to a hardcoded "1.10.0" placeholder in
+    // golang/mihomo/constant/version.go — mihomo's own Makefile always
+    // overrides it via ldflags from `git describe --tags` on the actual
+    // checked-out commit. Do the same so `/version` reports the real
+    // submodule version instead of that stale placeholder.
+    let mihomo_dir = std::path::Path::new(&manifest_dir).join("golang/mihomo");
+    let version = std::process::Command::new("git")
+        .current_dir(&mihomo_dir)
+        .args(["describe", "--tags"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| "unknown".to_string());
+    let ldflags = format!("-X github.com/metacubex/mihomo/constant.Version={version}");
+
     let status = std::process::Command::new("go")
         .current_dir(&wrapper_dir)
         .env("CGO_ENABLED", "1")
@@ -58,7 +75,7 @@ fn build_mihomo_wrapper() {
         // `with_gvisor` enables the userspace netstack TUN needs on Android
         // (no raw kernel TUN driver access without gVisor) — same tags
         // ClashMetaForAndroid's own Gradle build uses.
-        .args(["build", "-tags", "cmfa,with_gvisor", "-buildmode=c-shared", "-o"])
+        .args(["build", "-tags", "cmfa,with_gvisor", "-buildmode=c-shared", "-ldflags", &ldflags, "-o"])
         .arg(&so_path)
         .arg(".")
         .status()

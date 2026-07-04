@@ -11,7 +11,20 @@ import (
 	mihomoConstant "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/hub"
 	"github.com/metacubex/mihomo/hub/executor"
+	"github.com/metacubex/mihomo/hub/route"
 )
+
+func init() {
+	// hub/route/patch_android.go (compiled under our android+cmfa build tags)
+	// defaults embed mode to true, which disables the REST API's config/rules
+	// mutation endpoints (PUT/PATCH /configs, PATCH /rules, etc. — see
+	// hub/route/configs.go's `if !embedMode`). That default targets
+	// ClashMetaForAndroid's own architecture, where the Kotlin app mutates
+	// config by regenerating YAML and reloading rather than through the REST
+	// API. We want full REST API parity with desktop (e.g. mode switching via
+	// PATCH /configs), so override it back to false.
+	route.SetEmbedMode(false)
+}
 
 // StartCore parses configYaml and starts the core in-process — proxies, rules,
 // DNS, TUN (if the config's tun.file-descriptor is set), and the external-
