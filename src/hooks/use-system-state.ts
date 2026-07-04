@@ -3,8 +3,15 @@ import { useEffect, useRef, useState } from 'react'
 
 import { getRunningMode, isAdmin, isServiceAvailable } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
+import getSystem from '@/utils/get-system'
 
 import { useVerge } from './use-verge'
+
+// TUN mode on Android goes through VpnService's one-time permission dialog
+// (requested on demand when the user toggles it on), not an installable
+// privileged helper — there's no "is it installed" check to make in advance
+// the way desktop's admin/service checks do.
+const IS_MOBILE_PLATFORM = getSystem() === 'android'
 
 export interface SystemState {
   runningMode: 'Sidecar' | 'Service'
@@ -54,7 +61,8 @@ export function useSystemState() {
 
   const isSidecarMode = systemState.runningMode === 'Sidecar'
   const isServiceMode = systemState.runningMode === 'Service'
-  const isTunModeAvailable = systemState.isAdminMode || systemState.isServiceOk
+  const isTunModeAvailable =
+    IS_MOBILE_PLATFORM || systemState.isAdminMode || systemState.isServiceOk
 
   const enable_tun_mode = verge?.enable_tun_mode
   const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

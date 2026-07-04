@@ -29,18 +29,27 @@ class CelestialVpnService : VpnService() {
         startForeground(NOTIFICATION_ID, buildNotification())
     }
 
-    // TEMPORARY: minimal addressing just to prove the permission/fd-handoff plumbing
-    // (Milestone B1) — real routes/DNS come from the profile's mihomo config once the
-    // embedded core is wired in (Milestone C).
+    // Addresses/routes are placeholders — the embedded core (Milestone C) does its own
+    // routing/DNS via TUN once it opens the fd, so these just need to make the interface
+    // itself valid. addDisallowedApplication is load-bearing: without it, Android routes
+    // this app's OWN sockets (mihomo's DNS bootstrap + proxy-server dials) back into its
+    // own TUN interface, so they can never actually reach the internet.
     private fun establishTun(): Int? {
         tunInterface?.let { return it.fd }
 
-        val pfd = Builder()
+        val builder = Builder()
             .setSession("Celestial")
             .addAddress("10.0.0.2", 32)
             .addRoute("0.0.0.0", 0)
             .addDnsServer("1.1.1.1")
-            .establish() ?: return null
+
+        try {
+            builder.addDisallowedApplication(packageName)
+        } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+            // Can't happen for our own package name, but the API forces us to handle it.
+        }
+
+        val pfd = builder.establish() ?: return null
 
         tunInterface = pfd
         return pfd.fd

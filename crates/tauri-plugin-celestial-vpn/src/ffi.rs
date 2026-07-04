@@ -8,7 +8,11 @@ use std::ffi::{c_char, CStr, CString};
 #[cfg(target_os = "android")]
 #[link(name = "mihomo_wrapper")]
 unsafe extern "C" {
-    fn StartCore(config_yaml: *const c_char, home_dir: *const c_char, external_controller: *const c_char) -> *mut c_char;
+    fn StartCore(
+        config_yaml: *const c_char,
+        home_dir: *const c_char,
+        external_controller: *const c_char,
+    ) -> *mut c_char;
     fn StopCore();
     fn FreeString(s: *mut c_char);
     fn MihomoVersion() -> *mut c_char;

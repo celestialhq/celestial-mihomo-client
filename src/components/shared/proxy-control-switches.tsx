@@ -19,6 +19,7 @@ import { useServiceUninstaller } from '@/hooks/use-service-uninstaller'
 import { useSystemProxyState } from '@/hooks/use-system-proxy-state'
 import { useSystemState } from '@/hooks/use-system-state'
 import { useVerge } from '@/hooks/use-verge'
+import { startVpn, stopVpn } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 import getSystem from '@/utils/get-system'
 
@@ -184,7 +185,18 @@ const ProxyControlSwitches = ({
       throw new Error(t(msgKey))
     }
     mutateVerge({ ...verge, enable_tun_mode: value }, false)
-    await patchVerge({ enable_tun_mode: value })
+    if (IS_SINGLE_MODE_PLATFORM) {
+      // Android: TUN mode *is* VpnService — request the permission (if not
+      // already granted) and establish the interface before the core can
+      // use it, rather than just flipping the config flag on its own.
+      if (value) {
+        await startVpn()
+      } else {
+        await stopVpn()
+      }
+    } else {
+      await patchVerge({ enable_tun_mode: value })
+    }
   }
 
   const onInstallService = useLockFn(async () => {

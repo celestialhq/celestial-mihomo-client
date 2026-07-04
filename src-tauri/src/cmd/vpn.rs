@@ -10,11 +10,7 @@ use tauri_plugin_celestial_vpn::CelestialVpnExt as _;
 /// mode enabled so it actually uses that interface.
 #[tauri::command]
 pub async fn start_vpn(app: tauri::AppHandle) -> CmdResult<i32> {
-    let fd = app
-        .celestial_vpn()
-        .start_vpn()
-        .map_err(|e| e.to_string())?
-        .fd;
+    let fd = app.celestial_vpn().start_vpn().map_err(|e| e.to_string())?.fd;
 
     enhance::set_tun_fd(fd);
 

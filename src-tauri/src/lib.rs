@@ -118,7 +118,10 @@ mod app_init {
             tauri_plugin_mihomo::Builder::new()
                 .protocol(tauri_plugin_mihomo::models::Protocol::Http)
                 .external_host(host)
-                .external_port(port.parse::<u16>().expect("DEFAULT_EXTERNAL_CONTROLLER port must be a valid u16"))
+                .external_port(
+                    port.parse::<u16>()
+                        .expect("DEFAULT_EXTERNAL_CONTROLLER port must be a valid u16"),
+                )
                 .secret(crate::constants::network::DEFAULT_EXTERNAL_CONTROLLER_SECRET)
                 .pool_config(pool_config)
                 .build()

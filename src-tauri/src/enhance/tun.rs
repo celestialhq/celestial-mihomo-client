@@ -108,6 +108,14 @@ pub fn use_tun(mut config: Mapping, enable: bool) -> Mapping {
         if let Some(fd) = current_tun_fd() {
             revise!(tun_val, "file-descriptor", fd);
         }
+        // mihomo's own outbound dials (DNS bootstrap, proxy-server handshakes) are
+        // already kept out of the tunnel at the OS level via
+        // VpnService.Builder.addDisallowedApplication (see CelestialVpnService.kt) —
+        // mihomo doesn't need to additionally guess a physical interface to bind to.
+        // On Android that guess reliably fails (sandboxed apps can't enumerate real
+        // NICs the way mihomo expects), so it logs "get same name with tun" / returns
+        // '<invalid>' and refuses every dial "to avoid lookback", blocking all traffic.
+        revise!(tun_val, "auto-detect-interface", false);
     }
 
     revise!(config, "tun", tun_val);
