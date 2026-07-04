@@ -5,6 +5,9 @@ mod script;
 pub mod seq;
 mod tun;
 
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub use tun::{clear_tun_fd, set_tun_fd};
+
 use self::{
     chain::{AsyncChainItemFrom as _, ChainItem, ChainType},
     field::{use_keys, use_lowercase, use_sort},

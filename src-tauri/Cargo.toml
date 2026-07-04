@@ -142,6 +142,9 @@ sysproxy = { git = "https://github.com/clash-verge-rev/sysproxy-rs", branch = "0
   "guard",
 ] }
 
+[target.'cfg(target_os = "android")'.dependencies]
+tauri-plugin-celestial-vpn = { path = "../crates/tauri-plugin-celestial-vpn" }
+
 [dev-dependencies]
 criterion = { workspace = true }
 

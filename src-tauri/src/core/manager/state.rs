@@ -1,16 +1,21 @@
 use super::{CoreManager, RunningMode};
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use crate::AsyncHandler;
 use crate::{
-    AsyncHandler,
-    config::{Config, IClashTemp},
-    core::{handle, logger::Logger, manager::CLASH_LOGGER, service},
+    config::Config,
+    core::{manager::CLASH_LOGGER, service},
     logging,
     utils::dirs,
 };
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use crate::{config::IClashTemp, core::handle, core::logger::Logger};
 use anyhow::Result;
 use clash_verge_logging::Type;
 use compact_str::CompactString;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use log::Level;
 use scopeguard::defer;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri_plugin_shell::ShellExt as _;
 
 impl CoreManager {
@@ -22,6 +27,37 @@ impl CoreManager {
         }
     }
 
+    // No subprocess spawning on mobile — the core runs in-process via cgo
+    // FFI instead (see tauri_plugin_celestial_vpn::start_core). Its REST
+    // API listens on the same address `tauri_plugin_mihomo`'s Protocol::Http
+    // client is configured with in lib.rs.
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    pub(super) async fn start_core_by_sidecar(&self) -> Result<()> {
+        logging!(info, Type::Core, "Starting embedded core");
+
+        let config_file = Config::generate_file(crate::config::ConfigType::Run).await?;
+        let config_yaml = tokio::fs::read_to_string(&config_file).await?;
+        let home_dir = dirs::app_home_dir()?;
+
+        tauri_plugin_celestial_vpn::start_core(
+            &config_yaml,
+            &dirs::path_to_str(&home_dir)?,
+            crate::constants::network::DEFAULT_EXTERNAL_CONTROLLER,
+        )
+        .map_err(|e| anyhow::anyhow!("failed to start embedded core: {e}"))?;
+
+        self.set_running_mode(RunningMode::Sidecar);
+        Ok(())
+    }
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    pub(super) fn stop_core_by_sidecar(&self) {
+        logging!(info, Type::Core, "Stopping embedded core");
+        tauri_plugin_celestial_vpn::stop_core();
+        self.set_running_mode(RunningMode::NotRunning);
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub(super) async fn start_core_by_sidecar(&self) -> Result<()> {
         logging!(info, Type::Core, "Starting core in sidecar mode");
 
@@ -88,6 +124,7 @@ impl CoreManager {
         Ok(())
     }
 
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub(super) fn stop_core_by_sidecar(&self) {
         logging!(info, Type::Core, "Stopping sidecar");
         defer! {

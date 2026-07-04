@@ -601,3 +601,13 @@ export const isPortInUse = async (port: number) => {
     return false
   }
 }
+
+// Android only — TEMPORARY test surface for the VpnService permission/fd
+// handoff spike (Milestone B1), not wired to the embedded core yet.
+export async function startVpn() {
+  return invoke<number>('start_vpn')
+}
+
+export async function stopVpn() {
+  return invoke<void>('stop_vpn')
+}

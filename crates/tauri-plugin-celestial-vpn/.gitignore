@@ -13,3 +13,7 @@ permissions/schemas/
 golang/wrapper/*.so
 golang/wrapper/*.h
 golang/wrapper/*.a
+
+# The mihomo wrapper .so, cross-compiled by build.rs into the Gradle
+# module's jniLibs convention directory — regenerated on every build.
+android/src/main/jniLibs/

@@ -18,6 +18,8 @@ pub mod system;
 pub mod uwp;
 pub mod validate;
 pub mod verge;
+#[cfg(target_os = "android")]
+pub mod vpn;
 pub mod webdav;
 
 // Re-export all command functions for backwards compatibility
@@ -35,6 +37,8 @@ pub use system::*;
 pub use uwp::*;
 pub use validate::*;
 pub use verge::*;
+#[cfg(target_os = "android")]
+pub use vpn::*;
 pub use webdav::*;
 
 pub trait StringifyErr<T> {

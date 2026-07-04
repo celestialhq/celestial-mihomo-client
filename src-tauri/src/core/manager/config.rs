@@ -5,13 +5,10 @@ use crate::{
     core::{handle, validate::CoreConfigValidator},
     utils::{dirs, help},
 };
-use anyhow::Result;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-use anyhow::anyhow;
+use anyhow::{Result, anyhow};
 use clash_verge_logging::{Type, logging};
 use smartstring::alias::String;
 use std::{collections::HashSet, path::PathBuf, time::Instant};
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri_plugin_mihomo::Error as MihomoError;
 
 impl CoreManager {
@@ -83,20 +80,15 @@ impl CoreManager {
         }
     }
 
-    // There's no core process to push config to on mobile yet — the
-    // LocalSocket API transport and the sidecar-restart fallback both
-    // assume a running core, neither of which exists until the core runs
-    // in-process there (Phase 2). Treat "generated and saved to disk" as
-    // sufficient for now instead of cascading through two guaranteed
-    // failures down to a confusing OS error.
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    async fn apply_config(&self, _path: PathBuf) -> Result<()> {
-        logging!(info, Type::Core, "跳过应用配置到内核（移动端尚无内核）");
-        Config::runtime().await.apply();
-        Ok(())
-    }
-
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    // On desktop this reloads config into the spawned sidecar over its
+    // LocalSocket API, falling back to a full process restart if that fails
+    // (e.g. nothing spawned yet). On Android the embedded core (started via
+    // tauri_plugin_celestial_vpn's cgo FFI bridge, see
+    // core::manager::state::start_core_by_sidecar) exposes this exact same
+    // REST API on localhost (Protocol::Http, see lib.rs's mihomo_plugin()),
+    // so the identical reload-then-restart logic works unchanged — the
+    // first-ever enable naturally hits "nothing listening yet" and falls
+    // through to start_core_by_sidecar, which is what actually boots it.
     async fn apply_config(&self, path: PathBuf) -> Result<()> {
         let path = dirs::path_to_str(&path)?;
         match self.reload_config(path).await {
@@ -127,7 +119,6 @@ impl CoreManager {
         }
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     async fn reload_config(&self, path: &str) -> Result<(), MihomoError> {
         handle::Handle::mihomo().await.reload_config(true, path).await
     }

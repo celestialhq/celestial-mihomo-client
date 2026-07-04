@@ -3,6 +3,30 @@ use serde_yaml_ng::{Mapping, Value};
 #[cfg(target_os = "macos")]
 use crate::process::AsyncHandler;
 
+// The TUN file descriptor comes from Android's `VpnService.Builder.establish()`
+// (obtained via tauri-plugin-celestial-vpn, a Kotlin/JNI round trip) — there's
+// no config field for it up front the way there is for `enable`, so it's
+// threaded through as ambient runtime state, set once per VpnService session
+// and read back here when the config is (re)generated.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+static CURRENT_TUN_FD: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub fn set_tun_fd(fd: i32) {
+    CURRENT_TUN_FD.store(fd, std::sync::atomic::Ordering::Release);
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub fn clear_tun_fd() {
+    CURRENT_TUN_FD.store(-1, std::sync::atomic::Ordering::Release);
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn current_tun_fd() -> Option<i32> {
+    let fd = CURRENT_TUN_FD.load(std::sync::atomic::Ordering::Acquire);
+    (fd >= 0).then_some(fd)
+}
+
 macro_rules! revise {
     ($map: expr, $key: expr, $val: expr) => {
         let ret_key = Value::String($key.into());
@@ -78,6 +102,14 @@ pub fn use_tun(mut config: Mapping, enable: bool) -> Mapping {
 
     // 更新TUN配置
     revise!(tun_val, "enable", enable);
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    if enable {
+        if let Some(fd) = current_tun_fd() {
+            revise!(tun_val, "file-descriptor", fd);
+        }
+    }
+
     revise!(config, "tun", tun_val);
 
     config

@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { DialogRef, Switch, TooltipIcon } from '@/components/base'
 import ProxyControlSwitches from '@/components/shared/proxy-control-switches'
 import { useVerge } from '@/hooks/use-verge'
+import { startVpn, stopVpn } from '@/services/cmds'
+import { showNotice } from '@/services/notice-service'
 import getSystem from '@/utils/get-system'
 
 import { GuardState } from './mods/guard-state'
@@ -102,6 +104,33 @@ const SettingSystem = ({ onError }: Props) => {
               <Switch edge="end" />
             </GuardState>
           </SettingItem>
+        </>
+      )}
+
+      {IS_SINGLE_MODE_PLATFORM && (
+        <>
+          <SettingItem
+            label="[debug] Test VpnService permission + fd"
+            onClick={async () => {
+              try {
+                const fd = await startVpn()
+                showNotice.success(`VPN started, fd=${fd}`)
+              } catch (err) {
+                showNotice.error(String(err))
+              }
+            }}
+          />
+          <SettingItem
+            label="[debug] Stop VpnService"
+            onClick={async () => {
+              try {
+                await stopVpn()
+                showNotice.success('VPN stopped')
+              } catch (err) {
+                showNotice.error(String(err))
+              }
+            }}
+          />
         </>
       )}
     </SettingList>

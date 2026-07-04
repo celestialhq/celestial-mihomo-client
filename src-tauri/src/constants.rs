@@ -2,6 +2,13 @@ use std::time::Duration;
 
 pub mod network {
     pub const DEFAULT_EXTERNAL_CONTROLLER: &str = "127.0.0.1:9097";
+    /// `IClashTemp::new()` guarantees the generated config's `secret` field
+    /// is never empty, falling back to this literal placeholder — mihomo's
+    /// auth middleware applies to every transport (including the LocalSocket
+    /// desktop otherwise appears to get away without matching, apparently
+    /// for reasons specific to that transport), so any client using
+    /// `Protocol::Http` (Android's embedded core) must send this same value.
+    pub const DEFAULT_EXTERNAL_CONTROLLER_SECRET: &str = "set-your-secret";
 
     pub mod ports {
         #[cfg(not(target_os = "windows"))]

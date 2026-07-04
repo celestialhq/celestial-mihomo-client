@@ -8,9 +8,13 @@ use tauri::{
 pub use models::*;
 
 mod error;
+pub mod ffi;
 mod models;
 
 pub use error::{Error, Result};
+pub use ffi::FfiError;
+#[cfg(target_os = "android")]
+pub use ffi::{mihomo_version, start_core, stop_core};
 
 #[cfg(target_os = "android")]
 const PLUGIN_IDENTIFIER: &str = "app.tauri.celestialvpn";
