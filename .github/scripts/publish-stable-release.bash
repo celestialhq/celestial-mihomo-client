@@ -132,9 +132,12 @@ clean_release_assets "$PUBLIC_REPO" "$PUBLIC_RELEASE_TOKEN"
 upload_release_assets "$PRIVATE_REPO" "$GITHUB_TOKEN"
 upload_release_assets "$PUBLIC_REPO" "$PUBLIC_RELEASE_TOKEN"
 
+finalize_release "$PRIVATE_REPO" "$GITHUB_TOKEN"
+finalize_release "$PUBLIC_REPO" "$PUBLIC_RELEASE_TOKEN"
+
+# Must run after finalize_release: until the public release is un-drafted,
+# GitHub hasn't created the real "$TAG_NAME" git tag yet, so
+# `releases/tags/$TAG_NAME` 404s.
 if [[ "$IS_PRERELEASE" != "true" ]]; then
   publish_stable_updater
 fi
-
-finalize_release "$PRIVATE_REPO" "$GITHUB_TOKEN"
-finalize_release "$PUBLIC_REPO" "$PUBLIC_RELEASE_TOKEN"
