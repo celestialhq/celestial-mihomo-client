@@ -1,3 +1,14 @@
+## v2.1.0
+
+### New
+
+- Applied the new Celestial Design across the app: reworked layout, navigation, proxy/rule/connection lists, home cards, and settings, plus new Montserrat/JetBrains Mono fonts.
+- Added a bottom navigation bar (`bottom-nav.tsx`) for narrow windows.
+
+### Changed
+
+- Removed the standalone theme viewer settings page; theme controls now live inline in the redesigned settings.
+
 ## v2.0.0
 
 ### New
