@@ -25,6 +25,7 @@ env:
   RELEASE_SOURCE_BRANCH: main
   RUST_TOOLCHAIN: '1.95.0'
   NODE_VERSION: '24.15.0'
+  ANDROID_NDK_VERSION: '27.3.13750724'
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: short
   HUSKY: 0
@@ -347,16 +348,124 @@ jobs:
           compression-level: 0
           retention-days: 7
 
+  android:
+    name: Android universal
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag_name }}
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-android-universal
+          workspaces: . -> target
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install "ndk;${{ env.ANDROID_NDK_VERSION }}" "platforms;android-36" "build-tools;36.0.0"
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/${{ env.ANDROID_NDK_VERSION }}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/${{ env.ANDROID_NDK_VERSION }}" >> "$GITHUB_ENV"
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.2'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Initialize Android project
+        run: pnpm exec tauri android init
+
+      - name: Set up Android signing keystore
+        if: ${{ env.HAS_ANDROID_KEYSTORE == 'true' }}
+        shell: bash
+        env:
+          HAS_ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keystore_dir="src-tauri/gen/android/app"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore_dir/celestial-release.jks"
+          cat > "$keystore_dir/keystore.properties" <<PROPS
+          storeFile=celestial-release.jks
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          PROPS
+
+      - name: Build universal APK
+        run: pnpm exec tauri android build --apk
+
+      - name: Collect APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          cp src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk \
+            "release-assets/Celestial_${{ needs.prepare.outputs.version }}_universal.apk"
+
+      - name: Generate SHA-256 files
+        run: node .github/scripts/checksum-assets.mjs release-assets
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-android-universal
+          path: release-assets/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
   publish:
     name: Publish release
-    needs: [prepare, windows, macos, linux]
+    needs: [prepare, windows, macos, linux, android]
     if: >-
       always() &&
       needs.prepare.result == 'success' &&
       (
         needs.windows.result == 'success' ||
         needs.macos.result == 'success' ||
-        needs.linux.result == 'success'
+        needs.linux.result == 'success' ||
+        needs.android.result == 'success'
       )
     runs-on: ubuntu-latest
     outputs:
@@ -420,12 +529,12 @@ jobs:
           cat release.txt >> "$GITHUB_STEP_SUMMARY"
           {
             echo
-            echo "Build results: Windows=${{ needs.windows.result }}, macOS=${{ needs.macos.result }}, Linux=${{ needs.linux.result }}"
+            echo "Build results: Windows=${{ needs.windows.result }}, macOS=${{ needs.macos.result }}, Linux=${{ needs.linux.result }}, Android=${{ needs.android.result }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
   notify:
     name: Notify Telegram
-    needs: [prepare, windows, macos, linux, publish]
+    needs: [prepare, windows, macos, linux, android, publish]
     if: always() && needs.publish.result == 'success' && needs.prepare.outputs.is_rc != 'true'
     runs-on: ubuntu-latest
     env:
@@ -440,6 +549,7 @@ jobs:
           WINDOWS_RESULT: ${{ needs.windows.result }}
           MACOS_RESULT: ${{ needs.macos.result }}
           LINUX_RESULT: ${{ needs.linux.result }}
+          ANDROID_RESULT: ${{ needs.android.result }}
         shell: bash
         run: |
           format_status() {
@@ -451,12 +561,13 @@ jobs:
           }
 
           message="$(
-            printf 'Celestial %s is available\n%s\n\n%s\n%s\n%s' \
+            printf 'Celestial %s is available\n%s\n\n%s\n%s\n%s\n%s' \
               "$VERSION" \
               "$RELEASE_URL" \
               "$(format_status Windows "$WINDOWS_RESULT")" \
               "$(format_status macOS "$MACOS_RESULT")" \
-              "$(format_status Linux "$LINUX_RESULT")"
+              "$(format_status Linux "$LINUX_RESULT")" \
+              "$(format_status Android "$ANDROID_RESULT")"
           )"
           curl --fail --silent --show-error \
             --request POST \
