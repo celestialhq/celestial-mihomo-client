@@ -13,7 +13,6 @@ import {
   ListItem,
   ListItemText,
   Typography,
-  alpha,
   styled,
 } from '@mui/material'
 import { useLockFn } from 'ahooks'
@@ -27,16 +26,17 @@ import { showNotice } from '@/services/notice-service'
 import parseTraffic from '@/utils/parse-traffic'
 
 // 样式化组件 - 类型框
-const TypeBox = styled(Box)<{ component?: React.ElementType }>(({ theme }) => ({
+const TypeBox = styled(Box)<{ component?: React.ElementType }>(() => ({
   display: 'inline-block',
-  border: '1px solid #ccc',
-  borderColor: alpha(theme.palette.secondary.main, 0.5),
-  color: alpha(theme.palette.secondary.main, 0.8),
+  border: '1px solid var(--border)',
+  color: 'var(--text2)',
   borderRadius: 4,
-  fontSize: 10,
+  fontSize: 9,
+  fontFamily: "'JetBrains Mono', monospace",
+  fontWeight: 600,
   marginRight: '4px',
-  padding: '0 2px',
-  lineHeight: 1.25,
+  padding: '1px 4px',
+  lineHeight: 1.4,
 }))
 
 // 解析过期时间
@@ -203,29 +203,18 @@ export const ProviderButton = () => {
                 return (
                   <ListItem
                     key={key}
-                    sx={[
-                      {
-                        p: 0,
-                        mb: '8px',
-                        borderRadius: 2,
-                        overflow: 'hidden',
-                        transition: 'all 0.2s',
+                    sx={{
+                      p: 0,
+                      mb: '8px',
+                      borderRadius: '10px',
+                      overflow: 'hidden',
+                      border: '1px solid var(--border)',
+                      transition: 'background-color 0.15s ease',
+                      backgroundColor: 'var(--card)',
+                      '&:hover': {
+                        backgroundColor: 'var(--track)',
                       },
-                      ({ palette: { mode, primary } }) => {
-                        const bgcolor = mode === 'light' ? '#ffffff' : '#24252f'
-                        const hoverColor =
-                          mode === 'light'
-                            ? alpha(primary.main, 0.1)
-                            : alpha(primary.main, 0.2)
-
-                        return {
-                          backgroundColor: bgcolor,
-                          '&:hover': {
-                            backgroundColor: hoverColor,
-                          },
-                        }
-                      },
-                    ]}
+                    }}
                   >
                     <ListItemText
                       sx={{ px: 2, py: 1 }}

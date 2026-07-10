@@ -35,8 +35,10 @@ import { Outlet, useLocation, useNavigate } from 'react-router'
 
 import logoUrl from '@/assets/image/logo.svg'
 import { BaseErrorBoundary } from '@/components/base'
+import { BottomNav } from '@/components/layout/bottom-nav'
 import { LayoutItem } from '@/components/layout/layout-item'
 import { LayoutTraffic } from '@/components/layout/layout-traffic'
+import { CelestialMark } from '@/components/layout/nav-icons'
 import { NoticeManager } from '@/components/layout/notice-manager'
 import { UpdateButton } from '@/components/layout/update-button'
 import { WindowControls } from '@/components/layout/window-controller'
@@ -56,6 +58,8 @@ import LogsPage from './logs'
 
 import 'dayjs/locale/ru'
 import 'dayjs/locale/zh-cn'
+
+const MOBILE_BREAKPOINT = 760
 
 export const portableFlag = false
 
@@ -115,7 +119,7 @@ const Layout = () => {
   const { theme } = useCustomTheme()
   const { verge, mutateVerge, patchVerge } = useVerge()
   const { language } = verge ?? {}
-  const navCollapsed = verge?.collapse_navbar ?? false
+  const navCollapsed = verge?.collapse_navbar ?? true
   const sidebarCollapsed = navCollapsed
   const { switchLanguage } = useI18n()
   const navigate = useNavigate()
@@ -124,6 +128,23 @@ const Layout = () => {
   const logsPageMountedRef = useRef(false)
   if (isLogsPage) logsPageMountedRef.current = true
   const themeReady = useMemo(() => Boolean(theme), [theme])
+
+  const paperRef = useRef<HTMLDivElement>(null)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const el = paperRef.current
+    if (!el) return
+    const measure = () => {
+      // eslint-disable-next-line @eslint-react/set-state-in-effect
+      setIsMobile(el.getBoundingClientRect().width < MOBILE_BREAKPOINT)
+    }
+    measure()
+    if (!('ResizeObserver' in window)) return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const [menuUnlocked, setMenuUnlocked] = useState(false)
   const [menuContextPosition, setMenuContextPosition] =
@@ -248,7 +269,7 @@ const Layout = () => {
         style={{
           width: '100vw',
           height: '100vh',
-          background: '#070B12',
+          background: '#0D0D0F',
           transition: 'background 0.2s',
           display: 'flex',
           alignItems: 'center',
@@ -280,7 +301,8 @@ const Layout = () => {
       <Paper
         square
         elevation={0}
-        className={`${OS} layout${sidebarCollapsed ? ' layout--nav-collapsed' : ''}`}
+        ref={paperRef}
+        className={`${OS} layout${sidebarCollapsed ? ' layout--nav-collapsed' : ''}${isMobile ? ' layout--mobile' : ''}`}
         style={{
           borderTopLeftRadius: '0px',
           borderTopRightRadius: '0px',
@@ -311,149 +333,160 @@ const Layout = () => {
         {customTitlebar}
 
         <div className="layout-content">
-          <div className="layout-content__left">
-            <div className="the-logo" data-tauri-drag-region="false">
-              <div data-tauri-drag-region="true" className="the-brand">
-                <img className="the-brand__icon" src={logoUrl} alt="" />
-                <span className="the-brand__name">Celestial</span>
-              </div>
-              <UpdateButton className="the-newbtn" />
-              <Tooltip
-                title={
-                  navCollapsed
-                    ? t('layout.components.navigation.menu.expandNavBar')
-                    : t('layout.components.navigation.menu.collapseNavBar')
-                }
-                placement="right"
-                arrow
-              >
-                <IconButton
-                  className="the-nav-toggle"
-                  size="small"
-                  onClick={handleToggleNavCollapsed}
-                  aria-label={
+          {!isMobile && (
+            <div className="layout-content__left">
+              <div className="the-logo" data-tauri-drag-region="false">
+                <div data-tauri-drag-region="true" className="the-brand">
+                  <div className="the-brand__icon">
+                    <CelestialMark size={21} />
+                  </div>
+                  <span className="the-brand__name">Celestial</span>
+                </div>
+                <UpdateButton className="the-newbtn" />
+                <Tooltip
+                  title={
                     navCollapsed
                       ? t('layout.components.navigation.menu.expandNavBar')
                       : t('layout.components.navigation.menu.collapseNavBar')
                   }
+                  placement="right"
+                  arrow
                 >
-                  {navCollapsed ? (
-                    <KeyboardDoubleArrowRightRounded fontSize="small" />
-                  ) : (
-                    <KeyboardDoubleArrowLeftRounded fontSize="small" />
-                  )}
-                </IconButton>
-              </Tooltip>
-            </div>
-
-            {menuUnlocked && (
-              <Box
-                sx={(theme) => ({
-                  px: 1.5,
-                  py: 0.75,
-                  mx: 'auto',
-                  mb: 1,
-                  maxWidth: 250,
-                  borderRadius: 1.5,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  textAlign: 'center',
-                  color: theme.palette.warning.contrastText,
-                  bgcolor: theme.palette.warning.dark,
-                })}
-              >
-                {t('layout.components.navigation.menu.reorderMode')}
-              </Box>
-            )}
-
-            {menuUnlocked ? (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleMenuDragEnd}
-              >
-                <SortableContext items={menuOrder}>
-                  <List
-                    className="the-menu"
-                    onContextMenu={handleMenuContextMenu}
-                  >
-                    {menuOrder.map((path) => {
-                      const item = navItemMap.get(path)
-                      if (!item) {
-                        return null
-                      }
-                      return (
-                        <SortableNavMenuItem
-                          key={item.path}
-                          item={item}
-                          label={t(item.label)}
-                        />
-                      )
-                    })}
-                  </List>
-                </SortableContext>
-              </DndContext>
-            ) : (
-              <List className="the-menu" onContextMenu={handleMenuContextMenu}>
-                {menuOrder.map((path) => {
-                  const item = navItemMap.get(path)
-                  if (!item) {
-                    return null
-                  }
-                  return (
-                    <LayoutItem key={item.path} to={item.path} icon={item.icon}>
-                      {t(item.label)}
-                    </LayoutItem>
-                  )
-                })}
-              </List>
-            )}
-
-            <Menu
-              open={Boolean(menuContextPosition)}
-              onClose={handleMenuContextClose}
-              anchorReference="anchorPosition"
-              anchorPosition={
-                menuContextPosition
-                  ? {
-                      top: menuContextPosition.top,
-                      left: menuContextPosition.left,
+                  <IconButton
+                    className="the-nav-toggle"
+                    size="small"
+                    onClick={handleToggleNavCollapsed}
+                    aria-label={
+                      navCollapsed
+                        ? t('layout.components.navigation.menu.expandNavBar')
+                        : t('layout.components.navigation.menu.collapseNavBar')
                     }
-                  : undefined
-              }
-              transitionDuration={200}
-              slotProps={{
-                list: {
-                  sx: { py: 0.5 },
-                },
-              }}
-            >
-              <MenuItem onClick={handleToggleNavCollapsed} dense>
-                {navCollapsed
-                  ? t('layout.components.navigation.menu.expandNavBar')
-                  : t('layout.components.navigation.menu.collapseNavBar')}
-              </MenuItem>
-              <MenuItem
-                onClick={menuUnlocked ? handleLockMenu : handleUnlockMenu}
-                dense
-              >
-                {menuUnlocked
-                  ? t('layout.components.navigation.menu.lock')
-                  : t('layout.components.navigation.menu.unlock')}
-              </MenuItem>
-              <MenuItem
-                onClick={handleResetMenuOrder}
-                dense
-                disabled={isDefaultOrder}
-              >
-                {t('layout.components.navigation.menu.restoreDefaultOrder')}
-              </MenuItem>
-            </Menu>
+                  >
+                    {navCollapsed ? (
+                      <KeyboardDoubleArrowRightRounded fontSize="small" />
+                    ) : (
+                      <KeyboardDoubleArrowLeftRounded fontSize="small" />
+                    )}
+                  </IconButton>
+                </Tooltip>
+              </div>
 
-            <div className="the-traffic">
-              <LayoutTraffic />
+              {menuUnlocked && (
+                <Box
+                  sx={(theme) => ({
+                    px: 1.5,
+                    py: 0.75,
+                    mx: 'auto',
+                    mb: 1,
+                    maxWidth: 250,
+                    borderRadius: 1.5,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    textAlign: 'center',
+                    color: theme.palette.warning.contrastText,
+                    bgcolor: theme.palette.warning.dark,
+                  })}
+                >
+                  {t('layout.components.navigation.menu.reorderMode')}
+                </Box>
+              )}
+
+              {menuUnlocked ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleMenuDragEnd}
+                >
+                  <SortableContext items={menuOrder}>
+                    <List
+                      className="the-menu"
+                      onContextMenu={handleMenuContextMenu}
+                    >
+                      {menuOrder.map((path) => {
+                        const item = navItemMap.get(path)
+                        if (!item) {
+                          return null
+                        }
+                        return (
+                          <SortableNavMenuItem
+                            key={item.path}
+                            item={item}
+                            label={t(item.label)}
+                          />
+                        )
+                      })}
+                    </List>
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                <List
+                  className="the-menu"
+                  onContextMenu={handleMenuContextMenu}
+                >
+                  {menuOrder.map((path) => {
+                    const item = navItemMap.get(path)
+                    if (!item) {
+                      return null
+                    }
+                    return (
+                      <LayoutItem
+                        key={item.path}
+                        to={item.path}
+                        icon={item.icon}
+                      >
+                        {t(item.label)}
+                      </LayoutItem>
+                    )
+                  })}
+                </List>
+              )}
+
+              <Menu
+                open={Boolean(menuContextPosition)}
+                onClose={handleMenuContextClose}
+                anchorReference="anchorPosition"
+                anchorPosition={
+                  menuContextPosition
+                    ? {
+                        top: menuContextPosition.top,
+                        left: menuContextPosition.left,
+                      }
+                    : undefined
+                }
+                transitionDuration={200}
+                slotProps={{
+                  list: {
+                    sx: { py: 0.5 },
+                  },
+                }}
+              >
+                <MenuItem onClick={handleToggleNavCollapsed} dense>
+                  {navCollapsed
+                    ? t('layout.components.navigation.menu.expandNavBar')
+                    : t('layout.components.navigation.menu.collapseNavBar')}
+                </MenuItem>
+                <MenuItem
+                  onClick={menuUnlocked ? handleLockMenu : handleUnlockMenu}
+                  dense
+                >
+                  {menuUnlocked
+                    ? t('layout.components.navigation.menu.lock')
+                    : t('layout.components.navigation.menu.unlock')}
+                </MenuItem>
+                <MenuItem
+                  onClick={handleResetMenuOrder}
+                  dense
+                  disabled={isDefaultOrder}
+                >
+                  {t('layout.components.navigation.menu.restoreDefaultOrder')}
+                </MenuItem>
+              </Menu>
+
+              <div className="the-traffic">
+                <LayoutTraffic compact={navCollapsed} />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="layout-content__right">
             <div className="the-bar"></div>
@@ -478,6 +511,14 @@ const Layout = () => {
             </div>
           </div>
         </div>
+
+        {isMobile && (
+          <BottomNav
+            items={navItems}
+            labels={(item) => t(item.label)}
+            moreLabel={t('shared.actions.more')}
+          />
+        )}
       </Paper>
     </ThemeProvider>
   )

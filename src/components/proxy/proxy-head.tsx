@@ -35,6 +35,12 @@ interface Props {
 
 const defaultSx: SxProps = {}
 
+const iconBtnSx: SxProps = {
+  borderRadius: '8px',
+  color: 'var(--text2)',
+  '&:hover': { backgroundColor: 'var(--track)', color: 'var(--accent)' },
+}
+
 export const ProxyHead = ({
   sx = defaultSx,
   url,
@@ -78,6 +84,7 @@ export const ProxyHead = ({
       <IconButton
         size="small"
         color="inherit"
+        sx={iconBtnSx}
         title={t('proxies.page.tooltips.locate')}
         onClick={onLocation}
       >
@@ -87,6 +94,7 @@ export const ProxyHead = ({
       <IconButton
         size="small"
         color="inherit"
+        sx={iconBtnSx}
         title={t('proxies.page.tooltips.delayCheck')}
         onClick={() => {
           debugLog(`[ProxyHead] 点击延迟测试按钮，组: ${groupName}`)
@@ -104,6 +112,7 @@ export const ProxyHead = ({
       <IconButton
         size="small"
         color="inherit"
+        sx={iconBtnSx}
         title={
           [
             t('proxies.page.tooltips.sortDefault'),
@@ -123,6 +132,7 @@ export const ProxyHead = ({
       <IconButton
         size="small"
         color="inherit"
+        sx={iconBtnSx}
         title={t('proxies.page.tooltips.delayCheckUrl')}
         onClick={() =>
           onHeadState({ textState: textState === 'url' ? null : 'url' })
@@ -138,6 +148,7 @@ export const ProxyHead = ({
       <IconButton
         size="small"
         color="inherit"
+        sx={iconBtnSx}
         title={
           showType
             ? t('proxies.page.tooltips.showBasic')
@@ -151,6 +162,7 @@ export const ProxyHead = ({
       <IconButton
         size="small"
         color="inherit"
+        sx={iconBtnSx}
         title={t('proxies.page.tooltips.filter')}
         onClick={() =>
           onHeadState({ textState: textState === 'filter' ? null : 'filter' })

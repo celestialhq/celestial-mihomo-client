@@ -1,6 +1,10 @@
-import { Typography } from '@mui/material'
+import { Box, IconButton, Typography } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import React, { ReactNode } from 'react'
+
+import { MoonIcon, SunIcon } from '@/components/layout/nav-icons'
+import { useVerge } from '@/hooks/use-verge'
+import { useThemeMode } from '@/services/states'
 
 import { BaseErrorBoundary } from './base-error-boundary'
 
@@ -10,6 +14,31 @@ interface Props {
   contentStyle?: React.CSSProperties
   children?: ReactNode
   full?: boolean
+}
+
+const ThemeToggleButton = () => {
+  const mode = useThemeMode()
+  const { patchVerge } = useVerge()
+
+  return (
+    <IconButton
+      size="small"
+      onClick={() =>
+        void patchVerge({ theme_mode: mode === 'dark' ? 'light' : 'dark' })
+      }
+      sx={{
+        width: 36,
+        height: 36,
+        borderRadius: '10px',
+        border: '1px solid var(--border)',
+        background: 'var(--card)',
+        color: 'var(--text2)',
+        '&:hover': { color: 'var(--text)', background: 'var(--track)' },
+      }}
+    >
+      {mode === 'dark' ? <SunIcon size={17} /> : <MoonIcon size={17} />}
+    </IconButton>
+  )
 }
 
 export const BasePage: React.FC<Props> = (props) => {
@@ -27,7 +56,10 @@ export const BasePage: React.FC<Props> = (props) => {
             {title}
           </Typography>
 
-          {header}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+            {header}
+            <ThemeToggleButton />
+          </Box>
         </header>
 
         <div

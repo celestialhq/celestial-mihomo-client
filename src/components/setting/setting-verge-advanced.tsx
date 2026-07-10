@@ -24,7 +24,6 @@ import { LayoutViewer } from './mods/layout-viewer'
 import { LiteModeViewer } from './mods/lite-mode-viewer'
 import { MiscViewer } from './mods/misc-viewer'
 import { SettingItem, SettingList } from './mods/setting-comp'
-import { ThemeViewer } from './mods/theme-viewer'
 import { UpdateViewer } from './mods/update-viewer'
 
 interface Props {
@@ -37,7 +36,6 @@ const SettingVergeAdvanced = ({ onError: _ }: Props) => {
   const configRef = useRef<DialogRef>(null)
   const hotkeyRef = useRef<DialogRef>(null)
   const miscRef = useRef<DialogRef>(null)
-  const themeRef = useRef<DialogRef>(null)
   const layoutRef = useRef<DialogRef>(null)
   const updateRef = useRef<DialogRef>(null)
   const backupRef = useRef<DialogRef>(null)
@@ -75,7 +73,6 @@ const SettingVergeAdvanced = ({ onError: _ }: Props) => {
 
   return (
     <SettingList title={t('settings.components.verge.advanced.title')}>
-      <ThemeViewer ref={themeRef} />
       <ConfigViewer ref={configRef} />
       <HotkeyViewer ref={hotkeyRef} />
       <MiscViewer ref={miscRef} />

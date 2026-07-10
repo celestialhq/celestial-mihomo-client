@@ -4,16 +4,7 @@ import {
   HelpOutlineRounded,
   SvgIconComponent,
 } from '@mui/icons-material'
-import {
-  Box,
-  Typography,
-  Stack,
-  Paper,
-  Tooltip,
-  alpha,
-  useTheme,
-  Fade,
-} from '@mui/material'
+import { Box, Typography, Stack, Paper, Tooltip, Fade } from '@mui/material'
 import { useState, useMemo, memo, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -37,7 +28,7 @@ interface TabButtonProps {
 const TabButton: FC<TabButtonProps> = memo(
   ({ isActive, onClick, icon: Icon, label, hasIndicator = false }) => (
     <Paper
-      elevation={isActive ? 2 : 0}
+      elevation={0}
       onClick={onClick}
       sx={{
         cursor: 'pointer',
@@ -47,42 +38,34 @@ const TabButton: FC<TabButtonProps> = memo(
         alignItems: 'center',
         justifyContent: 'center',
         gap: 1,
-        bgcolor: isActive ? 'primary.main' : 'background.paper',
-        color: isActive ? 'primary.contrastText' : 'text.primary',
-        borderRadius: 1.5,
+        bgcolor: isActive ? 'var(--accent)' : 'transparent',
+        color: isActive ? '#fff' : 'var(--text2)',
+        border: '1px solid var(--border)',
+        borderRadius: '9px',
         flex: 1,
         maxWidth: 160,
-        transition: 'all 0.2s ease-in-out',
+        transition: 'background-color 0.15s ease, color 0.15s ease',
         position: 'relative',
-        '&:hover': {
-          transform: 'translateY(-1px)',
-          boxShadow: 1,
-        },
-        '&:after': isActive
-          ? {
-              content: '""',
-              position: 'absolute',
-              bottom: -9,
-              left: '50%',
-              width: 2,
-              height: 9,
-              bgcolor: 'primary.main',
-              transform: 'translateX(-50%)',
-            }
-          : {},
+        boxShadow: 'none',
       }}
     >
       <Icon fontSize="small" />
-      <Typography variant="body2" sx={{ fontWeight: isActive ? 600 : 400 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          fontWeight: 600,
+          fontFamily: "'Montserrat', sans-serif",
+        }}
+      >
         {label}
       </Typography>
       {hasIndicator && (
         <Box
           sx={{
-            width: 8,
-            height: 8,
+            width: 6,
+            height: 6,
             borderRadius: '50%',
-            bgcolor: isActive ? '#fff' : 'success.main',
+            bgcolor: isActive ? '#fff' : 'var(--good)',
             position: 'absolute',
             top: 8,
             right: 8,
@@ -108,13 +91,13 @@ const TabDescription: FC<TabDescriptionProps> = memo(
         sx={{
           width: '95%',
           textAlign: 'center',
-          color: 'text.secondary',
+          color: 'var(--text2)',
           p: 0.8,
-          borderRadius: 1,
-          borderColor: 'primary.main',
+          borderRadius: '8px',
+          borderColor: 'var(--border)',
           borderWidth: 1,
           borderStyle: 'solid',
-          backgroundColor: 'background.paper',
+          backgroundColor: 'var(--card2)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -136,7 +119,6 @@ const TabDescription: FC<TabDescriptionProps> = memo(
 
 export const ProxyTunCard: FC = () => {
   const { t } = useTranslation()
-  const theme = useTheme()
   const [activeTab, setActiveTab] = useState<string>(
     () => localStorage.getItem(LOCAL_STORAGE_TAB_KEY) || 'system',
   )
@@ -224,8 +206,8 @@ export const ProxyTunCard: FC = () => {
         sx={{
           mt: 0,
           p: 1,
-          bgcolor: alpha(theme.palette.primary.main, 0.04),
-          borderRadius: 2,
+          bgcolor: 'var(--track)',
+          borderRadius: '9px',
         }}
       >
         <ProxyControlSwitches

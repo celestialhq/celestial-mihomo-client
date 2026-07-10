@@ -35,11 +35,10 @@ const AdvancedSettingPage = () => {
   })
 
   const panelSx = {
-    borderRadius: 2,
-    border: '1px solid rgba(185, 167, 255, 0.16)',
-    background:
-      'linear-gradient(180deg, rgba(185, 167, 255, 0.075), rgba(255, 255, 255, 0.015)), #101318',
-    boxShadow: '0 18px 42px rgba(0, 0, 0, 0.24)',
+    borderRadius: '12px',
+    border: '1px solid var(--border)',
+    background: 'var(--card)',
+    boxShadow: 'none',
     overflow: 'hidden',
   }
 

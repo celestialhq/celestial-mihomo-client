@@ -16,8 +16,14 @@ import parseTraffic from '@/utils/parse-traffic'
 
 import { TrafficGraph, type TrafficRef } from './traffic-graph'
 
+interface Props {
+  // compact: icon-only rail variant — tiny sparkline + two mono figures,
+  // matching the Celestial design's collapsed-rail traffic widget
+  compact?: boolean
+}
+
 // setup the traffic
-export const LayoutTraffic = () => {
+export const LayoutTraffic = ({ compact = false }: Props) => {
   const { t } = useTranslation()
   const { verge } = useVerge()
 
@@ -45,12 +51,57 @@ export const LayoutTraffic = () => {
   }, [traffic])
 
   // 显示内存使用情况的设置
-  const displayMemory = verge?.enable_memory_usage ?? true
+  const displayMemory = (verge?.enable_memory_usage ?? true) && !compact
 
   // 使用parseTraffic统一处理转换，保持与首页一致的显示格式
   const [up, upUnit] = parseTraffic(traffic?.up || 0)
   const [down, downUnit] = parseTraffic(traffic?.down || 0)
   const [inuse, inuseUnit] = parseTraffic(memory?.inuse || 0)
+
+  if (compact) {
+    return (
+      <LightweightTrafficErrorBoundary>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '2px',
+          }}
+        >
+          {trafficGraph && pageVisible && (
+            <div style={{ width: '100%', height: 20 }}>
+              <TrafficGraph ref={trafficRef} />
+            </div>
+          )}
+          <Box
+            title={`${t('home.components.traffic.metrics.uploadSpeed')}: ${up}${upUnit}/s`}
+            sx={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '9px',
+              fontWeight: 600,
+              color: 'var(--text2)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            ↑{up}
+          </Box>
+          <Box
+            title={`${t('home.components.traffic.metrics.downloadSpeed')}: ${down}${downUnit}/s`}
+            sx={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '9px',
+              fontWeight: 600,
+              color: 'var(--accent)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            ↓{down}
+          </Box>
+        </Box>
+      </LightweightTrafficErrorBoundary>
+    )
+  }
 
   const boxStyle: any = {
     sx: {

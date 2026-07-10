@@ -1,70 +1,84 @@
 import { styled, Box, Typography } from '@mui/material'
 import { Rule } from 'tauri-plugin-mihomo-api'
 
-const Item = styled(Box)(({ theme }) => ({
+const Item = styled(Box)(() => ({
   display: 'flex',
-  padding: '4px 16px',
-  color: theme.palette.text.primary,
+  alignItems: 'center',
+  gap: '14px',
+  padding: '12px 16px',
+  color: 'var(--text)',
 }))
-
-const COLOR = [
-  'primary',
-  'secondary',
-  'info.main',
-  'warning.main',
-  'success.main',
-]
 
 interface Props {
   value: Rule & { lineNo: number }
 }
 
-const parseColor = (text: string) => {
-  if (text === 'REJECT' || text === 'REJECT-DROP') return 'error.main'
-  if (text === 'DIRECT') return 'text.primary'
-
-  let sum = 0
-  for (let i = 0; i < text.length; i++) {
-    sum += text.charCodeAt(i)
-  }
-  return COLOR[sum % COLOR.length]
+const targetColor = (text: string) => {
+  if (text === 'REJECT' || text === 'REJECT-DROP') return 'var(--bad)'
+  if (text === 'DIRECT') return 'var(--text2)'
+  return 'var(--accent)'
 }
 
 const RuleItem = (props: Props) => {
   const { value } = props
 
   return (
-    <Item sx={{ borderBottom: '1px solid var(--divider-color)' }}>
+    <Item sx={{ borderTop: '1px solid var(--border)' }}>
       <Typography
-        color="text.secondary"
-        variant="body2"
-        sx={{ lineHeight: 2, minWidth: 30, mr: 2.25, textAlign: 'center' }}
+        sx={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'var(--text3)',
+          width: 22,
+          flex: 'none',
+          textAlign: 'right',
+        }}
       >
         {value.lineNo}
       </Typography>
 
-      <Box sx={{ userSelect: 'text' }}>
-        <Typography component="h6" variant="subtitle1" color="text.primary">
+      <Box sx={{ userSelect: 'text', minWidth: 0, flex: 1 }}>
+        <Typography
+          component="div"
+          noWrap
+          sx={{
+            fontFamily: "'Montserrat', sans-serif",
+            fontSize: 13,
+            fontWeight: 500,
+            color: 'var(--text)',
+          }}
+        >
           {value.payload || '-'}
         </Typography>
 
         <Typography
-          component="span"
-          variant="body2"
-          color="text.secondary"
-          sx={{ mr: 3, minWidth: 120, display: 'inline-block' }}
+          component="div"
+          sx={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: '0.04em',
+            color: 'var(--text3)',
+            mt: '2px',
+          }}
         >
           {value.type}
         </Typography>
-
-        <Typography
-          component="span"
-          variant="body2"
-          color={parseColor(value.proxy)}
-        >
-          {value.proxy}
-        </Typography>
       </Box>
+
+      <Typography
+        component="span"
+        sx={{
+          fontFamily: "'Montserrat', sans-serif",
+          fontSize: 11.5,
+          fontWeight: 600,
+          color: targetColor(value.proxy),
+          flex: 'none',
+        }}
+      >
+        {value.proxy}
+      </Typography>
     </Item>
   )
 }

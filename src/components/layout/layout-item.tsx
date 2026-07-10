@@ -3,7 +3,6 @@ import type {
   DraggableSyntheticListeners,
 } from '@dnd-kit/core'
 import {
-  alpha,
   ListItem,
   ListItemButton,
   ListItemIcon,
@@ -70,39 +69,29 @@ export const LayoutItem = (props: Props) => {
         {...(dragHandleProps ?? {})}
         sx={[
           {
-            borderRadius: 2,
+            borderRadius: '11px',
             marginLeft: 1.25,
             paddingLeft: 1.5,
             paddingRight: 1.25,
             marginRight: 1.25,
             maxWidth: 'calc(100% - 20px)',
             minWidth: 0,
-            minHeight: 48,
+            minHeight: 44,
             gap: 1.5,
             justifyContent: 'flex-start',
             cursor: draggable ? 'grab' : 'pointer',
-            transition:
-              'background 0.2s ease, color 0.2s ease, transform 0.2s ease',
+            transition: 'background 0.15s ease, color 0.15s ease',
             '&:active': draggable ? { cursor: 'grabbing' } : {},
-            '&:hover': {
-              transform: 'translateX(2px)',
-            },
             '& .MuiListItemText-primary': {
               color: 'text.primary',
               fontWeight: '700',
               textAlign: 'left',
             },
           },
-          ({ palette: { mode, primary, text } }) => {
-            const background =
-              mode === 'light'
-                ? alpha(primary.main, 0.14)
-                : 'linear-gradient(135deg, #E9E2FF 0%, #B9A7FF 100%)'
-            const hoverBackground =
-              mode === 'light'
-                ? alpha(primary.main, 0.08)
-                : alpha('#B9A7FF', 0.1)
-            const color = mode === 'light' ? '#111111' : '#071018'
+          () => {
+            const background = 'var(--accent-bg)'
+            const hoverBackground = 'var(--track)'
+            const color = 'var(--accent)'
             return {
               '&:hover': { background: hoverBackground },
               '&.Mui-selected': { background },
@@ -110,7 +99,7 @@ export const LayoutItem = (props: Props) => {
               '&.Mui-selected .MuiListItemText-primary': { color },
               '&.Mui-selected .MuiListItemIcon-root': { color },
               '&:not(.Mui-selected) .MuiListItemIcon-root': {
-                color: alpha(text.primary, mode === 'light' ? 0.72 : 0.82),
+                color: 'var(--text2)',
               },
             }
           },

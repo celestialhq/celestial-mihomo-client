@@ -30,7 +30,15 @@ export const SettingItem: React.FC<ItemProps> = ({
   const clickable = !!onClick
 
   const primary = (
-    <Box sx={{ display: 'flex', alignItems: 'center', fontSize: '14px' }}>
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        fontSize: '13.5px',
+        fontWeight: 600,
+        fontFamily: "'Montserrat', sans-serif",
+      }}
+    >
       <span>{label}</span>
       {extra ? extra : null}
     </Box>
@@ -49,18 +57,24 @@ export const SettingItem: React.FC<ItemProps> = ({
   }
 
   return clickable ? (
-    <ListItem disablePadding>
-      <ListItemButton onClick={handleClick} disabled={isLoading}>
+    <ListItem disablePadding sx={{ borderTop: '1px solid var(--border)' }}>
+      <ListItemButton
+        onClick={handleClick}
+        disabled={isLoading}
+        sx={{ py: '12px' }}
+      >
         <ListItemText primary={primary} secondary={secondary} />
         {isLoading ? (
           <CircularProgress color="inherit" size={20} />
         ) : (
-          <ChevronRightRounded />
+          <ChevronRightRounded sx={{ color: 'var(--text3)' }} />
         )}
       </ListItemButton>
     </ListItem>
   ) : (
-    <ListItem sx={{ pt: '5px', pb: '5px' }}>
+    <ListItem
+      sx={{ pt: '12px', pb: '12px', borderTop: '1px solid var(--border)' }}
+    >
       <ListItemText primary={primary} secondary={secondary} />
       {children}
     </ListItem>
@@ -71,16 +85,18 @@ export const SettingList: React.FC<{
   title: string
   children: ReactNode
 }> = ({ title, children }) => (
-  <List>
+  <List sx={{ py: 0 }}>
     <ListSubheader
-      sx={[
-        { background: 'transparent', fontSize: '16px', fontWeight: '700' },
-        ({ palette }) => {
-          return {
-            color: palette.text.primary,
-          }
-        },
-      ]}
+      sx={{
+        background: 'transparent',
+        fontSize: '12px',
+        fontWeight: 700,
+        fontFamily: "'JetBrains Mono', monospace",
+        letterSpacing: '0.05em',
+        textTransform: 'uppercase',
+        color: 'var(--text2)',
+        lineHeight: '32px',
+      }}
       disableSticky
     >
       {title}

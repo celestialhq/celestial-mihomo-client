@@ -11,8 +11,8 @@
     <title>Celestial</title>
     <style>
       :root {
-        --bg-color: #070b12;
-        --text-color: #eef7ff;
+        --bg-color: #0d0d0f;
+        --text-color: #f3f3f5;
         color-scheme: dark;
       }
 
@@ -32,12 +32,7 @@
       #initial-loading-overlay {
         position: fixed;
         inset: 0;
-        background:
-          radial-gradient(circle at 72% 12%, rgba(185, 167, 255, 0.18), transparent 28%),
-          linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
-          var(--bg-color);
-        background-size: auto, 34px 34px, 34px 34px, auto;
+        background: var(--bg-color);
         z-index: 9999;
         transition: opacity 0.2s ease-out;
       }

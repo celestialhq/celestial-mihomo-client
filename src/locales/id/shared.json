@@ -23,7 +23,8 @@
     "closeAll": "Tutup Semua",
     "clear": "Bersihkan",
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "more": "More"
   },
   "labels": {
     "updateAt": "Diperbarui Pada",

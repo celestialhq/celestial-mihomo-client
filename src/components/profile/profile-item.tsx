@@ -825,15 +825,17 @@ export const ProfileItem = (props: Props) => {
                         : `${t('shared.labels.updateTime')}: ${parseExpire(updated)}\n${t('profiles.components.profileItem.tooltips.showNext')}`
                     }
                     sx={{
-                      fontSize: 14,
+                      fontSize: 11,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      color: 'var(--text2)',
                       textAlign: 'right',
                       cursor: 'pointer',
                       display: 'inline-block',
                       borderBottom: '1px dashed transparent',
                       transition: 'all 0.2s',
                       '&:hover': {
-                        borderBottomColor: 'primary.main',
-                        color: 'primary.main',
+                        borderBottomColor: 'var(--accent)',
+                        color: 'var(--accent)',
                       },
                     }}
                     onClick={toggleUpdateTimeDisplay}
@@ -851,14 +853,34 @@ export const ProfileItem = (props: Props) => {
         </Box>
         {/* the third line show extra info or last updated time */}
         {hasExtra ? (
-          <Box sx={{ ...boxStyle, fontSize: 14 }}>
+          <Box
+            sx={{
+              ...boxStyle,
+              fontSize: 11,
+              fontFamily: "'JetBrains Mono', monospace",
+              color: 'var(--text)',
+            }}
+          >
             <span title={t('shared.labels.usedTotal')}>
               {parseTraffic(upload + download)} / {parseTraffic(total)}
             </span>
-            <span title={t('shared.labels.expireTime')}>{expire}</span>
+            <span
+              title={t('shared.labels.expireTime')}
+              style={{ color: 'var(--text3)' }}
+            >
+              {expire}
+            </span>
           </Box>
         ) : (
-          <Box sx={{ ...boxStyle, fontSize: 12, justifyContent: 'flex-end' }}>
+          <Box
+            sx={{
+              ...boxStyle,
+              fontSize: 11,
+              fontFamily: "'JetBrains Mono', monospace",
+              color: 'var(--text3)',
+              justifyContent: 'flex-end',
+            }}
+          >
             <span title={t('shared.labels.updateTime')}>
               {parseExpire(updated)}
             </span>

@@ -20,7 +20,6 @@ import { LayoutViewer } from './mods/layout-viewer'
 import { MiscViewer } from './mods/misc-viewer'
 import { SettingItem, SettingList } from './mods/setting-comp'
 import { ThemeModeSwitch } from './mods/theme-mode-switch'
-import { ThemeViewer } from './mods/theme-viewer'
 import { UpdateViewer } from './mods/update-viewer'
 
 interface Props {
@@ -64,7 +63,6 @@ const SettingVergeBasic = ({ onError }: Props) => {
   const configRef = useRef<DialogRef>(null)
   const hotkeyRef = useRef<DialogRef>(null)
   const miscRef = useRef<DialogRef>(null)
-  const themeRef = useRef<DialogRef>(null)
   const layoutRef = useRef<DialogRef>(null)
   const updateRef = useRef<DialogRef>(null)
   const backupRef = useRef<DialogRef>(null)
@@ -80,7 +78,6 @@ const SettingVergeBasic = ({ onError }: Props) => {
 
   return (
     <SettingList title={t('settings.components.verge.basic.title')}>
-      <ThemeViewer ref={themeRef} />
       <ConfigViewer ref={configRef} />
       <HotkeyViewer ref={hotkeyRef} />
       <MiscViewer ref={miscRef} />
@@ -250,11 +247,6 @@ const SettingVergeBasic = ({ onError }: Props) => {
           ></Input>
         </GuardState>
       </SettingItem>
-
-      <SettingItem
-        onClick={() => themeRef.current?.open()}
-        label={t('settings.components.verge.basic.fields.themeSetting')}
-      />
 
       <SettingItem
         onClick={() => layoutRef.current?.open()}

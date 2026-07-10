@@ -85,6 +85,8 @@ const SwitchRow = ({
       sx={{
         display: 'flex',
         alignItems: 'center',
+        flexWrap: 'wrap',
+        rowGap: 0.5,
         justifyContent: 'space-between',
         p: 1,
         pr: 2,
@@ -96,15 +98,28 @@ const SwitchRow = ({
         transition: 'background-color 0.3s',
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          minWidth: 0,
+          flex: '1 1 auto',
+        }}
+      >
         {active ? (
-          <PlayCircleOutlineRounded sx={{ color: 'success.main', mr: 1 }} />
+          <PlayCircleOutlineRounded
+            sx={{ color: 'success.main', mr: 1, flex: 'none' }}
+          />
         ) : (
-          <PauseCircleOutlineRounded sx={{ color: 'text.disabled', mr: 1 }} />
+          <PauseCircleOutlineRounded
+            sx={{ color: 'text.disabled', mr: 1, flex: 'none' }}
+          />
         )}
         <Typography
           variant="subtitle1"
-          sx={{ fontWeight: 500, fontSize: '15px' }}
+          sx={{ fontWeight: 500, fontSize: '15px', minWidth: 0 }}
+          noWrap
         >
           {label}
         </Typography>
@@ -112,7 +127,7 @@ const SwitchRow = ({
           title={infoTitle}
           icon={SettingsRounded}
           onClick={onInfoClick}
-          sx={{ ml: 1 }}
+          sx={{ ml: 1, flex: 'none' }}
         />
         {extraIcons}
       </Box>
@@ -122,6 +137,7 @@ const SwitchRow = ({
         disabled={disabled}
         checked={checked}
         onChange={handleChange}
+        sx={{ flex: 'none' }}
       />
     </Box>
   )
