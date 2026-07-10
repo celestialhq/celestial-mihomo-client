@@ -13,6 +13,18 @@ set -euo pipefail
 ASSETS_DIR="${ASSETS_DIR:-release-assets}"
 RELEASE_BODY_PATH="${RELEASE_BODY_PATH:-release.txt}"
 
+# GitHub's "get a release by tag name" REST endpoint only returns published
+# releases — it 404s for drafts, because a draft's tag isn't a real git ref
+# yet. `gh api repos/.../releases/tags/$TAG_NAME` hits that endpoint
+# directly, so any script code needing a draft's release id must list
+# releases and filter by tag_name instead, which works for drafts too.
+release_id_for_tag() {
+  local repo="$1"
+  local token="$2"
+  GH_TOKEN="$token" gh api "repos/$repo/releases" --paginate \
+    --jq "[.[] | select(.tag_name == \"$TAG_NAME\")][0].id"
+}
+
 ensure_draft_release() {
   local repo="$1"
   local token="$2"
@@ -76,8 +88,7 @@ finalize_release() {
     --notes-file "$RELEASE_BODY_PATH"
 
   local release_id
-  release_id="$(GH_TOKEN="$token" gh api \
-    "repos/$repo/releases/tags/$TAG_NAME" --jq '.id')"
+  release_id="$(release_id_for_tag "$repo" "$token")"
 
   if [[ "$IS_PRERELEASE" == "true" ]]; then
     GH_TOKEN="$token" gh api \
@@ -97,9 +108,11 @@ finalize_release() {
 }
 
 publish_stable_updater() {
+  local release_id
+  release_id="$(release_id_for_tag "$PUBLIC_REPO" "$PUBLIC_RELEASE_TOKEN")"
   GH_TOKEN="$PUBLIC_RELEASE_TOKEN" gh api \
     -H "Accept: application/vnd.github+json" \
-    "repos/$PUBLIC_REPO/releases/tags/$TAG_NAME" > release-assets.json
+    "repos/$PUBLIC_REPO/releases/$release_id" > release-assets.json
 
   VERSION="$VERSION" UPDATE_VERSION="$TAG_NAME" \
     NOTES_FILE="$RELEASE_BODY_PATH" \
