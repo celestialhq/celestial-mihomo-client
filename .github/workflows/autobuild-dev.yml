@@ -222,7 +222,7 @@ jobs:
         run: node .github/scripts/checksum-assets.mjs release-assets
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: release-windows-${{ matrix.arch }}
           path: release-assets/*
@@ -314,7 +314,7 @@ jobs:
         run: node .github/scripts/checksum-assets.mjs release-assets
 
       - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: release-macos-${{ matrix.target }}
           path: release-assets/*
@@ -394,7 +394,7 @@ jobs:
         run: node .github/scripts/checksum-assets.mjs release-assets
 
       - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: release-linux-x64
           path: release-assets/*
@@ -430,7 +430,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Download successful build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: release-*
           path: release-assets
