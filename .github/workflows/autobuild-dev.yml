@@ -430,7 +430,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Download successful build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: release-assets
