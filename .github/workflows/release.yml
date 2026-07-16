@@ -26,6 +26,7 @@ env:
   RUST_TOOLCHAIN: '1.95.0'
   NODE_VERSION: '24.15.0'
   ANDROID_NDK_VERSION: '27.3.13750724'
+  ANDROID_BUILD_TOOLS_VERSION: '36.0.0'
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: short
   HUSKY: 0
@@ -386,7 +387,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sdkmanager --install "ndk;${{ env.ANDROID_NDK_VERSION }}" "platforms;android-36" "build-tools;36.0.0"
+          sdkmanager --install "ndk;${{ env.ANDROID_NDK_VERSION }}" "platforms;android-36" "build-tools;${{ env.ANDROID_BUILD_TOOLS_VERSION }}"
           echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/${{ env.ANDROID_NDK_VERSION }}" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/${{ env.ANDROID_NDK_VERSION }}" >> "$GITHUB_ENV"
 
@@ -412,35 +413,55 @@ jobs:
       - name: Initialize Android project
         run: pnpm exec tauri android init
 
-      - name: Set up Android signing keystore
-        if: ${{ env.HAS_ANDROID_KEYSTORE == 'true' }}
+      - name: Build universal APK
+        run: pnpm exec tauri android build --apk
+
+      # `tauri android init` regenerates gen/android from Tauri's stock template
+      # on every run (the dir is gitignored), so the local `signingConfigs`
+      # customization never reaches CI and Gradle emits an *unsigned* APK. Sign
+      # it here with apksigner rather than patching the generated Gradle files.
+      - name: Sign universal APK
         shell: bash
         env:
-          HAS_ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          keystore_dir="src-tauri/gen/android/app"
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore_dir/celestial-release.jks"
-          cat > "$keystore_dir/keystore.properties" <<PROPS
-          storeFile=celestial-release.jks
-          storePassword=$ANDROID_KEYSTORE_PASSWORD
-          keyAlias=$ANDROID_KEY_ALIAS
-          keyPassword=$ANDROID_KEY_PASSWORD
-          PROPS
-
-      - name: Build universal APK
-        run: pnpm exec tauri android build --apk
+          out_dir="src-tauri/gen/android/app/build/outputs/apk/universal/release"
+          apk=$(find "$out_dir" -maxdepth 1 -name '*.apk' -print -quit 2>/dev/null || true)
+          if [[ -z "$apk" ]]; then
+            echo "::error::Gradle produced no APK in $out_dir"
+            ls -R "$out_dir" 2>/dev/null || echo "(output dir missing)"
+            exit 1
+          fi
+          echo "Built APK: $apk"
+          if [[ -z "${ANDROID_KEYSTORE_BASE64:-}" ]]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 is unset — refusing to publish an unsigned APK"
+            exit 1
+          fi
+          build_tools="$ANDROID_SDK_ROOT/build-tools/${{ env.ANDROID_BUILD_TOOLS_VERSION }}"
+          keystore="$RUNNER_TEMP/celestial-release.jks"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore"
+          "$build_tools/zipalign" -p -f 4 "$apk" "$RUNNER_TEMP/aligned.apk"
+          "$build_tools/apksigner" sign \
+            --ks "$keystore" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --key-pass env:ANDROID_KEY_PASSWORD \
+            --out "$RUNNER_TEMP/celestial-universal-signed.apk" \
+            "$RUNNER_TEMP/aligned.apk"
+          "$build_tools/apksigner" verify --print-certs "$RUNNER_TEMP/celestial-universal-signed.apk"
+          rm -f "$keystore"
+          echo "SIGNED_APK=$RUNNER_TEMP/celestial-universal-signed.apk" >> "$GITHUB_ENV"
 
       - name: Collect APK
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          cp src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk \
+          cp "$SIGNED_APK" \
             "release-assets/Celestial_${{ needs.prepare.outputs.version }}_universal.apk"
 
       - name: Generate SHA-256 files
