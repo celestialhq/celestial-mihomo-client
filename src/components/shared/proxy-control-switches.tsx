@@ -131,12 +131,14 @@ const SwitchRow = ({
         >
           {label}
         </Typography>
-        <TooltipIcon
-          title={infoTitle}
-          icon={SettingsRounded}
-          onClick={onInfoClick}
-          sx={{ ml: 1, flex: 'none' }}
-        />
+        {onInfoClick && (
+          <TooltipIcon
+            title={infoTitle}
+            icon={SettingsRounded}
+            onClick={onInfoClick}
+            sx={{ ml: 1, flex: 'none' }}
+          />
+        )}
         {extraIcons}
       </Box>
 
@@ -244,7 +246,9 @@ const ProxyControlSwitches = ({
           label={t('settings.sections.proxyControl.fields.tunMode')}
           active={enable_tun_mode || false}
           infoTitle={t('settings.sections.proxyControl.tooltips.tunMode')}
-          onInfoClick={() => tunRef.current?.open()}
+          onInfoClick={
+            IS_SINGLE_MODE_PLATFORM ? undefined : () => tunRef.current?.open()
+          }
           onToggle={handleTunToggle}
           onError={onError}
           disabled={!isTunModeAvailable}
@@ -292,7 +296,7 @@ const ProxyControlSwitches = ({
       )}
 
       <SysproxyViewer ref={sysproxyRef} />
-      <TunViewer ref={tunRef} />
+      {!IS_SINGLE_MODE_PLATFORM && <TunViewer ref={tunRef} />}
     </Box>
   )
 }

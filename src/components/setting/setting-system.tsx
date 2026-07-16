@@ -40,7 +40,7 @@ const SettingSystem = ({ onError }: Props) => {
   return (
     <SettingList title={t('settings.sections.system.title')}>
       {!IS_SINGLE_MODE_PLATFORM && <SysproxyViewer ref={sysproxyRef} />}
-      <TunViewer ref={tunRef} />
+      {!IS_SINGLE_MODE_PLATFORM && <TunViewer ref={tunRef} />}
 
       <ProxyControlSwitches
         label={t('settings.sections.system.toggles.tunMode')}

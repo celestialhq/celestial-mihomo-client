@@ -133,7 +133,10 @@ export const SimpleProxySelector = () => {
     [groupName, groups],
   )
 
-  const showGroupSelect = !isGlobalMode && !isDirectMode && groups.length > 1
+  // Always show the group selector in rule mode (even with a single group)
+  // so it's clear which group's nodes are being picked from — matching the
+  // desktop Home page, which always shows "Группа" + "Прокси" side by side.
+  const showGroupSelect = !isGlobalMode && !isDirectMode && groups.length > 0
 
   const handleGroupChange = useCallback(
     (event: SelectChangeEvent<string>) => {

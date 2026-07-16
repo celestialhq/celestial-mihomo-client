@@ -82,7 +82,7 @@ const SettingVergeBasic = ({ onError }: Props) => {
       <ConfigViewer ref={configRef} />
       {!IS_MOBILE_PLATFORM && <HotkeyViewer ref={hotkeyRef} />}
       <MiscViewer ref={miscRef} />
-      <LayoutViewer ref={layoutRef} />
+      {!IS_MOBILE_PLATFORM && <LayoutViewer ref={layoutRef} />}
       <UpdateViewer ref={updateRef} />
       <BackupViewer ref={backupRef} />
 
@@ -253,10 +253,12 @@ const SettingVergeBasic = ({ onError }: Props) => {
         </SettingItem>
       )}
 
-      <SettingItem
-        onClick={() => layoutRef.current?.open()}
-        label={t('settings.components.verge.basic.fields.layoutSetting')}
-      />
+      {!IS_MOBILE_PLATFORM && (
+        <SettingItem
+          onClick={() => layoutRef.current?.open()}
+          label={t('settings.components.verge.basic.fields.layoutSetting')}
+        />
+      )}
 
       <SettingItem
         onClick={() => miscRef.current?.open()}

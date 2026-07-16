@@ -34,6 +34,7 @@ import { HomeProfileCard } from '@/components/home/home-profile-card'
 import { ProxyTunCard } from '@/components/home/proxy-tun-card'
 import { useProfiles } from '@/hooks/use-profiles'
 import { useVerge } from '@/hooks/use-verge'
+import SimpleHomePage from '@/pages/simple-home'
 import { entry_lightweight_mode, openWebUrl } from '@/services/cmds'
 import getSystem from '@/utils/get-system'
 
@@ -427,6 +428,9 @@ const ClashModeEnhancedCard = () => {
 }
 
 const HomePage = () => {
+  if (IS_MOBILE_PLATFORM) {
+    return <SimpleHomePage />
+  }
   return <AdvancedHomePage />
 }
 

@@ -269,18 +269,22 @@ export const EditorViewer = ({
           >
             <FormatPaintRounded fontSize="inherit" />
           </IconButton>
-          <IconButton
-            size="medium"
-            color="inherit"
-            title={t(
-              isMaximized ? 'shared.window.minimize' : 'shared.window.maximize',
-            )}
-            onClick={() => {
-              void handleToggleMaximize()
-            }}
-          >
-            {isMaximized ? <CloseFullscreenRounded /> : <OpenInFullRounded />}
-          </IconButton>
+          {getSystem() !== 'android' && (
+            <IconButton
+              size="medium"
+              color="inherit"
+              title={t(
+                isMaximized
+                  ? 'shared.window.minimize'
+                  : 'shared.window.maximize',
+              )}
+              onClick={() => {
+                void handleToggleMaximize()
+              }}
+            >
+              {isMaximized ? <CloseFullscreenRounded /> : <OpenInFullRounded />}
+            </IconButton>
+          )}
         </ButtonGroup>
       </DialogContent>
 

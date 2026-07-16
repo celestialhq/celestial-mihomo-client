@@ -38,7 +38,14 @@ import { showNotice } from '@/services/notice-service'
 import { useLoadingCache, useSetLoadingCache } from '@/services/states'
 import type { TranslationKey } from '@/types/generated/i18n-keys'
 import { debugLog } from '@/utils/debug'
+import getSystem from '@/utils/get-system'
 import parseTraffic from '@/utils/parse-traffic'
+
+// Opening a profile's home URL, its raw file in an external viewer, and
+// editing merge/script overrides are desktop power-user affordances with
+// little value (and, for the file-open path, no working equivalent) in
+// Android's sandboxed filesystem — hide them there.
+const IS_MOBILE_PLATFORM = getSystem() === 'android'
 
 import { ProfileBox } from './profile-box'
 import { ProxiesEditorViewer } from './proxies-editor-viewer'
@@ -431,7 +438,7 @@ export const ProfileItem = (props: Props) => {
   } as const
 
   const urlModeMenu: ContextMenuItem[] = [
-    ...(hasHome
+    ...(hasHome && !IS_MOBILE_PLATFORM
       ? [
           {
             label: menuLabels.home,
@@ -475,21 +482,25 @@ export const ProfileItem = (props: Props) => {
       handler: onEditGroups,
       disabled: !option?.groups,
     },
-    {
-      label: menuLabels.extendConfig,
-      handler: onEditMerge,
-      disabled: !option?.merge,
-    },
-    {
-      label: menuLabels.extendScript,
-      handler: onEditScript,
-      disabled: !option?.script,
-    },
-    {
-      label: menuLabels.openFile,
-      handler: onOpenFile,
-      disabled: false,
-    },
+    ...(IS_MOBILE_PLATFORM
+      ? []
+      : [
+          {
+            label: menuLabels.extendConfig,
+            handler: onEditMerge,
+            disabled: !option?.merge,
+          } satisfies ContextMenuItem,
+          {
+            label: menuLabels.extendScript,
+            handler: onEditScript,
+            disabled: !option?.script,
+          } satisfies ContextMenuItem,
+          {
+            label: menuLabels.openFile,
+            handler: onOpenFile,
+            disabled: false,
+          } satisfies ContextMenuItem,
+        ]),
     {
       label: menuLabels.update,
       handler: () => onUpdate(0),
@@ -547,21 +558,25 @@ export const ProfileItem = (props: Props) => {
       handler: onEditGroups,
       disabled: !option?.groups,
     },
-    {
-      label: menuLabels.extendConfig,
-      handler: onEditMerge,
-      disabled: !option?.merge,
-    },
-    {
-      label: menuLabels.extendScript,
-      handler: onEditScript,
-      disabled: !option?.script,
-    },
-    {
-      label: menuLabels.openFile,
-      handler: onOpenFile,
-      disabled: false,
-    },
+    ...(IS_MOBILE_PLATFORM
+      ? []
+      : [
+          {
+            label: menuLabels.extendConfig,
+            handler: onEditMerge,
+            disabled: !option?.merge,
+          } satisfies ContextMenuItem,
+          {
+            label: menuLabels.extendScript,
+            handler: onEditScript,
+            disabled: !option?.script,
+          } satisfies ContextMenuItem,
+          {
+            label: menuLabels.openFile,
+            handler: onOpenFile,
+            disabled: false,
+          } satisfies ContextMenuItem,
+        ]),
     {
       label: menuLabels.delete,
       handler: () => {

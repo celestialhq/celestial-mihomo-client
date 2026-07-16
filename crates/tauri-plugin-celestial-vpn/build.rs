@@ -75,7 +75,15 @@ fn build_mihomo_wrapper() {
         // `with_gvisor` enables the userspace netstack TUN needs on Android
         // (no raw kernel TUN driver access without gVisor) — same tags
         // ClashMetaForAndroid's own Gradle build uses.
-        .args(["build", "-tags", "cmfa,with_gvisor", "-buildmode=c-shared", "-ldflags", &ldflags, "-o"])
+        .args([
+            "build",
+            "-tags",
+            "cmfa,with_gvisor",
+            "-buildmode=c-shared",
+            "-ldflags",
+            &ldflags,
+            "-o",
+        ])
         .arg(&so_path)
         .arg(".")
         .status()

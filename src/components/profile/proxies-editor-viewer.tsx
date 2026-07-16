@@ -45,6 +45,11 @@ import type { MonacoEditorInstance } from '@/types/monaco'
 import getSystem from '@/utils/get-system'
 import parseUri from '@/utils/uri-parser'
 
+// See groups-editor-viewer.tsx for why: the two-column "visualization" form
+// view doesn't reflow on narrow Android screens, so Android defaults to and
+// is locked onto the raw YAML editor instead.
+const IS_MOBILE_PLATFORM = getSystem() === 'android'
+
 interface Props {
   profileUid: string
   property: string
@@ -60,7 +65,7 @@ export const ProxiesEditorViewer = (props: Props) => {
   const editorRef = useRef<MonacoEditorInstance | null>(null)
   const [prevData, setPrevData] = useState('')
   const [currData, setCurrData] = useState('')
-  const [visualization, setVisualization] = useState(true)
+  const [visualization, setVisualization] = useState(!IS_MOBILE_PLATFORM)
   const [match, setMatch] = useState(() => (_: string) => true)
   const [proxyUri, setProxyUri] = useState<string>('')
 
@@ -375,19 +380,21 @@ export const ProxiesEditorViewer = (props: Props) => {
         {
           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
             {t('profiles.modals.proxiesEditor.title')}
-            <Box>
-              <Button
-                variant="contained"
-                size="small"
-                onClick={() => {
-                  setVisualization((prev) => !prev)
-                }}
-              >
-                {visualization
-                  ? t('shared.editorModes.advanced')
-                  : t('shared.editorModes.visualization')}
-              </Button>
-            </Box>
+            {!IS_MOBILE_PLATFORM && (
+              <Box>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => {
+                    setVisualization((prev) => !prev)
+                  }}
+                >
+                  {visualization
+                    ? t('shared.editorModes.advanced')
+                    : t('shared.editorModes.visualization')}
+                </Button>
+              </Box>
+            )}
           </Box>
         }
       </DialogTitle>
