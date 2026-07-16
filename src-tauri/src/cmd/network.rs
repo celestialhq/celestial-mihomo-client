@@ -10,6 +10,9 @@ use std::net::TcpListener;
 use tauri_plugin_clash_verge_sysinfo;
 
 /// get the system proxy — not a concept on mobile, only VPN/TUN mode exists there.
+// `return` is needed to split the desktop path from the cfg'd-out mobile block;
+// clippy only sees the desktop compile where it looks redundant.
+#[allow(clippy::needless_return)]
 #[tauri::command]
 pub async fn get_sys_proxy() -> CmdResult<Mapping> {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -52,6 +55,8 @@ pub async fn get_sys_proxy() -> CmdResult<Mapping> {
 }
 
 /// 获取自动代理配置 — not a concept on mobile.
+// See `get_sys_proxy`: the `return` splits desktop from the cfg'd-out mobile path.
+#[allow(clippy::needless_return)]
 #[tauri::command]
 pub async fn get_auto_proxy() -> CmdResult<Mapping> {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]

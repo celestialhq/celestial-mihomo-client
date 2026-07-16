@@ -89,6 +89,14 @@ deelevate = "0.2.0"
 [patch."https://github.com/pius-pp/tauri-plugin-mihomo"]
 tauri-plugin-mihomo = { path = "vendor/tauri-plugin-mihomo" }
 
+[workspace.lints.rust]
+# Declare Tauri's build-script cfgs so clippy (which skips tauri_build) doesn't
+# flag `#[cfg(mobile)]` / `#[cfg(desktop)]` as unexpected under `-D warnings`.
+unexpected_cfgs = { level = "warn", check-cfg = [
+  'cfg(mobile)',
+  'cfg(desktop)',
+] }
+
 [workspace.lints.clippy]
 correctness = { level = "deny", priority = -1 }
 suspicious = { level = "deny", priority = -1 }
