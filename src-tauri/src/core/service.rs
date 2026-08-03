@@ -110,6 +110,21 @@ fn install_service() -> Result<()> {
     Ok(())
 }
 
+/// Escapes a string for embedding in an AppleScript double-quoted literal.
+/// Without this a path containing `"` or `\` terminates the literal early and
+/// the rest is parsed as AppleScript.
+#[cfg(target_os = "macos")]
+fn escape_osascript_double_quoted_string(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Wraps a string in POSIX single quotes so `do shell script` treats it as one
+/// literal argument regardless of spaces or shell metacharacters.
+#[cfg(target_os = "macos")]
+fn shell_single_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', r"'\''"))
+}
+
 #[cfg(target_os = "linux")]
 fn uninstall_service() -> Result<()> {
     logging!(info, Type::Service, "uninstall service");
@@ -120,17 +135,11 @@ fn uninstall_service() -> Result<()> {
         bail!(format!("uninstaller not found: {uninstall_path:?}"));
     }
 
-    let uninstall_shell: String = uninstall_path.to_string_lossy().replace(" ", "\\ ");
-
     let elevator = crate::utils::help::linux_elevator();
     let status = if linux_running_as_root() {
         StdCommand::new(&uninstall_path).status()?
     } else {
-        let result = StdCommand::new(&elevator)
-            .arg("sh")
-            .arg("-c")
-            .arg(&uninstall_shell)
-            .status()?;
+        let result = StdCommand::new(&elevator).arg(&uninstall_path).status()?;
 
         // 如果 pkexec 执行失败，回退到 sudo
         if !result.success() && elevator.contains("pkexec") {
@@ -140,11 +149,7 @@ fn uninstall_service() -> Result<()> {
                 "pkexec failed with code {}, falling back to sudo",
                 result.code().unwrap_or(-1)
             );
-            StdCommand::new("sudo")
-                .arg("sh")
-                .arg("-c")
-                .arg(&uninstall_shell)
-                .status()?
+            StdCommand::new("sudo").arg(&uninstall_path).status()?
         } else {
             result
         }
@@ -176,17 +181,11 @@ fn install_service() -> Result<()> {
         bail!(format!("installer not found: {install_path:?}"));
     }
 
-    let install_shell: String = install_path.to_string_lossy().replace(" ", "\\ ");
-
     let elevator = crate::utils::help::linux_elevator();
     let output = if linux_running_as_root() {
         StdCommand::new(&install_path).output()?
     } else {
-        let result = StdCommand::new(&elevator)
-            .arg("sh")
-            .arg("-c")
-            .arg(&install_shell)
-            .output()?;
+        let result = StdCommand::new(&elevator).arg(&install_path).output()?;
 
         // 如果 pkexec 执行失败，回退到 sudo
         if !result.status.success() && elevator.contains("pkexec") {
@@ -196,11 +195,7 @@ fn install_service() -> Result<()> {
                 "pkexec failed with code {}, falling back to sudo",
                 result.status.code().unwrap_or(-1)
             );
-            StdCommand::new("sudo")
-                .arg("sh")
-                .arg("-c")
-                .arg(&install_shell)
-                .output()?
+            StdCommand::new("sudo").arg(&install_path).output()?
         } else {
             result
         }
@@ -244,8 +239,9 @@ fn uninstall_service() -> Result<()> {
     // clash_verge_i18n::sync_locale(Config::verge().await.latest_arc().language.as_deref());
 
     let prompt = clash_verge_i18n::t!("service.adminUninstallPrompt");
-    let command =
-        format!(r#"do shell script "sudo '{uninstall_shell}'" with administrator privileges with prompt "{prompt}""#);
+    let shell = format!("sudo {}", shell_single_quote(&uninstall_shell));
+    let shell = escape_osascript_double_quoted_string(&shell);
+    let command = format!(r#"do shell script "{shell}" with administrator privileges with prompt "{prompt}""#);
 
     // logging!(debug, Type::Service, "uninstall command: {}", command);
 
@@ -278,9 +274,12 @@ fn install_service() -> Result<()> {
 
     let gid = tauri_plugin_clash_verge_sysinfo::current_gid();
     let prompt = clash_verge_i18n::t!("service.adminInstallPrompt");
-    let command = format!(
-        r#"do shell script "sudo CLASH_VERGE_SERVICE_GID={gid} '{install_shell}'" with administrator privileges with prompt "{prompt}""#
+    let shell = format!(
+        "sudo CLASH_VERGE_SERVICE_GID={gid} {}",
+        shell_single_quote(&install_shell)
     );
+    let shell = escape_osascript_double_quoted_string(&shell);
+    let command = format!(r#"do shell script "{shell}" with administrator privileges with prompt "{prompt}""#);
 
     let output = StdCommand::new("osascript").args(vec!["-e", &command]).output()?;
     if let Some((code, err)) = check_output_error(&output) {
