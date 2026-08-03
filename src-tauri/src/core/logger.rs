@@ -101,10 +101,16 @@ impl Logger {
         *self.sidecar_file_writer.write() = Some(sidecar_file_writer);
 
         std::panic::set_hook(Box::new(move |info| {
+            // Capture both common panic payload types — `panic!("{}", x)` produces a
+            // String payload, which the &str-only downcast logged as "unknown".
+            // This global hook only covers panics after logger init; earlier setup
+            // panics are caught in lib.rs.
             let payload = info
                 .payload()
                 .downcast_ref::<&str>()
-                .unwrap_or(&"Unknown panic payload");
+                .map(|s| (*s).to_string())
+                .or_else(|| info.payload().downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "Unknown panic payload".to_string());
             let location = info
                 .location()
                 .map(|loc| format!("{}:{}", loc.file(), loc.line()))
