@@ -10,6 +10,13 @@ import SettingVergeAdvanced from '@/components/setting/setting-verge-advanced'
 import SettingVergeBasic from '@/components/setting/setting-verge-basic'
 import { openWebUrl } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
+import getSystem from '@/utils/get-system'
+
+// Clash core config (ports, DNS, log level, core version switching) and
+// Verge's power-user tooling (config/log dirs, dev tools, diagnostics
+// export) are desktop power-user surfaces with little value on a mobile
+// VPN client — hide both entirely on Android to keep Settings focused.
+const IS_MOBILE_PLATFORM = getSystem() === 'android'
 
 const AdvancedSettingPage = () => {
   const { t } = useTranslation()
@@ -78,29 +85,32 @@ const AdvancedSettingPage = () => {
       <Grid container spacing={1.5} columns={{ xs: 6, sm: 6, md: 12 }}>
         <Grid size={6}>
           <Box
-            sx={{
-              ...panelSx,
-              marginBottom: 1.5,
-            }}
+            sx={
+              IS_MOBILE_PLATFORM
+                ? panelSx
+                : {
+                    ...panelSx,
+                    marginBottom: 1.5,
+                  }
+            }
           >
             <SettingSystem onError={onError} />
           </Box>
-          <Box sx={panelSx}>
-            <SettingClash onError={onError} />
-          </Box>
+          {!IS_MOBILE_PLATFORM && (
+            <Box sx={panelSx}>
+              <SettingClash onError={onError} />
+            </Box>
+          )}
         </Grid>
         <Grid size={6}>
-          <Box
-            sx={{
-              ...panelSx,
-              marginBottom: 1.5,
-            }}
-          >
+          <Box sx={panelSx}>
             <SettingVergeBasic onError={onError} />
           </Box>
-          <Box sx={panelSx}>
-            <SettingVergeAdvanced onError={onError} />
-          </Box>
+          {!IS_MOBILE_PLATFORM && (
+            <Box sx={{ ...panelSx, marginTop: 1.5 }}>
+              <SettingVergeAdvanced onError={onError} />
+            </Box>
+          )}
         </Grid>
       </Grid>
     </BasePage>

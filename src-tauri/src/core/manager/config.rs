@@ -80,6 +80,15 @@ impl CoreManager {
         }
     }
 
+    // On desktop this reloads config into the spawned sidecar over its
+    // LocalSocket API, falling back to a full process restart if that fails
+    // (e.g. nothing spawned yet). On Android the embedded core (started via
+    // tauri_plugin_celestial_vpn's cgo FFI bridge, see
+    // core::manager::state::start_core_by_sidecar) exposes this exact same
+    // REST API on localhost (Protocol::Http, see lib.rs's mihomo_plugin()),
+    // so the identical reload-then-restart logic works unchanged — the
+    // first-ever enable naturally hits "nothing listening yet" and falls
+    // through to start_core_by_sidecar, which is what actually boots it.
     async fn apply_config(&self, path: PathBuf) -> Result<()> {
         let path = dirs::path_to_str(&path)?;
         match self.reload_config(path).await {

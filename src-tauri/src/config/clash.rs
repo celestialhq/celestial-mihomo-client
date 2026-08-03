@@ -37,7 +37,7 @@ impl IClashTemp {
                     && let Value::String(s) = val
                     && s.is_empty()
                 {
-                    *s = "set-your-secret".into();
+                    *s = network::DEFAULT_EXTERNAL_CONTROLLER_SECRET.into();
                 }
 
                 Self(Self::guard(map))
@@ -103,7 +103,7 @@ impl IClashTemp {
             ]
             .into(),
         );
-        map.insert("secret".into(), "set-your-secret".into());
+        map.insert("secret".into(), network::DEFAULT_EXTERNAL_CONTROLLER_SECRET.into());
         map.insert("external-controller-cors".into(), cors_map.into());
         map.insert("unified-delay".into(), true.into());
         Self(map)

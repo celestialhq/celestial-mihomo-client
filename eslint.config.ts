@@ -12,7 +12,7 @@ import tseslint from 'typescript-eslint'
 
 export default defineConfig([
   {
-    ignores: ['newdesign2/**'],
+    ignores: ['newdesign2/**', 'vendor/**'],
   },
   {
     files: ['**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],

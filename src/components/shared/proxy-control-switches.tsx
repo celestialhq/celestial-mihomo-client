@@ -19,7 +19,15 @@ import { useServiceUninstaller } from '@/hooks/use-service-uninstaller'
 import { useSystemProxyState } from '@/hooks/use-system-proxy-state'
 import { useSystemState } from '@/hooks/use-system-state'
 import { useVerge } from '@/hooks/use-verge'
+import { startVpn, stopVpn } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
+import getSystem from '@/utils/get-system'
+
+// The privileged-helper "service" install flow is a desktop-only concept
+// (elevated TUN permissions via runas/pkexec/osascript) — Android grants
+// VPN access via a one-time permission dialog instead, so there's nothing
+// to install here.
+const IS_SINGLE_MODE_PLATFORM = getSystem() === 'android'
 
 interface ProxySwitchProps {
   label?: string
@@ -123,12 +131,14 @@ const SwitchRow = ({
         >
           {label}
         </Typography>
-        <TooltipIcon
-          title={infoTitle}
-          icon={SettingsRounded}
-          onClick={onInfoClick}
-          sx={{ ml: 1, flex: 'none' }}
-        />
+        {onInfoClick && (
+          <TooltipIcon
+            title={infoTitle}
+            icon={SettingsRounded}
+            onClick={onInfoClick}
+            sx={{ ml: 1, flex: 'none' }}
+          />
+        )}
         {extraIcons}
       </Box>
 
@@ -177,7 +187,18 @@ const ProxyControlSwitches = ({
       throw new Error(t(msgKey))
     }
     mutateVerge({ ...verge, enable_tun_mode: value }, false)
-    await patchVerge({ enable_tun_mode: value })
+    if (IS_SINGLE_MODE_PLATFORM) {
+      // Android: TUN mode *is* VpnService — request the permission (if not
+      // already granted) and establish the interface before the core can
+      // use it, rather than just flipping the config flag on its own.
+      if (value) {
+        await startVpn()
+      } else {
+        await stopVpn()
+      }
+    } else {
+      await patchVerge({ enable_tun_mode: value })
+    }
   }
 
   const onInstallService = useLockFn(async () => {
@@ -225,7 +246,9 @@ const ProxyControlSwitches = ({
           label={t('settings.sections.proxyControl.fields.tunMode')}
           active={enable_tun_mode || false}
           infoTitle={t('settings.sections.proxyControl.tooltips.tunMode')}
-          onInfoClick={() => tunRef.current?.open()}
+          onInfoClick={
+            IS_SINGLE_MODE_PLATFORM ? undefined : () => tunRef.current?.open()
+          }
           onToggle={handleTunToggle}
           onError={onError}
           disabled={!isTunModeAvailable}
@@ -236,23 +259,27 @@ const ProxyControlSwitches = ({
                 <>
                   <TooltipIcon
                     title={t(
-                      'settings.sections.proxyControl.tooltips.tunUnavailable',
+                      IS_SINGLE_MODE_PLATFORM
+                        ? 'settings.sections.proxyControl.tooltips.tunUnavailableMobile'
+                        : 'settings.sections.proxyControl.tooltips.tunUnavailable',
                     )}
                     icon={WarningRounded}
                     sx={{ color: 'warning.main', ml: 1 }}
                   />
-                  <TooltipIcon
-                    title={t(
-                      'settings.sections.proxyControl.actions.installService',
-                    )}
-                    icon={BuildRounded}
-                    color="primary"
-                    onClick={onInstallService}
-                    sx={{ ml: 1 }}
-                  />
+                  {!IS_SINGLE_MODE_PLATFORM && (
+                    <TooltipIcon
+                      title={t(
+                        'settings.sections.proxyControl.actions.installService',
+                      )}
+                      icon={BuildRounded}
+                      color="primary"
+                      onClick={onInstallService}
+                      sx={{ ml: 1 }}
+                    />
+                  )}
                 </>
               )}
-              {isServiceOk && (
+              {isServiceOk && !IS_SINGLE_MODE_PLATFORM && (
                 <TooltipIcon
                   title={t(
                     'settings.sections.proxyControl.actions.uninstallService',
@@ -269,7 +296,7 @@ const ProxyControlSwitches = ({
       )}
 
       <SysproxyViewer ref={sysproxyRef} />
-      <TunViewer ref={tunRef} />
+      {!IS_SINGLE_MODE_PLATFORM && <TunViewer ref={tunRef} />}
     </Box>
   )
 }

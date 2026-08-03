@@ -45,30 +45,29 @@ mod app_init {
         #[allow(unused_mut)]
         let mut builder = builder
             .plugin(tauri_plugin_clash_verge_sysinfo::init())
-            .plugin(tauri_plugin_updater::Builder::new().build())
             .plugin(tauri_plugin_clipboard_manager::init())
             .plugin(tauri_plugin_process::init())
-            .plugin(tauri_plugin_global_shortcut::Builder::new().build())
             .plugin(tauri_plugin_fs::init())
             .plugin(tauri_plugin_dialog::init())
             .plugin(tauri_plugin_shell::init())
             .plugin(tauri_plugin_deep_link::init())
             .plugin(tauri_plugin_http::init())
-            .plugin(
-                tauri_plugin_mihomo::Builder::new()
-                    .protocol(tauri_plugin_mihomo::models::Protocol::LocalSocket)
-                    .socket_path(crate::config::IClashTemp::guard_external_controller_ipc())
-                    .pool_config(
-                        tauri_plugin_mihomo::IpcPoolConfigBuilder::new()
-                            .min_connections(3)
-                            .max_connections(32)
-                            .idle_timeout(std::time::Duration::from_secs(60))
-                            .health_check_interval(std::time::Duration::from_secs(60))
-                            .reject_policy(RejectPolicy::Wait)
-                            .build(),
-                    )
-                    .build(),
-            );
+            .plugin(mihomo_plugin());
+
+        // Updater and global-shortcut have no mobile equivalent in the Tauri
+        // plugin ecosystem — desktop only.
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        {
+            builder = builder
+                .plugin(tauri_plugin_updater::Builder::new().build())
+                .plugin(tauri_plugin_global_shortcut::Builder::new().build());
+        }
+
+        // VpnService access — Android only, no equivalent (or need) on desktop.
+        #[cfg(target_os = "android")]
+        {
+            builder = builder.plugin(tauri_plugin_celestial_vpn::init());
+        }
 
         // Devtools plugin only in debug mode with feature tauri-dev
         // to avoid duplicated registering of logger since the devtools plugin also registers a logger
@@ -77,6 +76,56 @@ mod app_init {
             builder = builder.plugin(tauri_plugin_devtools::init());
         }
         builder
+    }
+
+    /// Builds the mihomo control-plane client. On desktop this talks to the
+    /// spawned sidecar process over a local Unix socket / named pipe. On
+    /// Android there's no subprocess — the core runs in-process (see
+    /// `core::manager::state::start_core_by_sidecar`'s Android branch) and
+    /// exposes its REST API on localhost instead, so the client is
+    /// configured with `Protocol::Http` pointed at that same address
+    /// (`constants::network::DEFAULT_EXTERNAL_CONTROLLER`) rather than a
+    /// socket path.
+    ///
+    /// Note the socket path is computed as part of building the plugin list,
+    /// which runs before `.setup()` (and thus before `APP_HANDLE` is set) —
+    /// `IClashTemp::guard_external_controller_ipc()` resolves the app data
+    /// dir via `Handle::app_handle()`, which panics this early. On desktop
+    /// this happens to only matter in non-portable installs.
+    fn mihomo_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+        let pool_config = tauri_plugin_mihomo::IpcPoolConfigBuilder::new()
+            .min_connections(3)
+            .max_connections(32)
+            .idle_timeout(std::time::Duration::from_secs(60))
+            .health_check_interval(std::time::Duration::from_secs(60))
+            .reject_policy(RejectPolicy::Wait)
+            .build();
+
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        {
+            tauri_plugin_mihomo::Builder::new()
+                .protocol(tauri_plugin_mihomo::models::Protocol::LocalSocket)
+                .socket_path(crate::config::IClashTemp::guard_external_controller_ipc())
+                .pool_config(pool_config)
+                .build()
+        }
+
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        {
+            let (host, port) = crate::constants::network::DEFAULT_EXTERNAL_CONTROLLER
+                .split_once(':')
+                .expect("DEFAULT_EXTERNAL_CONTROLLER must be host:port");
+            tauri_plugin_mihomo::Builder::new()
+                .protocol(tauri_plugin_mihomo::models::Protocol::Http)
+                .external_host(host)
+                .external_port(
+                    port.parse::<u16>()
+                        .expect("DEFAULT_EXTERNAL_CONTROLLER port must be a valid u16"),
+                )
+                .secret(crate::constants::network::DEFAULT_EXTERNAL_CONTROLLER_SECRET)
+                .pool_config(pool_config)
+                .build()
+        }
     }
 
     /// Setup deep link handling
@@ -99,7 +148,8 @@ mod app_init {
         });
     }
 
-    /// Setup autostart plugin
+    /// Setup autostart plugin — no launch-on-login concept on mobile.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn setup_autostart(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         #[cfg(target_os = "macos")]
         let mut auto_start_plugin_builder = tauri_plugin_autostart::Builder::new();
@@ -116,7 +166,14 @@ mod app_init {
         Ok(())
     }
 
-    /// Setup window state management
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    pub fn setup_autostart(_app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
+    }
+
+    /// Setup window state management — meaningless for a single-Activity
+    /// fullscreen mobile app, desktop only.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn setup_window_state(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         logging!(info, Type::Setup, "初始化窗口状态管理...");
         let window_state_plugin = tauri_plugin_window_state::Builder::new()
@@ -124,6 +181,11 @@ mod app_init {
             .with_state_flags(tauri_plugin_window_state::StateFlags::default())
             .build();
         app.handle().plugin(window_state_plugin)?;
+        Ok(())
+    }
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    pub fn setup_window_state(_app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 
@@ -212,11 +274,25 @@ mod app_init {
             cmd::list_webdav_backup,
             cmd::delete_webdav_backup,
             cmd::restore_webdav_backup,
+            #[cfg(target_os = "android")]
+            cmd::start_vpn,
+            #[cfg(target_os = "android")]
+            cmd::stop_vpn,
         ]
     }
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Android's native crash dump only shows libc/libhoudini frames under
+    // emulator ARM translation, not Rust frames — force a real backtrace
+    // into RustStdoutStderr (logcat) so panics are actually diagnosable.
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    std::panic::set_hook(Box::new(|info| {
+        eprintln!("{info}\n{}", std::backtrace::Backtrace::force_capture());
+    }));
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     if app_init::init_singleton_check().is_err() {
         return;
     }

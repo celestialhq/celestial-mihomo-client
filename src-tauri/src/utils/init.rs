@@ -411,6 +411,13 @@ pub fn init_scheme() -> Result<()> {
 pub const fn init_scheme() -> Result<()> {
     Ok(())
 }
+// Deep-link URL schemes are declared via AndroidManifest.xml intent-filters
+// (handled by the generated Android project, not at runtime) / Info.plist on
+// iOS — nothing to register here.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub const fn init_scheme() -> Result<()> {
+    Ok(())
+}
 
 #[cfg(target_os = "linux")]
 const DEEP_LINK_SCHEMES: &[&str] = &["clash", "celestial"];

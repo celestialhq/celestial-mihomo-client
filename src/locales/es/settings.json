@@ -32,7 +32,8 @@
       "tooltips": {
         "systemProxy": "Modifica la configuración del proxy del sistema operativo. Si no se puede habilitar, puede modificar manualmente la configuración del proxy del sistema operativo.",
         "tunMode": "El modo TUN (interfaz virtual) gestiona todo el tráfico del sistema. No es necesario habilitar el proxy del sistema cuando está activado.",
-        "tunUnavailable": "El modo TUN requiere el modo de servicio o el modo de administrador"
+        "tunUnavailable": "El modo TUN requiere el modo de servicio o el modo de administrador",
+        "tunUnavailableMobile": "El modo TUN aún no está disponible en Android"
       },
       "actions": {
         "installService": "Instalar servicio",

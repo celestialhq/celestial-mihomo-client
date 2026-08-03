@@ -72,6 +72,14 @@ interface Props {
   onSave?: (prev?: string, curr?: string) => void
 }
 
+// The "visualization" form view is a fixed two-column desktop layout (a
+// list of fields, each with a hardcoded pixel-width label) that doesn't
+// reflow on narrow Android screens — it forces horizontal scrolling. The
+// raw YAML editor beneath it (the other half of this same toggle) is a
+// single Monaco instance that already adapts to any width, so Android
+// defaults to and is locked onto that mode instead.
+const IS_MOBILE_PLATFORM = getSystem() === 'android'
+
 const builtinProxyPolicies = ['DIRECT', 'REJECT', 'REJECT-DROP', 'PASS']
 
 const PROXY_STRATEGY_LABEL_KEYS: Record<string, TranslationKey> = {
@@ -158,7 +166,7 @@ export const GroupsEditorViewer = (props: Props) => {
   const editorRef = useRef<MonacoEditorInstance | null>(null)
   const [prevData, setPrevData] = useState('')
   const [currData, setCurrData] = useState('')
-  const [visualization, setVisualization] = useState(true)
+  const [visualization, setVisualization] = useState(!IS_MOBILE_PLATFORM)
   const [match, setMatch] = useState(() => (_: string) => true)
   const [interfaceNameList, setInterfaceNameList] = useState<string[]>([])
   const { control, ...formIns } = useForm<IProxyGroupConfig>({
@@ -523,19 +531,21 @@ export const GroupsEditorViewer = (props: Props) => {
         {
           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
             {t('profiles.modals.groupsEditor.title')}
-            <Box>
-              <Button
-                variant="contained"
-                size="small"
-                onClick={() => {
-                  setVisualization((prev) => !prev)
-                }}
-              >
-                {visualization
-                  ? t('shared.editorModes.advanced')
-                  : t('shared.editorModes.visualization')}
-              </Button>
-            </Box>
+            {!IS_MOBILE_PLATFORM && (
+              <Box>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => {
+                    setVisualization((prev) => !prev)
+                  }}
+                >
+                  {visualization
+                    ? t('shared.editorModes.advanced')
+                    : t('shared.editorModes.visualization')}
+                </Button>
+              </Box>
+            )}
           </Box>
         }
       </DialogTitle>

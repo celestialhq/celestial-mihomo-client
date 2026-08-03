@@ -330,6 +330,7 @@ export const translationKeys = [
   'settings.sections.proxyControl.tooltips.systemProxy',
   'settings.sections.proxyControl.tooltips.tunMode',
   'settings.sections.proxyControl.tooltips.tunUnavailable',
+  'settings.sections.proxyControl.tooltips.tunUnavailableMobile',
   'settings.sections.proxyControl.actions.installService',
   'settings.sections.proxyControl.actions.uninstallService',
   'settings.sections.proxyControl.fields.systemProxy',

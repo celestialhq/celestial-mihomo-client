@@ -4,11 +4,16 @@ import { useTranslation } from 'react-i18next'
 import { DialogRef, Switch, TooltipIcon } from '@/components/base'
 import ProxyControlSwitches from '@/components/shared/proxy-control-switches'
 import { useVerge } from '@/hooks/use-verge'
+import getSystem from '@/utils/get-system'
 
 import { GuardState } from './mods/guard-state'
 import { SettingList, SettingItem } from './mods/setting-comp'
 import { SysproxyViewer } from './mods/sysproxy-viewer'
 import { TunViewer } from './mods/tun-viewer'
+
+// No system-wide proxy concept on Android — VPN/TUN is the only connection
+// mode there.
+const IS_SINGLE_MODE_PLATFORM = getSystem() === 'android'
 
 interface Props {
   onError?: (err: Error) => void
@@ -34,65 +39,71 @@ const SettingSystem = ({ onError }: Props) => {
 
   return (
     <SettingList title={t('settings.sections.system.title')}>
-      <SysproxyViewer ref={sysproxyRef} />
-      <TunViewer ref={tunRef} />
+      {!IS_SINGLE_MODE_PLATFORM && <SysproxyViewer ref={sysproxyRef} />}
+      {!IS_SINGLE_MODE_PLATFORM && <TunViewer ref={tunRef} />}
 
       <ProxyControlSwitches
         label={t('settings.sections.system.toggles.tunMode')}
         onError={onError}
       />
 
-      <ProxyControlSwitches
-        label={t('settings.sections.system.toggles.systemProxy')}
-        onError={onError}
-      />
+      {!IS_SINGLE_MODE_PLATFORM && (
+        <ProxyControlSwitches
+          label={t('settings.sections.system.toggles.systemProxy')}
+          onError={onError}
+        />
+      )}
 
-      <SettingItem label={t('settings.sections.system.fields.autoLaunch')}>
-        <GuardState
-          value={enable_auto_launch ?? false}
-          valueProps="checked"
-          onCatch={onError}
-          onFormat={onSwitchFormat}
-          onChange={(e) => {
-            onChangeData({ enable_auto_launch: e })
-          }}
-          onGuard={async (e) => {
-            try {
-              // 先触发UI更新立即看到反馈
-              onChangeData({ enable_auto_launch: e })
-              await patchVerge({ enable_auto_launch: e })
-              return Promise.resolve()
-            } catch (error) {
-              // 如果出错，恢复原始状态
-              onChangeData({ enable_auto_launch: !e })
-              return Promise.reject(error)
+      {!IS_SINGLE_MODE_PLATFORM && (
+        <>
+          <SettingItem label={t('settings.sections.system.fields.autoLaunch')}>
+            <GuardState
+              value={enable_auto_launch ?? false}
+              valueProps="checked"
+              onCatch={onError}
+              onFormat={onSwitchFormat}
+              onChange={(e) => {
+                onChangeData({ enable_auto_launch: e })
+              }}
+              onGuard={async (e) => {
+                try {
+                  // 先触发UI更新立即看到反馈
+                  onChangeData({ enable_auto_launch: e })
+                  await patchVerge({ enable_auto_launch: e })
+                  return Promise.resolve()
+                } catch (error) {
+                  // 如果出错，恢复原始状态
+                  onChangeData({ enable_auto_launch: !e })
+                  return Promise.reject(error)
+                }
+              }}
+            >
+              <Switch edge="end" />
+            </GuardState>
+          </SettingItem>
+
+          <SettingItem
+            label={t('settings.sections.system.fields.silentStart')}
+            extra={
+              <TooltipIcon
+                title={t('settings.sections.system.tooltips.silentStart')}
+                sx={{ opacity: '0.7' }}
+              />
             }
-          }}
-        >
-          <Switch edge="end" />
-        </GuardState>
-      </SettingItem>
-
-      <SettingItem
-        label={t('settings.sections.system.fields.silentStart')}
-        extra={
-          <TooltipIcon
-            title={t('settings.sections.system.tooltips.silentStart')}
-            sx={{ opacity: '0.7' }}
-          />
-        }
-      >
-        <GuardState
-          value={enable_silent_start ?? false}
-          valueProps="checked"
-          onCatch={onError}
-          onFormat={onSwitchFormat}
-          onChange={(e) => onChangeData({ enable_silent_start: e })}
-          onGuard={(e) => patchVerge({ enable_silent_start: e })}
-        >
-          <Switch edge="end" />
-        </GuardState>
-      </SettingItem>
+          >
+            <GuardState
+              value={enable_silent_start ?? false}
+              valueProps="checked"
+              onCatch={onError}
+              onFormat={onSwitchFormat}
+              onChange={(e) => onChangeData({ enable_silent_start: e })}
+              onGuard={(e) => patchVerge({ enable_silent_start: e })}
+            >
+              <Switch edge="end" />
+            </GuardState>
+          </SettingItem>
+        </>
+      )}
     </SettingList>
   )
 }

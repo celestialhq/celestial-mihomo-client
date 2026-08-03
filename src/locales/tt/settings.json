@@ -32,7 +32,8 @@
       "tooltips": {
         "systemProxy": "Системалы прокси көйләүләрен үзгәртү рөхсәтен бирегез. Әгәр рөхсәт алу мөмкин түгел икән, прокси көйләүләрен кулдан үзгәртегез",
         "tunMode": "Tun режимы бөтен системаның трафигын тотып ала. Аны кабызган очракта системалы проксины аерым кабызу таләп ителми.",
-        "tunUnavailable": "TUN requires Service Mode or Admin Mode"
+        "tunUnavailable": "TUN requires Service Mode or Admin Mode",
+        "tunUnavailableMobile": "TUN mode isn't available on Android yet"
       },
       "actions": {
         "installService": "Хезмәтне урнаштыру",

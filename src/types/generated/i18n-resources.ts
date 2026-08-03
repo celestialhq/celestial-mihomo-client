@@ -1182,6 +1182,7 @@ export interface TranslationResources {
             systemProxy: string
             tunMode: string
             tunUnavailable: string
+            tunUnavailableMobile: string
           }
         }
         system: {

@@ -223,7 +223,12 @@ export function ProfileViewer({ onChange, ref }: ProfileViewerProps) {
           ? t('profiles.modals.profileForm.title.create')
           : t('profiles.modals.profileForm.title.edit')
       }
-      contentSx={{ width: 375, pb: 0, maxHeight: '80%' }}
+      contentSx={{
+        width: { xs: '100%', sm: 375 },
+        maxWidth: 375,
+        pb: 0,
+        maxHeight: '80%',
+      }}
       okBtn={t('shared.actions.save')}
       cancelBtn={t('shared.actions.cancel')}
       onClose={handleClose}

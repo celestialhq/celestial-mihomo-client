@@ -1169,6 +1169,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",
+ "tauri-plugin-celestial-vpn",
  "tauri-plugin-clash-verge-sysinfo",
  "tauri-plugin-clipboard-manager",
  "tauri-plugin-deep-link",
@@ -7540,6 +7541,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-celestial-vpn"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "tauri-plugin-clash-verge-sysinfo"
 version = "0.1.0"
 dependencies = [
@@ -7699,7 +7711,6 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-mihomo"
 version = "0.5.4"
-source = "git+https://github.com/pius-pp/tauri-plugin-mihomo?branch=main#ff75ee3edd61923e6c76a7f3cf3c3fbd0f8e22c0"
 dependencies = [
  "base64 0.22.1",
  "bytes",

@@ -32,7 +32,8 @@
       "tooltips": {
         "systemProxy": "Enable to modify the operating system's proxy settings. If enabling fails, modify the operating system's proxy settings manually",
         "tunMode": "Tun (Virtual NIC) mode: Captures all system traffic, when enabled, there is no need to enable system proxy.",
-        "tunUnavailable": "TUN requires Service Mode or Admin Mode"
+        "tunUnavailable": "TUN requires Service Mode or Admin Mode",
+        "tunUnavailableMobile": "TUN mode isn't available on Android yet"
       },
       "actions": {
         "installService": "Install Service",

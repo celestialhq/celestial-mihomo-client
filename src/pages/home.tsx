@@ -34,7 +34,14 @@ import { HomeProfileCard } from '@/components/home/home-profile-card'
 import { ProxyTunCard } from '@/components/home/proxy-tun-card'
 import { useProfiles } from '@/hooks/use-profiles'
 import { useVerge } from '@/hooks/use-verge'
+import SimpleHomePage from '@/pages/simple-home'
 import { entry_lightweight_mode, openWebUrl } from '@/services/cmds'
+import getSystem from '@/utils/get-system'
+
+// Lightweight mode hides the window while keeping the core running in the
+// background — a desktop-tray concept. Android's OS already manages this
+// app's process lifecycle, there's no window to hide.
+const IS_MOBILE_PLATFORM = getSystem() === 'android'
 
 const LazyIpInfoCard = lazy(() =>
   import('@/components/home/ip-info-card').then((module) => ({
@@ -348,15 +355,17 @@ const AdvancedHomePage = () => {
       contentStyle={{ padding: 12 }}
       header={
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Tooltip title={t('home.page.tooltips.lightweightMode')} arrow>
-            <IconButton
-              onClick={async () => await entry_lightweight_mode()}
-              size="small"
-              color="inherit"
-            >
-              <HistoryEduOutlined />
-            </IconButton>
-          </Tooltip>
+          {!IS_MOBILE_PLATFORM && (
+            <Tooltip title={t('home.page.tooltips.lightweightMode')} arrow>
+              <IconButton
+                onClick={async () => await entry_lightweight_mode()}
+                size="small"
+                color="inherit"
+              >
+                <HistoryEduOutlined />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title={t('home.page.tooltips.manual')} arrow>
             <IconButton onClick={toGithubDoc} size="small" color="inherit">
               <HelpOutlineRounded />
@@ -419,6 +428,9 @@ const ClashModeEnhancedCard = () => {
 }
 
 const HomePage = () => {
+  if (IS_MOBILE_PLATFORM) {
+    return <SimpleHomePage />
+  }
   return <AdvancedHomePage />
 }
 

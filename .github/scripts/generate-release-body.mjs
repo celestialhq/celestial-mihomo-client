@@ -29,6 +29,9 @@ const rows = [
     findBadge(/_amd64\.deb$/, 'DEB x64', 'A81D33'),
     findBadge(/x86_64\.rpm$/, 'RPM x64', '294172'),
   ]),
+  buildRow('Android', [
+    findBadge(/_universal\.apk$/, 'Universal APK', '3DDC84'),
+  ]),
 ].filter(Boolean)
 
 if (rows.length === 0) {
