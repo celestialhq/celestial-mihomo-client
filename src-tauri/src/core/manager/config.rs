@@ -10,6 +10,7 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use clash_verge_logging::{Type, logging};
+use scopeguard::defer;
 use smartstring::alias::String;
 use std::{collections::HashSet, path::PathBuf, time::Instant};
 use tauri_plugin_mihomo::Error as MihomoError;
@@ -43,6 +44,16 @@ impl CoreManager {
             return Ok(ValidationOutcome::Skipped {
                 reason: ValidationSkipReason::Exiting,
             });
+        }
+
+        // Two overlapping updates used to interleave generate/validate/apply,
+        // so the core could end up running a config assembled from both.
+        if !self.try_start_config_update() {
+            logging!(info, Type::Core, "Configuration update is already running");
+            return Ok(ValidationOutcome::Busy);
+        }
+        defer! {
+            self.finish_config_update();
         }
 
         if !force && !self.should_update_config() {
@@ -93,10 +104,29 @@ impl CoreManager {
             return Ok(ValidationOutcome::invalid_from_message(message));
         }
 
-        self.apply_generate_config().await
+        self.apply_generate_config_inner().await
     }
 
-    pub async fn apply_generate_config(&self) -> Result<ValidationOutcome> {
+    /// 在已提交的 runtime 草稿上直接跑验证+应用，不重新生成整份配置。
+    /// 调用方通过闭包描述要打的补丁。
+    pub(crate) async fn update_runtime_config<F>(&self, f: F) -> Result<ValidationOutcome>
+    where
+        F: FnOnce(&mut IRuntime),
+    {
+        if !self.try_start_config_update() {
+            logging!(info, Type::Core, "Configuration update is already running");
+            return Ok(ValidationOutcome::Busy);
+        }
+        defer! {
+            self.finish_config_update();
+        }
+
+        Config::runtime().await.edit_draft(f);
+        self.apply_generate_config_inner().await
+    }
+
+    /// 调用方须已持有配置更新许可（见 `try_start_config_update`）。
+    async fn apply_generate_config_inner(&self) -> Result<ValidationOutcome> {
         match CoreConfigValidator::global().validate_config_outcome().await {
             Ok(outcome) if outcome.is_valid() => {
                 let run_path = Config::generate_file(ConfigType::Run).await?;

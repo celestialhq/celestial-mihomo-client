@@ -6,7 +6,14 @@ use anyhow::Result;
 use arc_swap::{ArcSwap, ArcSwapOption};
 use celestial_logger::AsyncLogger;
 use once_cell::sync::Lazy;
-use std::{fmt, sync::Arc, time::Instant};
+use std::{
+    fmt,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Instant,
+};
 use tauri_plugin_shell::process::CommandChild;
 
 use crate::singleton;
@@ -39,6 +46,9 @@ pub struct CoreManager {
     // Windows Job Object，绑定 sidecar 生命周期到本进程（KILL_ON_JOB_CLOSE）。
     #[cfg(target_os = "windows")]
     job_handle: ArcSwapOption<OwnedHandle>,
+    // 串行化配置更新。非阻塞：抢不到就返回 Busy，所以与 lifecycle_lock
+    // 组合也不会死锁（锁序 config_update_in_progress -> lifecycle_lock）。
+    config_update_in_progress: AtomicBool,
     // 串行化 start/stop/restart，避免生命周期操作互相穿插
     // （例如 restart 的 stop 与另一个 start 交错，留下无人管理的内核进程）。
     lifecycle_lock: tokio::sync::Mutex<()>,
@@ -66,6 +76,7 @@ impl Default for CoreManager {
             last_update: ArcSwapOption::new(None),
             #[cfg(target_os = "windows")]
             job_handle: ArcSwapOption::new(None),
+            config_update_in_progress: AtomicBool::new(false),
             lifecycle_lock: tokio::sync::Mutex::new(()),
         }
     }
@@ -104,6 +115,14 @@ impl CoreManager {
 
     pub fn set_last_update(&self, time: Instant) {
         self.last_update.store(Some(Arc::new(time)));
+    }
+
+    fn try_start_config_update(&self) -> bool {
+        !self.config_update_in_progress.swap(true, Ordering::AcqRel)
+    }
+
+    fn finish_config_update(&self) {
+        self.config_update_in_progress.store(false, Ordering::Release);
     }
 
     /// Replaces the Windows Job Object handle owned by the core manager.
