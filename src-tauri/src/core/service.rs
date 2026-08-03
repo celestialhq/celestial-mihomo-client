@@ -9,8 +9,15 @@ use celestial_service_ipc::{OwnerSessionProof, StartClashRequest};
 use clash_verge_logging::{Type, logging};
 use compact_str::CompactString;
 use once_cell::sync::Lazy;
-use std::{borrow::Cow, env::current_exe, path::Path, process::Command as StdCommand, time::Duration};
-use tokio::sync::Mutex;
+use std::{
+    borrow::Cow,
+    env::current_exe,
+    path::Path,
+    process::Command as StdCommand,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
+use tokio::sync::Notify;
 
 /// The session handed out by the service for the core we started. Mutating
 /// calls are only authorised while this matches the service's own generation,
@@ -45,8 +52,29 @@ pub enum ServiceStatus {
     Unavailable(String),
 }
 
-#[derive(Clone)]
-pub struct ServiceManager(ServiceStatus);
+/// Service status plus a guard that serialises install/uninstall.
+///
+/// This used to be wrapped in a `tokio::Mutex` by every caller, which meant the
+/// lock was held for the whole duration of an elevation prompt (UAC, pkexec,
+/// osascript) — every other reader of the service status blocked behind a
+/// dialog waiting on the user. Locking is internal now: status reads are cheap
+/// and never wait, while the long privileged operations serialise on their own
+/// flag.
+pub struct ServiceManager {
+    status: parking_lot::Mutex<ServiceStatus>,
+    operation_running: AtomicBool,
+    operation_done: Notify,
+}
+
+/// Releases the operation slot and wakes one waiter, including on panic.
+struct OperationGuard<'a>(&'a ServiceManager);
+
+impl Drop for OperationGuard<'_> {
+    fn drop(&mut self) {
+        self.0.operation_running.store(false, Ordering::Release);
+        self.0.operation_done.notify_one();
+    }
+}
 
 #[cfg(target_os = "windows")]
 fn uninstall_service() -> Result<()> {
@@ -405,10 +433,8 @@ pub(super) async fn start_with_existing_service(config_file: &Path) -> Result<()
 pub(super) async fn run_core_by_service(config_file: &Path) -> Result<()> {
     logging!(info, Type::Service, "正在尝试通过服务启动核心");
 
-    let mut manager = SERVICE_MANAGER.lock().await;
-    manager.refresh().await?;
-    let status = manager.current();
-    drop(manager);
+    SERVICE_MANAGER.refresh().await?;
+    let status = SERVICE_MANAGER.current();
 
     if !matches!(status, ServiceStatus::Ready) {
         logging!(warn, Type::Service, "service is not ready for core start: {:?}", status);
@@ -488,12 +514,12 @@ pub async fn is_service_available() -> Result<()> {
     Ok(())
 }
 
-pub async fn wait_and_check_service_available(status: &mut ServiceManager) -> Result<()> {
-    wait_for_service_ipc(status, "Waiting for service to be available").await
+pub async fn wait_and_check_service_available(manager: &ServiceManager) -> Result<()> {
+    wait_for_service_ipc(manager, "Waiting for service to be available").await
 }
 
-async fn wait_for_service_ipc(status: &mut ServiceManager, reason: &str) -> Result<()> {
-    status.0 = ServiceStatus::Unavailable(reason.into());
+async fn wait_for_service_ipc(manager: &ServiceManager, reason: &str) -> Result<()> {
+    manager.mark_unavailable(reason);
     let config = ServiceManager::config();
 
     let backoff = ConstantBuilder::default()
@@ -512,7 +538,7 @@ async fn wait_for_service_ipc(status: &mut ServiceManager, reason: &str) -> Resu
     .await;
 
     if result.is_ok() {
-        status.0 = ServiceStatus::Ready;
+        manager.set_status(ServiceStatus::Ready);
     }
 
     result
@@ -524,7 +550,37 @@ pub fn is_service_ipc_path_exists() -> bool {
 
 impl ServiceManager {
     pub fn default() -> Self {
-        Self(ServiceStatus::Unavailable("Need Checks".into()))
+        Self {
+            status: parking_lot::Mutex::new(ServiceStatus::Unavailable("Need Checks".into())),
+            operation_running: AtomicBool::new(false),
+            operation_done: Notify::new(),
+        }
+    }
+
+    fn set_status(&self, status: ServiceStatus) {
+        *self.status.lock() = status;
+    }
+
+    /// Marks the service unusable without going through a full refresh — used
+    /// when a call has already proven the service cannot be reached.
+    pub fn mark_unavailable(&self, reason: impl Into<String>) {
+        self.set_status(ServiceStatus::Unavailable(reason.into()));
+    }
+
+    /// Waits until no other privileged operation is in flight, then claims the
+    /// slot. `Notify` stores a permit if the holder finished first, so a
+    /// release that races this call cannot leave us waiting forever.
+    async fn begin_operation(&self) -> OperationGuard<'_> {
+        loop {
+            if self
+                .operation_running
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                return OperationGuard(self);
+            }
+            self.operation_done.notified().await;
+        }
     }
 
     pub const fn config() -> celestial_service_ipc::IpcConfig {
@@ -535,21 +591,21 @@ impl ServiceManager {
         }
     }
 
-    pub async fn init(&mut self) -> Result<()> {
+    pub async fn init(&self) -> Result<()> {
         if let Err(e) = celestial_service_ipc::connect().await {
-            self.0 = ServiceStatus::Unavailable("服务连接失败: {e}".to_string());
+            self.mark_unavailable(format!("服务连接失败: {e}"));
             return Err(e);
         }
         Ok(())
     }
 
     pub fn current(&self) -> ServiceStatus {
-        self.0.clone()
+        self.status.lock().clone()
     }
 
-    pub async fn refresh(&mut self) -> Result<()> {
+    pub async fn refresh(&self) -> Result<()> {
         let status = self.check_service_comprehensive().await;
-        self.0 = status;
+        self.set_status(status);
         Ok(())
     }
 
@@ -562,11 +618,15 @@ impl ServiceManager {
     }
 
     /// 根据服务状态执行相应操作
-    pub async fn handle_service_status(&mut self, status: &ServiceStatus) -> Result<()> {
+    pub async fn handle_service_status(&self, status: &ServiceStatus) -> Result<()> {
+        // Install/uninstall shell out to an elevation prompt; without this only
+        // the caller's own lock stopped two prompts appearing at once.
+        let _operation = self.begin_operation().await;
+
         match status {
             ServiceStatus::Ready => {
                 logging!(info, Type::Service, "服务就绪，直接启动");
-                self.0 = ServiceStatus::Ready;
+                self.set_status(ServiceStatus::Ready);
             }
             ServiceStatus::ReinstallRequired => {
                 logging!(info, Type::Service, "服务需要重装，执行重装流程");
@@ -586,11 +646,11 @@ impl ServiceManager {
             ServiceStatus::UninstallRequired => {
                 logging!(info, Type::Service, "服务需要卸载，执行卸载流程");
                 uninstall_service()?;
-                self.0 = ServiceStatus::Unavailable("Service Uninstalled".into());
+                self.mark_unavailable("Service Uninstalled");
             }
             ServiceStatus::Unavailable(reason) => {
                 logging!(info, Type::Service, "服务不可用: {}，将使用Sidecar模式", reason);
-                self.0 = ServiceStatus::Unavailable(reason.clone());
+                self.mark_unavailable(reason.clone());
                 return Err(anyhow::anyhow!("服务不可用: {}", reason));
             }
         }
@@ -601,4 +661,4 @@ impl ServiceManager {
     }
 }
 
-pub static SERVICE_MANAGER: Lazy<Mutex<ServiceManager>> = Lazy::new(|| Mutex::new(ServiceManager::default()));
+pub static SERVICE_MANAGER: Lazy<ServiceManager> = Lazy::new(ServiceManager::default);

@@ -131,7 +131,7 @@ impl CoreManager {
         #[cfg(target_os = "windows")]
         self.wait_for_service_if_needed().await;
 
-        let value = SERVICE_MANAGER.lock().await.current();
+        let value = SERVICE_MANAGER.current();
         let mode = match value {
             ServiceStatus::Ready => RunningMode::Service,
             _ => RunningMode::Sidecar,
@@ -152,7 +152,7 @@ impl CoreManager {
         use backon::{ConstantBuilder, Retryable as _};
 
         let tun_enabled = Config::verge().await.latest_arc().enable_tun_mode.unwrap_or(false);
-        let service_ready = matches!(SERVICE_MANAGER.lock().await.current(), ServiceStatus::Ready);
+        let service_ready = matches!(SERVICE_MANAGER.current(), ServiceStatus::Ready);
         let is_admin = is_current_app_handle_admin(Handle::app_handle());
 
         if !should_wait_for_service(tun_enabled, service_ready, is_admin) {
@@ -172,7 +172,7 @@ impl CoreManager {
             .with_max_times(max_times as usize);
 
         let _ = (|| async {
-            let mut manager = SERVICE_MANAGER.lock().await;
+            let manager = &*SERVICE_MANAGER;
 
             if matches!(manager.current(), ServiceStatus::Ready) {
                 return Ok(());

@@ -178,11 +178,9 @@ pub(super) async fn init_service_manager() {
     if !is_service_ipc_path_exists() {
         return;
     }
-    let mut manager = SERVICE_MANAGER.lock().await;
-    if manager.init().await.is_ok() {
-        logging_error!(Type::Setup, manager.refresh().await);
+    if SERVICE_MANAGER.init().await.is_ok() {
+        logging_error!(Type::Setup, SERVICE_MANAGER.refresh().await);
     }
-    drop(manager);
 }
 
 pub(super) async fn init_core_manager() {

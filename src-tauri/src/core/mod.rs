@@ -166,7 +166,6 @@ pub mod service {
         Unavailable(String),
     }
 
-    #[derive(Clone)]
     pub struct ServiceManager(ServiceStatus);
 
     impl ServiceManager {
@@ -178,7 +177,7 @@ pub mod service {
             celestial_service_ipc::IpcConfig::default()
         }
 
-        pub async fn init(&mut self) -> Result<()> {
+        pub async fn init(&self) -> Result<()> {
             anyhow::bail!("service mode is not available on this platform")
         }
 
@@ -186,16 +185,16 @@ pub mod service {
             self.0.clone()
         }
 
-        pub async fn refresh(&mut self) -> Result<()> {
+        pub async fn refresh(&self) -> Result<()> {
             Ok(())
         }
 
-        pub async fn handle_service_status(&mut self, _status: &ServiceStatus) -> Result<()> {
+        pub async fn handle_service_status(&self, _status: &ServiceStatus) -> Result<()> {
             anyhow::bail!("service mode is not available on this platform")
         }
     }
 
-    pub static SERVICE_MANAGER: Lazy<Mutex<ServiceManager>> = Lazy::new(|| Mutex::new(ServiceManager::default()));
+    pub static SERVICE_MANAGER: Lazy<ServiceManager> = Lazy::new(ServiceManager::default);
 
     pub async fn is_service_available() -> Result<()> {
         anyhow::bail!("service mode is not available on this platform")
