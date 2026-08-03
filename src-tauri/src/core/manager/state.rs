@@ -18,6 +18,21 @@ use scopeguard::defer;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri_plugin_shell::ShellExt as _;
 
+#[cfg(target_os = "windows")]
+use {
+    std::os::windows::io::{AsRawHandle as _, FromRawHandle as _, OwnedHandle},
+    windows_sys::Win32::{
+        Foundation::HANDLE,
+        System::{
+            JobObjects::{
+                AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+                JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation, SetInformationJobObject,
+            },
+            Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_SET_QUOTA, PROCESS_TERMINATE},
+        },
+    },
+};
+
 impl CoreManager {
     pub async fn get_clash_logs(&self) -> Result<Vec<CompactString>> {
         match *self.get_running_mode() {
@@ -84,6 +99,35 @@ impl CoreManager {
                 &IClashTemp::guard_external_controller_ipc(),
             ])
             .spawn()?;
+
+        // Windows has no parent-death signal, so a crashed/killed app would
+        // leave the sidecar running and holding the core's ports. Tie it to a
+        // Job Object with KILL_ON_JOB_CLOSE: the OS terminates it as soon as
+        // our handle goes away, including on abnormal termination.
+        #[cfg(target_os = "windows")]
+        {
+            let job = match create_and_assign_sidecar_job(child.pid()) {
+                Ok(job) => job,
+                Err(job_error) => {
+                    let pid = child.pid();
+
+                    // Don't silently fall back to an unmanaged child — kill it
+                    // and fail, otherwise we're back to the leak this prevents.
+                    let error = match child.kill() {
+                        Ok(()) => job_error,
+                        Err(kill_error) => anyhow::anyhow!(
+                            "failed to configure Job Object for sidecar PID {pid}: \
+                            {job_error:#}; failed to terminate child: {kill_error:#}"
+                        ),
+                    };
+
+                    logging!(error, Type::Core, "Failed to start sidecar: {error:#}");
+                    return Err(error);
+                }
+            };
+            self.set_job_handle(Some(job));
+        }
+
         #[cfg(unix)]
         unsafe {
             tauri_plugin_clash_verge_sysinfo::libc::umask(previous_mask)
@@ -132,6 +176,20 @@ impl CoreManager {
         }
         if let Some(child) = self.take_child_sidecar() {
             let pid = child.pid();
+
+            #[cfg(target_os = "windows")]
+            {
+                // Clearing the stored handle closes the Job Object, which is
+                // what actually enforces KILL_ON_JOB_CLOSE.
+                self.set_job_handle(None);
+                logging!(
+                    trace,
+                    Type::Core,
+                    "Closed job handle for sidecar process (PID: {})",
+                    pid
+                );
+            }
+
             let result = child.kill();
             logging!(
                 trace,
@@ -158,5 +216,117 @@ impl CoreManager {
         }
         service::stop_core_by_service().await?;
         Ok(())
+    }
+}
+
+/// Creates a Job Object with `KILL_ON_JOB_CLOSE` and assigns `child_pid` to it.
+/// Dropping the returned handle terminates the assigned process.
+#[cfg(target_os = "windows")]
+fn create_and_assign_sidecar_job(child_pid: u32) -> Result<OwnedHandle> {
+    unsafe {
+        let raw_job: HANDLE = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if raw_job.is_null() {
+            return Err(last_win32_error("CreateJobObjectW failed"));
+        }
+        // Take ownership immediately so every early return below still closes it.
+        let job = OwnedHandle::from_raw_handle(raw_job);
+
+        let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+        let set_info_result = SetInformationJobObject(
+            job.as_raw_handle() as HANDLE,
+            JobObjectExtendedLimitInformation,
+            &mut info as *mut _ as *mut _,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        );
+        if set_info_result == 0 {
+            return Err(last_win32_error("SetInformationJobObject failed"));
+        }
+
+        let raw_process_handle = OpenProcess(
+            PROCESS_SET_QUOTA | PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION,
+            0,
+            child_pid,
+        );
+        if raw_process_handle.is_null() {
+            return Err(last_win32_error("OpenProcess failed"));
+        }
+        let process_handle = OwnedHandle::from_raw_handle(raw_process_handle);
+
+        let assign_result = AssignProcessToJobObject(job.as_raw_handle(), process_handle.as_raw_handle());
+        if assign_result == 0 {
+            return Err(last_win32_error("AssignProcessToJobObject failed"));
+        }
+
+        Ok(job)
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn last_win32_error(operation: &'static str) -> anyhow::Error {
+    anyhow::Error::new(std::io::Error::last_os_error()).context(operation)
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::create_and_assign_sidecar_job;
+    use anyhow::Result;
+    use std::{
+        process::{Child, Command, Stdio},
+        thread::sleep,
+        time::{Duration, Instant},
+    };
+
+    /// Long-lived child used to observe the Job Object lifetime binding.
+    fn spawn_long_lived() -> Result<Child> {
+        let child = Command::new("ping")
+            .args(["-n", "999", "127.0.0.1"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()?;
+        Ok(child)
+    }
+
+    fn wait_until_exited(child: &mut Child, timeout: Duration) -> Result<bool> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            if child.try_wait()?.is_some() {
+                return Ok(true);
+            }
+            if Instant::now() >= deadline {
+                return Ok(false);
+            }
+            sleep(Duration::from_millis(50));
+        }
+    }
+
+    #[test]
+    fn job_kills_child_on_handle_drop() -> Result<()> {
+        let mut child = spawn_long_lived()?;
+
+        let job = create_and_assign_sidecar_job(child.id())?;
+
+        assert!(
+            child.try_wait()?.is_none(),
+            "child should still be running after being assigned to the job"
+        );
+
+        // Closing the job handle is what KILL_ON_JOB_CLOSE reacts to.
+        drop(job);
+
+        assert!(
+            wait_until_exited(&mut child, Duration::from_secs(5))?,
+            "child should be terminated after the job handle is dropped"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn returns_err_for_invalid_pid() {
+        // PIDs are multiples of 4; this one is high enough to not exist.
+        let result = create_and_assign_sidecar_job(0xFFFF_FFFC);
+        assert!(result.is_err(), "expected Err for a non-existent PID");
     }
 }

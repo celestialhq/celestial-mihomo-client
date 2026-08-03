@@ -10,6 +10,8 @@ use std::{fmt, sync::Arc, time::Instant};
 use tauri_plugin_shell::process::CommandChild;
 
 use crate::singleton;
+#[cfg(target_os = "windows")]
+use std::os::windows::io::OwnedHandle;
 
 pub(crate) static CLASH_LOGGER: Lazy<Arc<AsyncLogger>> = Lazy::new(|| Arc::new(AsyncLogger::new()));
 
@@ -34,6 +36,9 @@ impl fmt::Display for RunningMode {
 pub struct CoreManager {
     state: ArcSwap<State>,
     last_update: ArcSwapOption<Instant>,
+    // Windows Job Object，绑定 sidecar 生命周期到本进程（KILL_ON_JOB_CLOSE）。
+    #[cfg(target_os = "windows")]
+    job_handle: ArcSwapOption<OwnedHandle>,
     // 串行化 start/stop/restart，避免生命周期操作互相穿插
     // （例如 restart 的 stop 与另一个 start 交错，留下无人管理的内核进程）。
     lifecycle_lock: tokio::sync::Mutex<()>,
@@ -59,6 +64,8 @@ impl Default for CoreManager {
         Self {
             state: ArcSwap::new(Arc::new(State::default())),
             last_update: ArcSwapOption::new(None),
+            #[cfg(target_os = "windows")]
+            job_handle: ArcSwapOption::new(None),
             lifecycle_lock: tokio::sync::Mutex::new(()),
         }
     }
@@ -97,6 +104,15 @@ impl CoreManager {
 
     pub fn set_last_update(&self, time: Instant) {
         self.last_update.store(Some(Arc::new(time)));
+    }
+
+    /// Replaces the Windows Job Object handle owned by the core manager.
+    ///
+    /// Passing `None` drops the current handle, which closes the Job Object and
+    /// terminates its assigned processes because of `KILL_ON_JOB_CLOSE`.
+    #[cfg(target_os = "windows")]
+    fn set_job_handle(&self, handle: Option<OwnedHandle>) {
+        self.job_handle.store(handle.map(Arc::new));
     }
 
     pub async fn init(&self) -> Result<()> {
