@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use anyhow::anyhow;
-    use clash_verge_draft::Draft;
+    use clash_verge_draft::{Draft, DraftRebase};
     use std::future::Future;
     use std::pin::Pin;
     use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
@@ -10,6 +10,15 @@ mod tests {
     struct IVerge {
         enable_auto_launch: Option<bool>,
         enable_tun_mode: Option<bool>,
+    }
+
+    impl DraftRebase for IVerge {
+        /// 测试用：约定草稿只承载 `enable_tun_mode`，`enable_auto_launch`
+        /// 归已提交数据所有。这样就能验证 rebase 既保留了草稿的意图，
+        /// 又没有回滚 with_data_modify 刚提交的改动。
+        fn rebase_onto(&self, newer: &mut Self) {
+            newer.enable_tun_mode = self.enable_tun_mode;
+        }
     }
 
     // Minimal single-threaded executor for immediately-ready futures
@@ -222,42 +231,75 @@ mod tests {
     }
 
     #[test]
-    fn test_with_data_modify_does_not_touch_existing_draft() {
+    fn test_with_data_modify_rebases_existing_draft() {
         let draft = Draft::new(IVerge {
             enable_auto_launch: Some(false),
             enable_tun_mode: Some(false),
         });
 
-        // 创建草稿并修改
-        draft.edit_draft(|d| {
-            d.enable_auto_launch = Some(true);
-            d.enable_tun_mode = Some(true);
-        });
-        let draft_before = draft.latest_arc();
-        let draft_before_ptr = std::sync::Arc::as_ptr(&draft_before);
+        // 存在一个待生效的草稿（只承载 enable_tun_mode）
+        draft.edit_draft(|d| d.enable_tun_mode = Some(true));
 
-        // 同时通过 with_data_modify 修改 committed
+        // 与此同时 committed 被异步改写（模拟订阅刷新写入新数据）
         #[allow(clippy::unwrap_used)]
         block_on_ready(draft.with_data_modify(|mut v| async move {
-            v.enable_auto_launch = Some(false); // 与草稿不同
+            v.enable_auto_launch = Some(true);
             Ok((v, ()))
         }))
         .unwrap();
 
-        // 草稿应保持不变
-        let draft_after = draft.latest_arc();
-        assert_eq!(
-            std::sync::Arc::as_ptr(&draft_after),
-            draft_before_ptr,
-            "Existing draft should not be replaced by with_data_modify"
-        );
-        assert_eq!(draft_after.enable_auto_launch, Some(true));
-        assert_eq!(draft_after.enable_tun_mode, Some(true));
-
-        // 丢弃草稿后 latest == committed，且 committed 为异步修改结果
-        draft.discard();
+        // 草稿被重新落到新的 committed 上：既保留自己的意图，也带上了新数据
         let latest = draft.latest_arc();
-        assert_eq!(latest.enable_auto_launch, Some(false));
-        assert_eq!(latest.enable_tun_mode, Some(false));
+        assert_eq!(latest.enable_tun_mode, Some(true), "draft intent must survive");
+        assert_eq!(
+            latest.enable_auto_launch,
+            Some(true),
+            "rebased draft must carry the newly committed data"
+        );
+
+        // 关键回归：apply() 不能用过时草稿把刚提交的改动回滚掉
+        draft.apply();
+        let committed = draft.data_arc();
+        assert_eq!(
+            committed.enable_auto_launch,
+            Some(true),
+            "apply() must not roll back the concurrent with_data_modify commit"
+        );
+        assert_eq!(committed.enable_tun_mode, Some(true));
+    }
+
+    #[test]
+    fn test_with_data_modify_serializes_concurrent_calls() {
+        // 旧实现用乐观锁：并发调用中后来者会因为「committed 变了」直接失败，
+        // 改动被丢弃。现在调用被串行化，两次都必须成功且都体现在结果里。
+        let rt = {
+            #[allow(clippy::unwrap_used)]
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .build()
+                .unwrap()
+        };
+
+        let draft = Draft::new(IVerge::default());
+
+        rt.block_on(async {
+            let a = draft.with_data_modify(|mut v| async move {
+                tokio::task::yield_now().await;
+                v.enable_auto_launch = Some(true);
+                Ok((v, ()))
+            });
+            let b = draft.with_data_modify(|mut v| async move {
+                tokio::task::yield_now().await;
+                v.enable_tun_mode = Some(true);
+                Ok((v, ()))
+            });
+            let (ra, rb) = tokio::join!(a, b);
+            assert!(ra.is_ok(), "first concurrent modify failed: {ra:?}");
+            assert!(rb.is_ok(), "second concurrent modify failed: {rb:?}");
+        });
+
+        let committed = draft.data_arc();
+        assert_eq!(committed.enable_auto_launch, Some(true));
+        assert_eq!(committed.enable_tun_mode, Some(true));
     }
 }

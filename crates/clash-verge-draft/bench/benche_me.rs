@@ -3,12 +3,18 @@ use std::hint::black_box;
 use std::process;
 use tokio::runtime::Runtime;
 
-use clash_verge_draft::Draft;
+use clash_verge_draft::{Draft, DraftRebase};
 
 #[derive(Default, Clone, Debug)]
 struct IVerge {
     enable_auto_launch: Option<bool>,
     enable_tun_mode: Option<bool>,
+}
+
+impl DraftRebase for IVerge {
+    fn rebase_onto(&self, newer: &mut Self) {
+        newer.enable_tun_mode = self.enable_tun_mode;
+    }
 }
 
 fn make_draft() -> Draft<IVerge> {

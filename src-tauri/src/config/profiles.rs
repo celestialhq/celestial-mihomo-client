@@ -4,6 +4,7 @@ use crate::utils::{
     help,
 };
 use anyhow::{Context as _, Result, bail};
+use clash_verge_draft::DraftRebase;
 use clash_verge_logging::{Type, logging};
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Mapping;
@@ -19,6 +20,21 @@ pub struct IProfiles {
 
     /// profile list
     pub items: Option<Vec<PrfItem>>,
+}
+
+impl DraftRebase for IProfiles {
+    /// 草稿对 profiles 的唯一意图就是切换 `current`（见 [`IProfiles::patch_config`]），
+    /// items 永远由已提交数据负责。所以「重新落草稿」= 只把 current 搬到新数据上，
+    /// 这样订阅刷新写入的 items 不会被随后的 apply() 回滚。
+    ///
+    /// 复用 `patch_config` 还顺带拿到了校验：如果这期间该 profile 被删掉了，
+    /// 过时的 current 会被忽略而不是留下一个悬空引用。
+    fn rebase_onto(&self, newer: &mut Self) {
+        newer.patch_config(&Self {
+            current: self.current.clone(),
+            items: None,
+        });
+    }
 }
 
 pub struct IProfilePreview<'a> {
