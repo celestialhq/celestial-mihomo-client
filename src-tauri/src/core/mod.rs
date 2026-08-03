@@ -140,6 +140,14 @@ pub mod tray {
 // elevated TUN permissions) has no Android analogue — Android grants VPN
 // access via a one-time user permission dialog on `VpnService`, not an
 // installable privileged helper.
+// Owner credentials and the runtime bundle exist only to talk to the
+// privileged service, so they follow `service`'s desktop gating rather than
+// being compiled into the Android build that has no service at all.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub(crate) mod owner_identity;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod runtime_bundle;
+
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod service;
 #[cfg(any(target_os = "android", target_os = "ios"))]

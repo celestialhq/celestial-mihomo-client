@@ -1,22 +1,39 @@
 use crate::{
-    config::{Config, IClashTemp},
-    core::{logger::Logger, tray::Tray},
+    config::Config,
+    core::{owner_identity::current_owner_credentials, runtime_bundle::collect_runtime_bundle, tray::Tray},
     utils::dirs,
 };
 use anyhow::{Context as _, Result, anyhow, bail};
 use backon::{ConstantBuilder, Retryable as _};
-use celestial_service_ipc::CoreConfig;
+use celestial_service_ipc::{OwnerSessionProof, StartClashRequest};
 use clash_verge_logging::{Type, logging};
 use compact_str::CompactString;
 use once_cell::sync::Lazy;
-use std::{
-    borrow::Cow,
-    env::current_exe,
-    path::{Path, PathBuf},
-    process::Command as StdCommand,
-    time::Duration,
-};
+use std::{borrow::Cow, env::current_exe, path::Path, process::Command as StdCommand, time::Duration};
 use tokio::sync::Mutex;
+
+/// The session handed out by the service for the core we started. Mutating
+/// calls are only authorised while this matches the service's own generation,
+/// so a stale client cannot stop a core another instance now owns.
+static ACTIVE_SERVICE_SESSION: Lazy<parking_lot::Mutex<Option<OwnerSessionProof>>> =
+    Lazy::new(|| parking_lot::Mutex::new(None));
+
+fn generate_service_session_token() -> Result<String> {
+    let mut bytes = [0_u8; 32];
+    getrandom::fill(&mut bytes).context("failed to generate service owner session")?;
+    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+pub(crate) fn active_service_session() -> Result<OwnerSessionProof> {
+    ACTIVE_SERVICE_SESSION
+        .lock()
+        .clone()
+        .context("service owner session is not active")
+}
+
+pub(crate) fn clear_active_service_session() {
+    ACTIVE_SERVICE_SESSION.lock().take();
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServiceStatus {
@@ -339,8 +356,9 @@ fn force_reinstall_service() -> Result<()> {
 }
 
 /// 尝试使用服务启动core
-pub(super) async fn start_with_existing_service(config_file: &PathBuf) -> Result<()> {
+pub(super) async fn start_with_existing_service(config_file: &Path) -> Result<()> {
     logging!(info, Type::Service, "尝试使用现有服务启动核心");
+    clear_active_service_session();
 
     let verge_config = Config::verge().await;
     let clash_core = verge_config.latest_arc().get_valid_clash_core();
@@ -349,17 +367,19 @@ pub(super) async fn start_with_existing_service(config_file: &PathBuf) -> Result
     let bin_ext = if cfg!(windows) { ".exe" } else { "" };
     let bin_path = current_exe()?.with_file_name(format!("{clash_core}{bin_ext}"));
 
-    let payload = celestial_service_ipc::ClashConfig {
-        core_config: CoreConfig {
-            config_path: dirs::path_to_str(config_file)?.into(),
-            core_path: dirs::path_to_str(&bin_path)?.into(),
-            core_ipc_path: IClashTemp::guard_external_controller_ipc(),
-            config_dir: dirs::path_to_str(&dirs::app_home_dir()?)?.into(),
-        },
-        log_config: Logger::global().service_writer_config()?,
+    // The service no longer accepts a config *path* from us — it takes the
+    // config and its assets by value, so a privileged process never reads
+    // files out of a directory an unprivileged client controls.
+    let credentials = current_owner_credentials()?;
+    let runtime = collect_runtime_bundle(config_file, &bin_path).await?;
+    let proposed_session_token = generate_service_session_token()?;
+    let request = StartClashRequest {
+        runtime,
+        proposed_session_token: proposed_session_token.clone(),
+        macos_proxy: None,
     };
 
-    let response = celestial_service_ipc::start_clash(&payload)
+    let response = celestial_service_ipc::start_clash(&credentials, &request)
         .await
         .context("无法连接到Celestial Service")?;
 
@@ -369,12 +389,20 @@ pub(super) async fn start_with_existing_service(config_file: &PathBuf) -> Result
         bail!(err_msg);
     }
 
+    // The generation the service assigns, paired with the token we proposed,
+    // is what authorises every later mutating call.
+    let result = response.data.context("Celestial Service 未返回会话信息")?;
+    *ACTIVE_SERVICE_SESSION.lock() = Some(OwnerSessionProof {
+        generation: result.session.generation,
+        token: proposed_session_token,
+    });
+
     logging!(info, Type::Service, "服务成功启动核心");
     Ok(())
 }
 
 // 以服务启动core
-pub(super) async fn run_core_by_service(config_file: &PathBuf) -> Result<()> {
+pub(super) async fn run_core_by_service(config_file: &Path) -> Result<()> {
     logging!(info, Type::Service, "正在尝试通过服务启动核心");
 
     let mut manager = SERVICE_MANAGER.lock().await;
@@ -394,7 +422,8 @@ pub(super) async fn run_core_by_service(config_file: &PathBuf) -> Result<()> {
 pub(super) async fn get_clash_logs_by_service() -> Result<Vec<CompactString>> {
     logging!(info, Type::Service, "正在获取服务模式下的 Clash 日志");
 
-    let response = celestial_service_ipc::get_clash_logs()
+    let credentials = current_owner_credentials()?;
+    let response = celestial_service_ipc::get_clash_logs(&credentials)
         .await
         .context("无法连接到Celestial Service")?;
 
@@ -412,9 +441,15 @@ pub(super) async fn get_clash_logs_by_service() -> Result<Vec<CompactString>> {
 pub(super) async fn stop_core_by_service() -> Result<()> {
     logging!(info, Type::Service, "通过服务停止核心 (IPC)");
 
-    let response = celestial_service_ipc::stop_clash()
+    let credentials = current_owner_credentials()?;
+    let session = active_service_session()?;
+    let response = celestial_service_ipc::stop_clash(&credentials, &session)
         .await
         .context("无法连接到Celestial Service")?;
+
+    // Drop the session regardless of the reply: whether the stop succeeded or
+    // the service rejected us, the generation we held is no longer usable.
+    clear_active_service_session();
 
     if response.code > 0 {
         let err_msg = response.message;
@@ -423,6 +458,18 @@ pub(super) async fn stop_core_by_service() -> Result<()> {
     }
 
     logging!(info, Type::Service, "服务成功停止核心");
+    Ok(())
+}
+
+pub(crate) async fn update_writer_by_service(writer: &celestial_service_ipc::WriterConfig) -> Result<()> {
+    let credentials = current_owner_credentials()?;
+    let session = active_service_session()?;
+    let response = celestial_service_ipc::update_writer(&credentials, &session, writer)
+        .await
+        .context("无法连接到Celestial Service")?;
+    if response.code > 0 {
+        bail!(response.message);
+    }
     Ok(())
 }
 
