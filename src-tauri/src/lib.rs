@@ -470,9 +470,14 @@ pub fn run() {
                 event_handlers::handle_reopen(has_visible_windows).await;
             });
         }
-        tauri::RunEvent::Exit => {
+        tauri::RunEvent::Exit => AsyncHandler::block_on(async {
+            // Windows session ending currently reaches Tao as WM_ENDSESSION and
+            // destroys the loop without a preventable ExitRequested event.
+            if !handle::Handle::global().is_exiting() {
+                feat::quit().await;
+            }
             logging!(info, Type::System, "Application exited");
-        }
+        }),
         #[allow(unused_variables)]
         tauri::RunEvent::ExitRequested { api, code, .. } => {
             if module::lightweight::is_in_lightweight_mode() && !handle::Handle::global().is_exiting() {
@@ -480,7 +485,9 @@ pub fn run() {
             } else if code.is_none() {
                 api.prevent_exit();
                 if !handle::Handle::global().is_exiting() {
-                    AsyncHandler::spawn(|| async {
+                    // Must finish before the loop tears down, otherwise cleanup
+                    // races the process going away.
+                    AsyncHandler::block_on(async {
                         feat::quit().await;
                     });
                 }

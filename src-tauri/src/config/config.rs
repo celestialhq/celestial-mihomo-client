@@ -92,6 +92,11 @@ impl Config {
             handle::Handle::notice_message(msg_type, msg_content);
         }
 
+        // generate_and_validate() leaves the freshly generated config in the
+        // runtime draft; without committing it here the first readers after
+        // startup fall back to the stale committed snapshot.
+        Self::runtime().await.apply();
+
         {
             let profiles = Self::profiles().await.data_arc();
             // Logging error internally

@@ -34,6 +34,9 @@ impl fmt::Display for RunningMode {
 pub struct CoreManager {
     state: ArcSwap<State>,
     last_update: ArcSwapOption<Instant>,
+    // 串行化 start/stop/restart，避免生命周期操作互相穿插
+    // （例如 restart 的 stop 与另一个 start 交错，留下无人管理的内核进程）。
+    lifecycle_lock: tokio::sync::Mutex<()>,
 }
 
 #[derive(Debug)]
@@ -56,6 +59,7 @@ impl Default for CoreManager {
         Self {
             state: ArcSwap::new(Arc::new(State::default())),
             last_update: ArcSwapOption::new(None),
+            lifecycle_lock: tokio::sync::Mutex::new(()),
         }
     }
 }
