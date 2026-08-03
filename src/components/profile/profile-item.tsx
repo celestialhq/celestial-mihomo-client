@@ -645,7 +645,12 @@ export const ProfileItem = (props: Props) => {
 
   const handleSaveProfileDocument = useLockFn(async () => {
     const currentValue = profileDocument.value
-    await saveProfileFile(uid, currentValue)
+    if (!(await saveProfileFile(uid, currentValue))) {
+      // Backend restored the previous content; show that instead of the
+      // rejected text so a reopened editor is not out of sync with disk.
+      await profileDocument.reload()
+      return
+    }
     onSave?.(profileDocument.savedValue, currentValue)
     profileDocument.markSaved(currentValue)
   })
@@ -653,7 +658,12 @@ export const ProfileItem = (props: Props) => {
   const handleSaveMergeDocument = useLockFn(async () => {
     const mergeUid = option?.merge ?? ''
     const currentValue = mergeDocument.value
-    await saveProfileFile(mergeUid, currentValue)
+    if (!(await saveProfileFile(mergeUid, currentValue))) {
+      // Backend restored the previous content; show that instead of the
+      // rejected text so a reopened editor is not out of sync with disk.
+      await mergeDocument.reload()
+      return
+    }
     onSave?.(mergeDocument.savedValue, currentValue)
     mergeDocument.markSaved(currentValue)
   })
@@ -661,7 +671,12 @@ export const ProfileItem = (props: Props) => {
   const handleSaveScriptDocument = useLockFn(async () => {
     const scriptUid = option?.script ?? ''
     const currentValue = scriptDocument.value
-    await saveProfileFile(scriptUid, currentValue)
+    if (!(await saveProfileFile(scriptUid, currentValue))) {
+      // Backend restored the previous content; show that instead of the
+      // rejected text so a reopened editor is not out of sync with disk.
+      await scriptDocument.reload()
+      return
+    }
     onSave?.(scriptDocument.savedValue, currentValue)
     scriptDocument.markSaved(currentValue)
   })

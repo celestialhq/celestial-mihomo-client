@@ -3,7 +3,10 @@ use crate::{
     cmd::StringifyErr as _,
     cmd::validate::{ValidationNoticeTarget, handle_validation_notice},
     config::{Config, PrfItem},
-    core::{CoreManager, handle, validate::CoreConfigValidator},
+    core::{
+        CoreManager, handle,
+        validate::{CoreConfigValidator, ValidationOutcome},
+    },
     module::auto_backup::{AutoBackupManager, AutoBackupTrigger},
     utils::dirs,
 };
@@ -13,10 +16,10 @@ use tokio::fs;
 
 /// 保存profiles的配置
 #[tauri::command]
-pub async fn save_profile_file(index: String, file_data: Option<String>) -> CmdResult {
+pub async fn save_profile_file(index: String, file_data: Option<String>) -> CmdResult<ValidationOutcome> {
     let file_data = match file_data {
         Some(d) => d,
-        None => return Ok(()),
+        None => return Ok(ValidationOutcome::Valid),
     };
 
     let backup_trigger = match index.as_str() {
@@ -59,17 +62,21 @@ pub async fn save_profile_file(index: String, file_data: Option<String>) -> CmdR
         is_merge_file
     );
 
-    let changes_applied = if is_merge_file {
+    let outcome = if is_merge_file {
         handle_merge_file(&file_path_str, &file_path, &original_content).await?
     } else {
         handle_full_validation(&file_path_str, &file_path, &original_content).await?
     };
 
-    if changes_applied && let Some(trigger) = backup_trigger {
+    if outcome.is_valid()
+        && let Some(trigger) = backup_trigger
+    {
         AutoBackupManager::trigger_backup(trigger);
     }
 
-    Ok(())
+    // On failure the file has already been restored to `original_content`, so the
+    // caller is expected to re-read it rather than keep showing the rejected text.
+    Ok(outcome)
 }
 
 async fn restore_original(file_path: &std::path::Path, original_content: &str) -> Result<(), String> {
@@ -80,7 +87,7 @@ async fn handle_merge_file(
     file_path_str: &str,
     file_path: &std::path::Path,
     original_content: &str,
-) -> CmdResult<bool> {
+) -> CmdResult<ValidationOutcome> {
     logging!(info, Type::Config, "[cmd配置save] 检测到merge文件，只进行语法验证");
 
     match CoreConfigValidator::validate_config_file_outcome(file_path_str, Some(true)).await {
@@ -91,13 +98,13 @@ async fn handle_merge_file(
             } else {
                 handle::Handle::refresh_clash();
             }
-            Ok(true)
+            Ok(ValidationOutcome::Valid)
         }
         Ok(outcome) => {
             logging!(warn, Type::Config, "[cmd配置save] merge文件语法验证失败: {}", outcome);
             restore_original(file_path, original_content).await?;
             handle_validation_notice(&outcome, ValidationNoticeTarget::Merge, "合并配置文件");
-            Ok(false)
+            Ok(outcome)
         }
         Err(e) => {
             logging!(error, Type::Config, "[cmd配置save] 验证过程发生错误: {}", e);
@@ -111,11 +118,11 @@ async fn handle_full_validation(
     file_path_str: &str,
     file_path: &std::path::Path,
     original_content: &str,
-) -> CmdResult<bool> {
+) -> CmdResult<ValidationOutcome> {
     match CoreConfigValidator::validate_config_file_outcome(file_path_str, None).await {
         Ok(outcome) if outcome.is_valid() => {
             logging!(info, Type::Config, "[cmd配置save] 验证成功");
-            Ok(true)
+            Ok(outcome)
         }
         Ok(outcome) => {
             logging!(warn, Type::Config, "[cmd配置save] 验证失败: {}", outcome);
@@ -130,7 +137,7 @@ async fn handle_full_validation(
             };
             handle_validation_notice(&outcome, target, file_type);
 
-            Ok(false)
+            Ok(outcome)
         }
         Err(e) => {
             logging!(error, Type::Config, "[cmd配置save] 验证过程发生错误: {}", e);

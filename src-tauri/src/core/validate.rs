@@ -108,17 +108,6 @@ impl ValidationOutcome {
     pub const fn is_valid(&self) -> bool {
         matches!(self, Self::Valid)
     }
-
-    /// 兼容仍在使用 `(bool, String)` 的调用方（前端契约尚未切换）。
-    pub fn into_legacy_pair(self) -> (bool, String) {
-        match self {
-            Self::Valid => (true, String::new()),
-            // Skipped/Busy 表示没有真正验证，对这些调用方按“无异常”处理，
-            // 与重构前的行为保持一致。
-            Self::Skipped { .. } | Self::Busy => (true, String::new()),
-            Self::Invalid { message, .. } => (false, message),
-        }
-    }
 }
 
 impl fmt::Display for ValidationOutcome {

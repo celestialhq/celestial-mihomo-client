@@ -35,11 +35,11 @@ pub async fn get_profiles() -> CmdResult<SharedDraft<IProfiles>> {
 
 /// 增强配置文件
 #[tauri::command]
-pub async fn enhance_profiles() -> CmdResult {
+pub async fn enhance_profiles() -> CmdResult<ValidationOutcome> {
     match feat::enhance_profiles().await {
         Ok(outcome) if outcome.is_valid() => {
             handle::Handle::refresh_clash();
-            Ok(())
+            Ok(outcome)
         }
         Ok(outcome) => {
             logging!(
@@ -48,7 +48,8 @@ pub async fn enhance_profiles() -> CmdResult {
                 "Reactivate profiles command failed validation: {}",
                 outcome
             );
-            Err(outcome.to_string().into())
+            handle_validation_notice(&outcome, ValidationNoticeTarget::Runtime, "运行时配置");
+            Ok(outcome)
         }
         Err(e) => {
             logging!(error, Type::Cmd, "{}", e);
@@ -190,7 +191,7 @@ pub async fn delete_profile(index: String) -> CmdResult {
 }
 
 /// 验证新配置文件的语法
-async fn validate_new_profile(new_profile: &String) -> Result<(), ()> {
+async fn validate_new_profile(new_profile: &String) -> Result<(), String> {
     logging!(info, Type::Cmd, "正在切换到新配置: {}", new_profile);
 
     // 获取目标配置文件路径
@@ -217,8 +218,9 @@ async fn validate_new_profile(new_profile: &String) -> Result<(), ()> {
     if let Some(file_path) = config_file_result {
         if !file_path.exists() {
             logging!(error, Type::Cmd, "目标配置文件不存在: {}", file_path.display());
-            handle::Handle::notice_message("config_validate::file_not_found", format!("{}", file_path.display()));
-            return Err(());
+            let error_msg: String = format!("File not found: {}", file_path.display()).into();
+            handle::Handle::notice_message("config_validate::file_not_found", error_msg.clone());
+            return Err(error_msg);
         }
 
         // 超时保护
@@ -237,30 +239,30 @@ async fn validate_new_profile(new_profile: &String) -> Result<(), ()> {
                         Ok(())
                     }
                     Ok(Err(err)) => {
-                        let error_msg = format!(" {err}");
+                        let error_msg: String = format!("YAML syntax error: {err}").into();
                         logging!(error, Type::Cmd, "目标配置文件存在YAML语法错误:{}", error_msg);
-                        handle::Handle::notice_message("config_validate::yaml_syntax_error", error_msg);
-                        Err(())
+                        handle::Handle::notice_message("config_validate::yaml_syntax_error", error_msg.clone());
+                        Err(error_msg)
                     }
                     Err(join_err) => {
-                        let error_msg = format!("YAML解析任务失败: {join_err}");
+                        let error_msg: String = format!("YAML解析任务失败: {join_err}").into();
                         logging!(error, Type::Cmd, "{}", error_msg);
-                        handle::Handle::notice_message("config_validate::yaml_parse_error", error_msg);
-                        Err(())
+                        handle::Handle::notice_message("config_validate::yaml_parse_error", error_msg.clone());
+                        Err(error_msg)
                     }
                 }
             }
             Ok(Err(err)) => {
-                let error_msg = format!("无法读取目标配置文件: {err}");
+                let error_msg: String = format!("Failed to read file: {err}").into();
                 logging!(error, Type::Cmd, "{}", error_msg);
-                handle::Handle::notice_message("config_validate::file_read_error", error_msg);
-                Err(())
+                handle::Handle::notice_message("config_validate::file_read_error", error_msg.clone());
+                Err(error_msg)
             }
             Err(_) => {
-                let error_msg = "读取配置文件超时(5秒)".to_string();
+                let error_msg: String = "读取配置文件超时(5秒)".into();
                 logging!(error, Type::Cmd, "{}", error_msg);
-                handle::Handle::notice_message("config_validate::file_read_timeout", error_msg);
-                Err(())
+                handle::Handle::notice_message("config_validate::file_read_timeout", error_msg.clone());
+                Err(error_msg)
             }
         }
     } else {
@@ -375,13 +377,13 @@ async fn perform_config_update(
 
 /// 修改profiles的配置
 #[tauri::command]
-pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult<bool> {
+pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult<ValidationOutcome> {
     if CURRENT_SWITCHING_PROFILE
         .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
         .is_err()
     {
         logging!(info, Type::Cmd, "当前正在切换配置，放弃请求");
-        return Ok(false);
+        return Ok(ValidationOutcome::Busy);
     }
 
     let target_profile = profiles.current.as_ref();
@@ -395,23 +397,19 @@ pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult<bool> {
     // 如果要切换配置，先检查目标配置文件是否有语法错误
     if let Some(switch_to_profile) = target_profile
         && previous_profile.as_ref() != Some(switch_to_profile)
-        && validate_new_profile(switch_to_profile).await.is_err()
+        && let Err(message) = validate_new_profile(switch_to_profile).await
     {
         CURRENT_SWITCHING_PROFILE.store(false, Ordering::Release);
-        return Ok(false);
+        return Ok(ValidationOutcome::invalid_from_message(message));
     }
     Config::profiles().await.edit_draft(|d| d.patch_config(&profiles));
 
-    // Collapsed to bool to keep the current frontend contract; the follow-up
-    // commit that updates the TS side returns the outcome itself.
-    perform_config_update(target_profile, previous_profile.as_ref())
-        .await
-        .map(|outcome| outcome.is_valid())
+    perform_config_update(target_profile, previous_profile.as_ref()).await
 }
 
 /// 根据profile name修改profiles
 #[tauri::command]
-pub async fn patch_profiles_config_by_profile_index(profile_index: String) -> CmdResult<bool> {
+pub async fn patch_profiles_config_by_profile_index(profile_index: String) -> CmdResult<ValidationOutcome> {
     logging!(info, Type::Cmd, "切换配置到: {}", profile_index);
 
     let profiles = IProfiles {

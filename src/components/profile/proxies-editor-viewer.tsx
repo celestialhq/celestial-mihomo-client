@@ -359,7 +359,9 @@ export const ProxiesEditorViewer = (props: Props) => {
 
   const handleSave = useLockFn(async () => {
     try {
-      await saveProfileFile(property, currData)
+      // A rejected save is restored on disk by the backend, so don't
+      // report success or close over stale content.
+      if (!(await saveProfileFile(property, currData))) return
       showNotice.success('shared.feedback.notifications.saved')
       onSave?.(prevData, currData)
       onClose()

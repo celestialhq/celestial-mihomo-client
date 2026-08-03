@@ -217,20 +217,17 @@ pub async fn get_dns_config_content() -> CmdResult<String> {
 
 /// 验证DNS配置文件
 #[tauri::command]
-pub async fn validate_dns_config() -> CmdResult<(bool, String)> {
+pub async fn validate_dns_config() -> CmdResult<ValidationOutcome> {
     let app_dir = dirs::app_home_dir().stringify_err()?;
     let dns_path = app_dir.join(constants::files::DNS_CONFIG);
     let dns_path_str = dns_path.to_str().unwrap_or_default();
 
     if !dns_path.exists() {
-        return Ok((false, "DNS config file not found".into()));
+        return Ok(ValidationOutcome::invalid_from_message("DNS config file not found"));
     }
 
-    // Still returns the legacy pair: the frontend contract switches to
-    // ValidationOutcome in the follow-up commit that updates the TS side.
     CoreConfigValidator::validate_config_file_outcome(dns_path_str, None)
         .await
-        .map(ValidationOutcome::into_legacy_pair)
         .stringify_err()
 }
 

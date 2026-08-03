@@ -545,12 +545,11 @@ export function DnsViewer({ ref }: { ref?: Ref<DialogRef> }) {
       await invoke('save_dns_config', { dnsConfig: config })
 
       // 验证配置
-      const [isValid, errorMsg] = await invoke<[boolean, string]>(
-        'validate_dns_config',
-        {},
-      )
+      const outcome = await invoke<ValidationOutcome>('validate_dns_config', {})
 
-      if (!isValid) {
+      if (outcome.status !== 'valid') {
+        const errorMsg =
+          outcome.status === 'invalid' ? outcome.message : outcome.status
         let cleanErrorMsg = errorMsg
 
         // 提取关键错误信息

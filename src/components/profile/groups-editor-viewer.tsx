@@ -509,7 +509,9 @@ export const GroupsEditorViewer = (props: Props) => {
         setCurrData(nextData)
       }
 
-      await saveProfileFile(property, nextData)
+      // A rejected save is restored on disk by the backend, so don't
+      // report success or close over stale content.
+      if (!(await saveProfileFile(property, nextData))) return
       showNotice.success('shared.feedback.notifications.saved')
       setPrevData(nextData)
       onSave?.(prevData, nextData)

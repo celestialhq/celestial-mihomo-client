@@ -17,6 +17,17 @@ type Platform =
 declare const OS_PLATFORM: Platform
 
 /**
+ * Result of a backend config validation.
+ *
+ * `busy` and `skipped` mean nothing was actually validated — they are not
+ * success, and must not be treated as such.
+ */
+type ValidationOutcome =
+  | { status: 'valid' | 'busy' }
+  | { status: 'invalid'; kind: string; message: string }
+  | { status: 'skipped'; reason: string }
+
+/**
  * Some interface for clash api
  */
 interface IConfigData {
