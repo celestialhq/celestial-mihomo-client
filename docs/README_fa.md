@@ -28,19 +28,19 @@
 
 ## نصب
 
-برای دانلود فایل نصبی متناسب با پلتفرم خود، به [صفحه انتشار](https://github.com/pius-pp/celestial-mihomo-client/releases) مراجعه کنید.<br> ما بسته‌هایی برای ویندوز (x64/x86)، لینوکس (x64/arm64) و macOS 10.15+ (اینتل/اپل) ارائه می‌دهیم.
+برای دانلود فایل نصبی متناسب با پلتفرم خود، به [صفحه انتشار](https://github.com/celestialhq/celestial-mihomo-client/releases) مراجعه کنید.<br> ما بسته‌هایی برای ویندوز (x64/x86)، لینوکس (x64/arm64) و macOS 10.15+ (اینتل/اپل) ارائه می‌دهیم.
 
 #### انتخاب کانال انتشار
 
 | Channel     | توضیحات                                                                                           | Link                                                                                   |
 | :---------- | :------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------- |
-| Stable      | ساخت رسمی با قابلیت اطمینان بالا، ایده‌آل برای استفاده روزانه.                                    | [Release](https://github.com/pius-pp/celestial-mihomo-client/releases)                 |
-| Alpha (EOL) | نسخه‌های قدیمی (Legacy builds) برای اعتبارسنجی خط لوله انتشار (publish pipeline) استفاده می‌شوند. | [Alpha](https://github.com/pius-pp/celestial-mihomo-client/releases/tag/alpha)         |
-| AutoBuild   | نسخه‌های آزمایشی برای آزمایش و دریافت بازخورد. منتظر تغییرات آزمایشی باشید.                       | [AutoBuild](https://github.com/pius-pp/celestial-mihomo-client/releases/tag/autobuild) |
+| Stable      | ساخت رسمی با قابلیت اطمینان بالا، ایده‌آل برای استفاده روزانه.                                    | [Release](https://github.com/celestialhq/celestial-mihomo-client/releases)                 |
+| Alpha (EOL) | نسخه‌های قدیمی (Legacy builds) برای اعتبارسنجی خط لوله انتشار (publish pipeline) استفاده می‌شوند. | [Alpha](https://github.com/celestialhq/celestial-mihomo-client/releases/tag/alpha)         |
+| AutoBuild   | نسخه‌های آزمایشی برای آزمایش و دریافت بازخورد. منتظر تغییرات آزمایشی باشید.                       | [AutoBuild](https://github.com/celestialhq/celestial-mihomo-client/releases/tag/autobuild) |
 
 #### راهنماهای نصب و سوالات متداول
 
-برای مراحل نصب، عیب‌یابی و سوالات متداول، [مستندات پروژه](https://github.com/pius-pp/celestial-mihomo-client#readme) را مطالعه کنید.
+برای مراحل نصب، عیب‌یابی و سوالات متداول، [مستندات پروژه](https://github.com/celestialhq/celestial-mihomo-client#readme) را مطالعه کنید.
 
 ### کانال تلگرام
 
@@ -85,7 +85,7 @@
 
 ### سوالات متداول
 
-برای راهنمایی‌های مربوط به هر پلتفرم، به [صفحه سوالات متداول](https://github.com/pius-pp/celestial-mihomo-client#readme) مراجعه کنید.
+برای راهنمایی‌های مربوط به هر پلتفرم، به [صفحه سوالات متداول](https://github.com/celestialhq/celestial-mihomo-client#readme) مراجعه کنید.
 
 ### اهدا
 

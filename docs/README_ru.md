@@ -12,7 +12,7 @@
   <a href="../README.md">English</a> · <strong>Русский</strong>
 </p>
 
-> Celestial - это форк [celestial-mihomo-client](https://github.com/pius-pp/celestial-mihomo-client). Проект сохраняет основу Celestial и адаптирует ее под клиент Celestial.
+> Celestial - это форк [celestial-mihomo-client](https://github.com/celestialhq/celestial-mihomo-client). Проект сохраняет основу Celestial и адаптирует ее под клиент Celestial.
 
 ## Что это
 
@@ -69,7 +69,7 @@ pnpm build
 
 Celestial наследует большую часть функциональности от Celestial и связанных проектов:
 
-- [pius-pp/celestial-mihomo-client](https://github.com/pius-pp/celestial-mihomo-client) - upstream, от которого сделан этот форк.
+- [celestialhq/celestial-mihomo-client](https://github.com/celestialhq/celestial-mihomo-client) - upstream, от которого сделан этот форк.
 - [zzzgydi/clash-verge](https://github.com/zzzgydi/clash-verge) - оригинальный desktop GUI Celestial.
 - [MetaCubeX/mihomo](https://github.com/MetaCubeX/mihomo) - rule-based proxy core.
 - [tauri-apps/tauri](https://github.com/tauri-apps/tauri) - фреймворк для desktop-приложений.

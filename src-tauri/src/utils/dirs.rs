@@ -11,14 +11,24 @@ use std::{fs, path::PathBuf};
 use tauri::Manager as _;
 
 #[cfg(not(feature = "celestial-dev"))]
-pub static APP_ID: &str = "io.github.pius-pp.celestial-mihomo-client";
+pub static APP_ID: &str = "io.github.celestialhq.celestial-mihomo-client";
 #[cfg(not(feature = "celestial-dev"))]
 pub static BACKUP_DIR: &str = "celestial-backup";
 
 #[cfg(feature = "celestial-dev")]
-pub static APP_ID: &str = "io.github.pius-pp.celestial-mihomo-client.dev";
+pub static APP_ID: &str = "io.github.celestialhq.celestial-mihomo-client.dev";
 #[cfg(feature = "celestial-dev")]
 pub static BACKUP_DIR: &str = "celestial-backup-dev";
+
+/// APP_ID 决定了整个用户数据目录（profiles、celestial.yaml、icons、备份…），
+/// 所以每次改动它都会把老用户的数据「丢在」旧目录里。这里按从新到旧的顺序列出
+/// 历史 APP_ID，启动时用于一次性迁移，见 `utils::init::migrate_legacy_app_home_dir`。
+///
+/// 迁移完成后请保留条目——用户可能从任意旧版本直接升上来。
+#[cfg(not(feature = "celestial-dev"))]
+pub static LEGACY_APP_IDS: &[&str] = &["io.github.pius-pp.celestial-mihomo-client"];
+#[cfg(feature = "celestial-dev")]
+pub static LEGACY_APP_IDS: &[&str] = &["io.github.pius-pp.celestial-mihomo-client.dev"];
 
 pub static PORTABLE_FLAG: OnceCell<bool> = OnceCell::new();
 static SUBSCRIPTION_HWID: OnceCell<String> = OnceCell::new();
@@ -45,6 +55,12 @@ pub fn init_portable_flag() -> Result<()> {
 
 /// get the verge app home dir
 pub fn app_home_dir() -> Result<PathBuf> {
+    app_home_dir_for(APP_ID)
+}
+
+/// 按指定 APP_ID 解析用户数据目录。除 [`app_home_dir`] 外只有历史 APP_ID 的
+/// 迁移会用到，见 [`legacy_app_home_dirs`]。
+fn app_home_dir_for(app_id: &str) -> Result<PathBuf> {
     use tauri::utils::platform::current_exe;
 
     let flag = PORTABLE_FLAG.get().unwrap_or(&false);
@@ -54,19 +70,28 @@ pub fn app_home_dir() -> Result<PathBuf> {
         let app_dir = app_exe
             .parent()
             .ok_or_else(|| anyhow::anyhow!("failed to get the portable app dir"))?;
-        return Ok(PathBuf::from(app_dir).join(".config").join(APP_ID));
+        return Ok(PathBuf::from(app_dir).join(".config").join(app_id));
     }
 
     // 避免在Handle未初始化时崩溃
     let app_handle = handle::Handle::app_handle();
 
     match app_handle.path().data_dir() {
-        Ok(dir) => Ok(dir.join(APP_ID)),
+        Ok(dir) => Ok(dir.join(app_id)),
         Err(e) => {
             logging!(error, Type::File, "Failed to get the app home directory: {e}");
             Err(anyhow::anyhow!("Failed to get the app homedirectory"))
         }
     }
+}
+
+/// 历史 APP_ID 对应的用户数据目录，顺序与 [`LEGACY_APP_IDS`] 一致（新 -> 旧）。
+pub fn legacy_app_home_dirs() -> Vec<PathBuf> {
+    LEGACY_APP_IDS
+        .iter()
+        .filter(|id| **id != APP_ID)
+        .filter_map(|id| app_home_dir_for(id).ok())
+        .collect()
 }
 
 /// get the resources dir

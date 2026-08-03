@@ -255,7 +255,7 @@ const AdvancedHomePage = () => {
   // 文档链接函数
   const toGithubDoc = useLockFn(() => {
     return openWebUrl(
-      'https://github.com/pius-pp/celestial-mihomo-client-public#readme',
+      'https://github.com/celestialhq/celestial-mihomo-client#readme',
     )
   })
 

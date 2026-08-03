@@ -22,7 +22,7 @@ async function sendTelegramNotification() {
 
   const downloadUrl =
     process.env.DOWNLOAD_URL ||
-    `https://github.com/${process.env.PUBLIC_RELEASE_REPO || 'pius-pp/celestial-mihomo-client-public'}/releases/download/v${version}`
+    `https://github.com/${process.env.PUBLIC_RELEASE_REPO || 'celestialhq/celestial-mihomo-client'}/releases/download/v${version}`
 
   const isAutobuild =
     process.env.BUILD_TYPE === 'autobuild' || version.includes('autobuild')
@@ -117,7 +117,7 @@ async function sendTelegramNotification() {
   const encodedVersion = encodeURIComponent(version)
   const releaseTag = isAutobuild ? 'autobuild' : `v${version}`
   const publicReleaseRepo =
-    process.env.PUBLIC_RELEASE_REPO || 'pius-pp/celestial-mihomo-client-public'
+    process.env.PUBLIC_RELEASE_REPO || 'celestialhq/celestial-mihomo-client'
   const releasePageUrl = `https://github.com/${publicReleaseRepo}/releases/tag/${releaseTag}`
 
   const content = `<b>🎉 <a href="${releasePageUrl}">Celestial v${version}</a> — ${releaseTitle}</b>\n\n${formattedContent}`

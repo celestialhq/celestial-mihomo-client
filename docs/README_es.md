@@ -28,20 +28,20 @@ Una interfaz gráfica para Clash Meta construida con <a href="https://github.com
 
 ## Instalación
 
-Visita la [página de lanzamientos](https://github.com/pius-pp/celestial-mihomo-client/releases) y descarga el instalador que corresponda a tu plataforma.<br>
+Visita la [página de lanzamientos](https://github.com/celestialhq/celestial-mihomo-client/releases) y descarga el instalador que corresponda a tu plataforma.<br>
 Ofrecemos paquetes para Windows (x64/x86), Linux (x64/arm64) y macOS 10.15+ (Intel/Apple).
 
 #### Cómo elegir el canal de lanzamiento
 
 | Canal       | Descripción                                                                    | Enlace                                                                                 |
 | :---------- | :----------------------------------------------------------------------------- | :------------------------------------------------------------------------------------- |
-| Stable      | Compilaciones oficiales de alta fiabilidad; ideales para el uso diario.        | [Release](https://github.com/pius-pp/celestial-mihomo-client/releases)                 |
-| Alpha (EOL) | Compilaciones heredadas usadas para validar el flujo de publicación.           | [Alpha](https://github.com/pius-pp/celestial-mihomo-client/releases/tag/alpha)         |
-| AutoBuild   | Compilaciones continuas para pruebas y retroalimentación. Espera cambios beta. | [AutoBuild](https://github.com/pius-pp/celestial-mihomo-client/releases/tag/autobuild) |
+| Stable      | Compilaciones oficiales de alta fiabilidad; ideales para el uso diario.        | [Release](https://github.com/celestialhq/celestial-mihomo-client/releases)                 |
+| Alpha (EOL) | Compilaciones heredadas usadas para validar el flujo de publicación.           | [Alpha](https://github.com/celestialhq/celestial-mihomo-client/releases/tag/alpha)         |
+| AutoBuild   | Compilaciones continuas para pruebas y retroalimentación. Espera cambios beta. | [AutoBuild](https://github.com/celestialhq/celestial-mihomo-client/releases/tag/autobuild) |
 
 #### Guías de instalación y preguntas frecuentes
 
-Consulta la [documentación del proyecto](https://github.com/pius-pp/celestial-mihomo-client#readme) para encontrar los pasos de instalación, solución de problemas y preguntas frecuentes.
+Consulta la [documentación del proyecto](https://github.com/celestialhq/celestial-mihomo-client#readme) para encontrar los pasos de instalación, solución de problemas y preguntas frecuentes.
 
 ### Canal de Telegram
 
@@ -86,7 +86,7 @@ Consulta la [documentación del proyecto](https://github.com/pius-pp/celestial-m
 
 ### Preguntas frecuentes
 
-Visita la [página de FAQ](https://github.com/pius-pp/celestial-mihomo-client#readme) para obtener instrucciones específicas por plataforma.
+Visita la [página de FAQ](https://github.com/celestialhq/celestial-mihomo-client#readme) para obtener instrucciones específicas por plataforma.
 
 ### Donaciones
 

@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PUBLIC_RELEASE_REPO: pius-pp/celestial-mihomo-client-public
+  PUBLIC_RELEASE_REPO: celestialhq/celestial-mihomo-client
   RELEASE_SOURCE_BRANCH: main
   RUST_TOOLCHAIN: '1.95.0'
   NODE_VERSION: '24.15.0'

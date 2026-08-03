@@ -229,7 +229,7 @@ export function UpdateViewer({ ref }: { ref?: Ref<DialogRef> }) {
             sx={{ whiteSpace: 'nowrap' }}
             onClick={() => {
               openUrl(
-                `https://github.com/pius-pp/celestial-mihomo-client-public/releases/tag/v${updateInfo?.version}`,
+                `https://github.com/celestialhq/celestial-mihomo-client/releases/tag/v${updateInfo?.version}`,
               )
             }}
           >

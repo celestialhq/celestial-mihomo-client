@@ -144,8 +144,8 @@ importers:
         specifier: ^7.0.0
         version: 7.0.0
       tauri-plugin-mihomo-api:
-        specifier: github:pius-pp/tauri-plugin-mihomo#main
-        version: https://codeload.github.com/pius-pp/tauri-plugin-mihomo/tar.gz/ff75ee3edd61923e6c76a7f3cf3c3fbd0f8e22c0
+        specifier: github:celestialhq/tauri-plugin-mihomo#main
+        version: https://codeload.github.com/celestialhq/tauri-plugin-mihomo/tar.gz/ff75ee3edd61923e6c76a7f3cf3c3fbd0f8e22c0
       types-pac:
         specifier: ^1.0.3
         version: 1.0.3
@@ -3439,8 +3439,8 @@ packages:
     resolution: {integrity: sha512-56adEpPMouktRlBLXiaYFFzZ/3+JXa8P9n7WbR+ibIjtviN55mEaOkiysCnPnWm+7kkui1Dn8J9l+g6zV8731w==}
     engines: {node: '>=18'}
 
-  tauri-plugin-mihomo-api@https://codeload.github.com/pius-pp/tauri-plugin-mihomo/tar.gz/ff75ee3edd61923e6c76a7f3cf3c3fbd0f8e22c0:
-    resolution: {tarball: https://codeload.github.com/pius-pp/tauri-plugin-mihomo/tar.gz/ff75ee3edd61923e6c76a7f3cf3c3fbd0f8e22c0}
+  tauri-plugin-mihomo-api@https://codeload.github.com/celestialhq/tauri-plugin-mihomo/tar.gz/ff75ee3edd61923e6c76a7f3cf3c3fbd0f8e22c0:
+    resolution: {tarball: https://codeload.github.com/celestialhq/tauri-plugin-mihomo/tar.gz/ff75ee3edd61923e6c76a7f3cf3c3fbd0f8e22c0}
     version: 0.5.4
 
   terser@5.46.1:
@@ -7217,7 +7217,7 @@ snapshots:
       minizlib: 3.1.0
       yallist: 5.0.0
 
-  tauri-plugin-mihomo-api@https://codeload.github.com/pius-pp/tauri-plugin-mihomo/tar.gz/ff75ee3edd61923e6c76a7f3cf3c3fbd0f8e22c0:
+  tauri-plugin-mihomo-api@https://codeload.github.com/celestialhq/tauri-plugin-mihomo/tar.gz/ff75ee3edd61923e6c76a7f3cf3c3fbd0f8e22c0:
     dependencies:
       '@tauri-apps/api': 2.11.1
 

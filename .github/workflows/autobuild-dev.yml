@@ -34,7 +34,7 @@ concurrency:
 env:
   TAG_NAME: autobuild
   RELEASE_NAME: Celestial AutoBuild
-  PUBLIC_RELEASE_REPO: pius-pp/celestial-mihomo-client-public
+  PUBLIC_RELEASE_REPO: celestialhq/celestial-mihomo-client
   RUST_TOOLCHAIN: '1.95.0'
   NODE_VERSION: '24.15.0'
   ANDROID_NDK_VERSION: '27.3.13750724'

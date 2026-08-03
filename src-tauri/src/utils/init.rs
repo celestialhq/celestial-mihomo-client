@@ -13,9 +13,10 @@ use crate::{
 use anyhow::Result;
 use chrono::{Local, TimeZone as _};
 use clash_verge_logging::Type;
-#[cfg(target_os = "windows")]
-use std::path::Path;
-use std::{path::PathBuf, str::FromStr as _};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr as _,
+};
 use tauri_plugin_shell::ShellExt as _;
 use tokio::fs;
 use tokio::fs::DirEntry;
@@ -227,6 +228,96 @@ async fn init_dns_config() -> Result<()> {
     Ok(())
 }
 
+/// 目录是否存在且非空
+async fn dir_has_entries(dir: &Path) -> bool {
+    match fs::read_dir(dir).await {
+        Ok(mut entries) => matches!(entries.next_entry().await, Ok(Some(_))),
+        Err(_) => false,
+    }
+}
+
+/// 递归复制目录（rename 失败时的兜底，例如旧目录跨卷或被占用）。
+/// 用显式栈而不是 async 递归，省掉 Box::pin。
+async fn copy_dir_all(src: &Path, dest: &Path) -> Result<()> {
+    let mut pending = vec![(src.to_path_buf(), dest.to_path_buf())];
+
+    while let Some((from, to)) = pending.pop() {
+        fs::create_dir_all(&to).await?;
+        let mut entries = fs::read_dir(&from).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            let target = to.join(entry.file_name());
+            if entry.file_type().await?.is_dir() {
+                pending.push((entry.path(), target));
+            } else {
+                fs::copy(entry.path(), &target).await?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// 把历史 APP_ID 下的用户数据迁移到当前 APP_ID 目录。
+///
+/// APP_ID 变更（pius-pp -> celestialhq）会把 profiles、celestial.yaml、图标和
+/// 备份留在旧目录里，升级上来的用户会看到一个空客户端。这里在任何东西读写新
+/// 目录之前跑一次，所以必须留在 [`init_config`] 的最前面。
+///
+/// 只在新目录不存在或为空时迁移——新目录里已经有数据就说明用户已经在新版上用过了，
+/// 这时候覆盖会造成真正的数据丢失。
+async fn migrate_legacy_app_home_dir() -> Result<()> {
+    let new_dir = dirs::app_home_dir()?;
+
+    if dir_has_entries(&new_dir).await {
+        return Ok(());
+    }
+
+    for legacy_dir in dirs::legacy_app_home_dirs() {
+        if legacy_dir == new_dir || !dir_has_entries(&legacy_dir).await {
+            continue;
+        }
+
+        logging!(
+            info,
+            Type::Setup,
+            "migrating app data from legacy dir {:?} to {:?}",
+            legacy_dir,
+            new_dir
+        );
+
+        // 空的新目录会挡住 rename，先挪开（remove_dir 只删空目录，非空会报错并跳过）
+        if new_dir.exists() {
+            std::mem::drop(fs::remove_dir(&new_dir).await);
+        }
+
+        match fs::rename(&legacy_dir, &new_dir).await {
+            Ok(()) => {
+                logging!(info, Type::Setup, "app data migrated to {:?}", new_dir);
+            }
+            Err(err) => {
+                logging!(
+                    warn,
+                    Type::Setup,
+                    "failed to rename legacy app dir ({err}), falling back to copy"
+                );
+                copy_dir_all(&legacy_dir, &new_dir).await?;
+                // 故意保留旧目录：复制过程中出问题时用户还能手动找回数据
+                logging!(
+                    info,
+                    Type::Setup,
+                    "app data copied to {:?}, legacy dir kept at {:?}",
+                    new_dir,
+                    legacy_dir
+                );
+            }
+        }
+
+        return Ok(());
+    }
+
+    Ok(())
+}
+
 /// 确保目录结构存在
 async fn ensure_directories() -> Result<()> {
     let directories = [
@@ -297,6 +388,11 @@ pub async fn init_config() -> Result<()> {
     // if let Err(e) = init_log().await {
     //     eprintln!("Failed to initialize logging: {}", e);
     // }
+
+    // 必须在任何东西创建/读取新 APP_ID 目录之前执行
+    if let Err(e) = migrate_legacy_app_home_dir().await {
+        logging!(error, Type::Setup, "Legacy app data migration failed: {}", e);
+    }
 
     ensure_directories().await?;
 

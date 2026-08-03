@@ -28,20 +28,20 @@
 
 ## インストール
 
-[リリースページ](https://github.com/pius-pp/celestial-mihomo-client/releases) から、ご利用のプラットフォームに対応したインストーラーをダウンロードしてください。<br>
+[リリースページ](https://github.com/celestialhq/celestial-mihomo-client/releases) から、ご利用のプラットフォームに対応したインストーラーをダウンロードしてください。<br>
 Windows (x64/x86)、Linux (x64/arm64)、macOS 10.15+ (Intel/Apple) をサポートしています。
 
 #### リリースチャンネルの選び方
 
 | チャンネル  | 説明                                                             | リンク                                                                                 |
 | :---------- | :--------------------------------------------------------------- | :------------------------------------------------------------------------------------- |
-| Stable      | 安定版。信頼性が高く、日常利用に最適です。                       | [Release](https://github.com/pius-pp/celestial-mihomo-client/releases)                 |
-| Alpha (EOL) | 公開フローの検証に使用した旧テスト版。                           | [Alpha](https://github.com/pius-pp/celestial-mihomo-client/releases/tag/alpha)         |
-| AutoBuild   | 継続的に更新されるテスト版。フィードバックや新機能検証向けです。 | [AutoBuild](https://github.com/pius-pp/celestial-mihomo-client/releases/tag/autobuild) |
+| Stable      | 安定版。信頼性が高く、日常利用に最適です。                       | [Release](https://github.com/celestialhq/celestial-mihomo-client/releases)                 |
+| Alpha (EOL) | 公開フローの検証に使用した旧テスト版。                           | [Alpha](https://github.com/celestialhq/celestial-mihomo-client/releases/tag/alpha)         |
+| AutoBuild   | 継続的に更新されるテスト版。フィードバックや新機能検証向けです。 | [AutoBuild](https://github.com/celestialhq/celestial-mihomo-client/releases/tag/autobuild) |
 
 #### インストール手順と FAQ
 
-詳しい導入手順やトラブルシュートは [ドキュメントサイト](https://github.com/pius-pp/celestial-mihomo-client#readme) を参照してください。
+詳しい導入手順やトラブルシュートは [ドキュメントサイト](https://github.com/celestialhq/celestial-mihomo-client#readme) を参照してください。
 
 ### Telegram チャンネル
 
@@ -86,7 +86,7 @@ Windows (x64/x86)、Linux (x64/arm64)、macOS 10.15+ (Intel/Apple) をサポー�
 
 ### FAQ
 
-プラットフォーム別の案内は [FAQ ページ](https://github.com/pius-pp/celestial-mihomo-client#readme) を参照してください。
+プラットフォーム別の案内は [FAQ ページ](https://github.com/celestialhq/celestial-mihomo-client#readme) を参照してください。
 
 ### 寄付
 

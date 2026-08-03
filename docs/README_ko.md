@@ -28,20 +28,20 @@
 
 ## 설치
 
-[릴리스 페이지](https://github.com/pius-pp/celestial-mihomo-client/releases)에서 사용 중인 플랫폼에 맞는 설치 프로그램을 다운로드하세요.<br>
+[릴리스 페이지](https://github.com/celestialhq/celestial-mihomo-client/releases)에서 사용 중인 플랫폼에 맞는 설치 프로그램을 다운로드하세요.<br>
 Windows (x64/x86), Linux (x64/arm64), macOS 10.15+ (Intel/Apple)을 지원합니다.
 
 #### 릴리스 채널 선택
 
 | 채널        | 설명                                                                                 | 링크                                                                                   |
 | :---------- | :----------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------- |
-| Stable      | 안정 릴리스. 신뢰성이 높아 일상 사용에 적합합니다.                                   | [Release](https://github.com/pius-pp/celestial-mihomo-client/releases)                 |
-| Alpha (EOL) | 퍼블리시 파이프라인 검증에 사용되었던 구 테스트 채널입니다.                          | [Alpha](https://github.com/pius-pp/celestial-mihomo-client/releases/tag/alpha)         |
-| AutoBuild   | 롤링 빌드 채널. 테스트와 피드백 용도로 권장되며, 실험적인 변경이 포함될 수 있습니다. | [AutoBuild](https://github.com/pius-pp/celestial-mihomo-client/releases/tag/autobuild) |
+| Stable      | 안정 릴리스. 신뢰성이 높아 일상 사용에 적합합니다.                                   | [Release](https://github.com/celestialhq/celestial-mihomo-client/releases)                 |
+| Alpha (EOL) | 퍼블리시 파이프라인 검증에 사용되었던 구 테스트 채널입니다.                          | [Alpha](https://github.com/celestialhq/celestial-mihomo-client/releases/tag/alpha)         |
+| AutoBuild   | 롤링 빌드 채널. 테스트와 피드백 용도로 권장되며, 실험적인 변경이 포함될 수 있습니다. | [AutoBuild](https://github.com/celestialhq/celestial-mihomo-client/releases/tag/autobuild) |
 
 #### 설치 가이드 및 FAQ
 
-설치 방법, 트러블슈팅, 자주 묻는 질문은 [프로젝트 문서](https://github.com/pius-pp/celestial-mihomo-client#readme)를 참고하세요.
+설치 방법, 트러블슈팅, 자주 묻는 질문은 [프로젝트 문서](https://github.com/celestialhq/celestial-mihomo-client#readme)를 참고하세요.
 
 ### 텔레그램 채널
 
@@ -86,7 +86,7 @@ Windows (x64/x86), Linux (x64/arm64), macOS 10.15+ (Intel/Apple)을 지원합니
 
 ### FAQ
 
-플랫폼별 가이드는 [FAQ 페이지](https://github.com/pius-pp/celestial-mihomo-client#readme)에서 확인하세요.
+플랫폼별 가이드는 [FAQ 페이지](https://github.com/celestialhq/celestial-mihomo-client#readme)에서 확인하세요.
 
 ### 후원
 

@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "identifier": "io.github.pius-pp.celestial-mihomo-client",
+  "identifier": "io.github.celestialhq.celestial-mihomo-client",
   "bundle": {
     "targets": ["nsis"],
     "windows": {
@@ -25,8 +25,8 @@
       "active": true,
       "dialog": false,
       "endpoints": [
-        "https://update.hwdns.net/https://github.com/pius-pp/celestial-mihomo-client-public/releases/download/updater/update-fixed-webview2-proxy.json",
-        "https://github.com/pius-pp/celestial-mihomo-client-public/releases/download/updater/update-fixed-webview2.json"
+        "https://update.hwdns.net/https://github.com/celestialhq/celestial-mihomo-client/releases/download/updater/update-fixed-webview2-proxy.json",
+        "https://github.com/celestialhq/celestial-mihomo-client/releases/download/updater/update-fixed-webview2.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU0MTMzRUEzNkJBQTU2MDcKUldRSFZxcHJvejRUVkVLQTZiTDdSUkJkRTZxVURJcUx1cHJldEl0YTFZcmxzTXhnU2tlK1ZBUkkK"
     }

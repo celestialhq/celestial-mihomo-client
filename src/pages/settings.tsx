@@ -26,14 +26,12 @@ const AdvancedSettingPage = () => {
   }
 
   const toGithubRepo = useLockFn(() => {
-    return openWebUrl(
-      'https://github.com/pius-pp/celestial-mihomo-client-public',
-    )
+    return openWebUrl('https://github.com/celestialhq/celestial-mihomo-client')
   })
 
   const toGithubDoc = useLockFn(() => {
     return openWebUrl(
-      'https://github.com/pius-pp/celestial-mihomo-client-public#readme',
+      'https://github.com/celestialhq/celestial-mihomo-client#readme',
     )
   })
 
