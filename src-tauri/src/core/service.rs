@@ -9,7 +9,9 @@ use crate::{
 };
 use anyhow::{Context as _, Result, anyhow, bail};
 use backon::{ConstantBuilder, Retryable as _};
-use celestial_service_ipc::{OwnerSessionProof, StartClashRequest};
+use celestial_service_ipc::{
+    MIN_REQUIRED_SERVICE_REVISION, OwnerSessionProof, ProtocolInfo, ProtocolVersion, StartClashRequest,
+};
 use clash_verge_logging::{Type, logging};
 use compact_str::CompactString;
 use once_cell::sync::Lazy;
@@ -106,6 +108,70 @@ const fn transport_failure_recovery_reason(
 
 fn session_matches_status(proof: &OwnerSessionProof, is_active: bool, active_generation: Option<u64>) -> bool {
     is_active && active_generation == Some(proof.generation)
+}
+
+/// What the service answered when asked for its protocol version.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ServiceVersionReply {
+    code: u16,
+    message: String,
+    protocol: Option<ProtocolInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ServiceVersionCheck {
+    Ready,
+    NeedsReinstall(String),
+}
+
+/// A reachable service is not necessarily a usable one. Every authenticated
+/// call depends on the helper speaking the protocol this build expects, so an
+/// older installed helper has to be reported as needing reinstall rather than
+/// as ready — otherwise it accepts the connection and only fails later, at
+/// start_clash, with a much less obvious error.
+fn classify_service_version_reply(reply: &ServiceVersionReply) -> ServiceVersionCheck {
+    let client = ProtocolVersion::current();
+    if reply.code == 0
+        && reply
+            .protocol
+            .as_ref()
+            .is_some_and(|info| info.supports_client(client, MIN_REQUIRED_SERVICE_REVISION))
+    {
+        return ServiceVersionCheck::Ready;
+    }
+
+    let detail = if reply.code == 0 {
+        match reply.protocol.as_ref() {
+            Some(info) => format!(
+                "client requires epoch {} revision >= {}, service reports epoch {} revision {} (build {})",
+                client.epoch,
+                MIN_REQUIRED_SERVICE_REVISION,
+                info.protocol.epoch,
+                info.protocol.revision,
+                info.build_version
+            ),
+            None => "service did not report protocol information".to_owned(),
+        }
+    } else {
+        format!(
+            "protocol query returned code {} ({}) while expecting epoch {}",
+            reply.code, reply.message, client.epoch
+        )
+    };
+    ServiceVersionCheck::NeedsReinstall(format!(
+        "Service helper protocol mismatch: {detail}. Reinstall the service to continue"
+    ))
+}
+
+/// `get_version` is unauthenticated, so it still answers on a helper too old to
+/// accept the owner-scoped calls — which is exactly the case we need to detect.
+async fn probe_service_version_once() -> Result<ServiceVersionReply> {
+    let response = celestial_service_ipc::get_version().await?;
+    Ok(ServiceVersionReply {
+        code: response.code,
+        message: response.message,
+        protocol: response.data,
+    })
 }
 
 /// Claims the right to recover, so two observers cannot both tear down.
@@ -863,9 +929,21 @@ impl ServiceManager {
 
     /// 综合服务状态检查（一次性完成所有检查）
     pub async fn check_service_comprehensive(&self) -> ServiceStatus {
-        match is_service_available().await {
-            Ok(()) => ServiceStatus::Ready,
-            Err(err) => ServiceStatus::Unavailable(err.to_string()),
+        if let Err(err) = is_service_available().await {
+            return ServiceStatus::Unavailable(err.to_string());
+        }
+
+        // Reachable is not the same as usable — check the helper actually
+        // speaks our protocol before calling it Ready.
+        match probe_service_version_once().await {
+            Ok(reply) => match classify_service_version_reply(&reply) {
+                ServiceVersionCheck::Ready => ServiceStatus::Ready,
+                ServiceVersionCheck::NeedsReinstall(detail) => {
+                    logging!(warn, Type::Service, "{}", detail);
+                    ServiceStatus::ReinstallRequired
+                }
+            },
+            Err(err) => ServiceStatus::Unavailable(format!("service version probe failed: {err:#}")),
         }
     }
 
@@ -918,9 +996,11 @@ pub static SERVICE_MANAGER: Lazy<ServiceManager> = Lazy::new(ServiceManager::def
 #[cfg(test)]
 mod owner_monitor_tests {
     use super::{
-        OWNER_MONITOR_GENERATION, OwnerRecoveryReason, OwnerSessionProof, claim_owner_recovery_generation,
-        owner_status_recovery_reason, session_matches_status, transport_failure_recovery_reason,
+        OWNER_MONITOR_GENERATION, OwnerRecoveryReason, OwnerSessionProof, ServiceVersionCheck, ServiceVersionReply,
+        claim_owner_recovery_generation, classify_service_version_reply, owner_status_recovery_reason,
+        session_matches_status, transport_failure_recovery_reason,
     };
+    use celestial_service_ipc::ProtocolInfo;
     use celestial_service_ipc::ServiceLifecycleState;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -998,6 +1078,60 @@ mod owner_monitor_tests {
         assert_eq!(claim_owner_recovery_generation(&generation, 5), Some(6));
         // A second observer holding the same captured generation loses the race.
         assert_eq!(claim_owner_recovery_generation(&generation, 5), None);
+    }
+
+    #[test]
+    fn a_service_speaking_our_protocol_is_ready() {
+        let reply = ServiceVersionReply {
+            code: 0,
+            message: String::new(),
+            protocol: Some(ProtocolInfo::current()),
+        };
+        assert_eq!(classify_service_version_reply(&reply), ServiceVersionCheck::Ready);
+    }
+
+    #[test]
+    fn an_older_helper_needs_reinstall_rather_than_looking_ready() {
+        // The case that matters after bumping service-ipc: the helper still
+        // answers get_version, so a reachability-only check would call it Ready
+        // and then fail on the first authenticated call.
+        let mut info = ProtocolInfo::current();
+        info.protocol.epoch = info.protocol.epoch.wrapping_sub(1);
+        let reply = ServiceVersionReply {
+            code: 0,
+            message: String::new(),
+            protocol: Some(info),
+        };
+        assert!(matches!(
+            classify_service_version_reply(&reply),
+            ServiceVersionCheck::NeedsReinstall(_)
+        ));
+    }
+
+    #[test]
+    fn a_reply_without_protocol_info_is_not_ready() {
+        let reply = ServiceVersionReply {
+            code: 0,
+            message: String::new(),
+            protocol: None,
+        };
+        assert!(matches!(
+            classify_service_version_reply(&reply),
+            ServiceVersionCheck::NeedsReinstall(_)
+        ));
+    }
+
+    #[test]
+    fn an_error_code_is_not_ready_even_with_protocol_info() {
+        let reply = ServiceVersionReply {
+            code: 1,
+            message: "boom".into(),
+            protocol: Some(ProtocolInfo::current()),
+        };
+        assert!(matches!(
+            classify_service_version_reply(&reply),
+            ServiceVersionCheck::NeedsReinstall(_)
+        ));
     }
 
     #[test]
