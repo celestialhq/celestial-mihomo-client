@@ -145,15 +145,11 @@ impl Hotkey {
             }
             HotkeyFunction::ReactivateProfiles => {
                 AsyncHandler::spawn(async move || match feat::enhance_profiles().await {
-                    Ok((true, _)) => {
+                    Ok(outcome) if outcome.is_valid() => {
                         handle::Handle::refresh_clash();
                     }
-                    Ok((false, msg)) => {
-                        let message = if msg.is_empty() {
-                            "Failed to reactivate profiles.".to_string()
-                        } else {
-                            msg.to_string()
-                        };
+                    Ok(outcome) => {
+                        let message = outcome.to_string();
                         logging!(
                             warn,
                             Type::Hotkey,

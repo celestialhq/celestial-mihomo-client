@@ -1,5 +1,6 @@
 use super::CmdResult;
 use super::StringifyErr as _;
+use crate::cmd::validate::{ValidationNoticeTarget, handle_validation_notice};
 use crate::utils::window_manager::WindowManager;
 use crate::{
     config::{
@@ -10,7 +11,7 @@ use crate::{
         },
         profiles_append_item_safe,
     },
-    core::{CoreManager, handle, timer::Timer, tray::Tray},
+    core::{CoreManager, handle, timer::Timer, tray::Tray, validate::ValidationOutcome},
     feat,
     process::AsyncHandler,
     utils::{dirs, help},
@@ -36,23 +37,18 @@ pub async fn get_profiles() -> CmdResult<SharedDraft<IProfiles>> {
 #[tauri::command]
 pub async fn enhance_profiles() -> CmdResult {
     match feat::enhance_profiles().await {
-        Ok((true, _)) => {
+        Ok(outcome) if outcome.is_valid() => {
             handle::Handle::refresh_clash();
             Ok(())
         }
-        Ok((false, msg)) => {
-            let message: String = if msg.is_empty() {
-                "Failed to reactivate profiles".into()
-            } else {
-                msg
-            };
+        Ok(outcome) => {
             logging!(
                 warn,
                 Type::Cmd,
                 "Reactivate profiles command failed validation: {}",
-                message.as_str()
+                outcome
             );
-            Err(message)
+            Err(outcome.to_string().into())
         }
         Err(e) => {
             logging!(error, Type::Cmd, "{}", e);
@@ -172,12 +168,16 @@ pub async fn delete_profile(index: String) -> CmdResult {
         logging!(warn, Type::Cmd, "Warning: 异步更新托盘菜单失败: {e}");
     }
     if should_update {
-        match CoreManager::global().update_config().await {
-            Ok(_) => {
+        match CoreManager::global().update_config_forced().await {
+            Ok(outcome) if outcome.is_valid() => {
                 handle::Handle::refresh_clash();
                 // 发送配置变更通知
                 logging!(info, Type::Cmd, "[删除订阅] 发送配置变更通知: {}", index);
                 handle::Handle::notify_profile_changed(&index);
+            }
+            Ok(outcome) => {
+                logging!(warn, Type::Cmd, "[删除订阅] 配置未生效: {}", outcome);
+                return Err(outcome.to_string().into());
             }
             Err(e) => {
                 logging!(error, Type::Cmd, "{}", e);
@@ -288,7 +288,7 @@ async fn restore_previous_profile(prev_profile: &String) -> CmdResult<()> {
     Ok(())
 }
 
-async fn handle_success(current_value: Option<&String>) -> CmdResult<bool> {
+async fn handle_success(current_value: Option<&String>) -> CmdResult<ValidationOutcome> {
     Config::profiles().await.apply();
     handle::Handle::refresh_clash();
 
@@ -311,47 +311,64 @@ async fn handle_success(current_value: Option<&String>) -> CmdResult<bool> {
         handle::Handle::notify_profile_changed(current);
     }
 
-    Ok(true)
+    Ok(ValidationOutcome::Valid)
 }
 
-async fn handle_validation_failure(error_msg: String, current_profile: Option<&String>) -> CmdResult<bool> {
-    logging!(warn, Type::Cmd, "配置验证失败: {}", error_msg);
+async fn discard_and_restore(current_profile: Option<&String>) -> CmdResult<()> {
     Config::profiles().await.discard();
     if let Some(prev_profile) = current_profile {
         restore_previous_profile(prev_profile).await?;
     }
-    handle::Handle::notice_message("config_validate::error", error_msg);
-    Ok(false)
+    Ok(())
 }
 
-async fn handle_update_error<E: std::fmt::Display>(e: E) -> CmdResult<bool> {
+async fn handle_validation_failure(
+    outcome: ValidationOutcome,
+    current_profile: Option<&String>,
+) -> CmdResult<ValidationOutcome> {
+    logging!(warn, Type::Cmd, "配置验证失败: {}", outcome);
+    discard_and_restore(current_profile).await?;
+    handle_validation_notice(&outcome, ValidationNoticeTarget::Runtime, "运行时配置");
+    Ok(outcome)
+}
+
+async fn handle_update_error<E: std::fmt::Display>(
+    e: E,
+    current_profile: Option<&String>,
+) -> CmdResult<ValidationOutcome> {
     logging!(warn, Type::Cmd, "更新过程发生错误: {}", e,);
-    Config::profiles().await.discard();
-    handle::Handle::notice_message("config_validate::boot_error", e.to_string());
-    Ok(false)
+    // Previously this discarded the draft but left the core on the half-applied
+    // profile; restore the previous one like the other failure paths do.
+    discard_and_restore(current_profile).await?;
+    let message: String = e.to_string().into();
+    handle::Handle::notice_message("config_validate::boot_error", message.clone());
+    Ok(ValidationOutcome::invalid_from_message(message))
 }
 
-async fn handle_timeout(current_profile: Option<&String>) -> CmdResult<bool> {
-    let timeout_msg = "配置更新超时(30秒)，可能是配置验证或核心通信阻塞";
+async fn handle_timeout(current_profile: Option<&String>) -> CmdResult<ValidationOutcome> {
+    let timeout_msg: String = "配置更新超时(30秒)，可能是配置验证或核心通信阻塞".into();
     logging!(error, Type::Cmd, "{}", timeout_msg);
-    Config::profiles().await.discard();
-    if let Some(prev_profile) = current_profile {
-        restore_previous_profile(prev_profile).await?;
-    }
-    handle::Handle::notice_message("config_validate::timeout", timeout_msg);
-    Ok(false)
+    discard_and_restore(current_profile).await?;
+    handle::Handle::notice_message("config_validate::timeout", timeout_msg.clone());
+    Ok(ValidationOutcome::invalid_from_message(timeout_msg))
 }
 
-async fn perform_config_update(current_value: Option<&String>, current_profile: Option<&String>) -> CmdResult<bool> {
+async fn perform_config_update(
+    current_value: Option<&String>,
+    current_profile: Option<&String>,
+) -> CmdResult<ValidationOutcome> {
     defer! {
         CURRENT_SWITCHING_PROFILE.store(false, Ordering::Release);
     }
-    let update_result = tokio::time::timeout(Duration::from_secs(30), CoreManager::global().update_config()).await;
+    let update_result =
+        tokio::time::timeout(Duration::from_secs(30), CoreManager::global().update_config_forced()).await;
 
     match update_result {
-        Ok(Ok((true, _))) => handle_success(current_value).await,
-        Ok(Ok((false, error_msg))) => handle_validation_failure(error_msg, current_profile).await,
-        Ok(Err(e)) => handle_update_error(e).await,
+        // Skipped/Busy land here too, which is what we want: nothing was
+        // validated, so the pending profile draft must not be committed.
+        Ok(Ok(outcome)) if outcome.is_valid() => handle_success(current_value).await,
+        Ok(Ok(outcome)) => handle_validation_failure(outcome, current_profile).await,
+        Ok(Err(e)) => handle_update_error(e, current_profile).await,
         Err(_) => handle_timeout(current_profile).await,
     }
 }
@@ -385,7 +402,11 @@ pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult<bool> {
     }
     Config::profiles().await.edit_draft(|d| d.patch_config(&profiles));
 
-    perform_config_update(target_profile, previous_profile.as_ref()).await
+    // Collapsed to bool to keep the current frontend contract; the follow-up
+    // commit that updates the TS side returns the outcome itself.
+    perform_config_update(target_profile, previous_profile.as_ref())
+        .await
+        .map(|outcome| outcome.is_valid())
 }
 
 /// 根据profile name修改profiles

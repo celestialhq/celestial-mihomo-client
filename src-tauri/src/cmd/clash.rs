@@ -5,7 +5,10 @@ use crate::{
     cmd::StringifyErr as _,
     config::{ClashInfo, Config},
     constants,
-    core::{CoreManager, handle, validate::CoreConfigValidator},
+    core::{
+        CoreManager, handle,
+        validate::{CoreConfigValidator, ValidationOutcome},
+    },
 };
 use clash_verge_logging::{Type, logging, logging_error};
 use compact_str::CompactString;
@@ -156,32 +159,28 @@ pub async fn apply_dns_config(apply: bool) -> CmdResult {
             d.patch_config(&patch);
         });
 
-        // 重新生成配置
-        Config::generate().await.stringify_err_log(|err| {
-            let err = format!("Failed to regenerate config with DNS: {err}");
-            logging!(error, Type::Config, "{err}");
-        })?;
-
-        // 应用新配置
-        CoreManager::global().update_config().await.stringify_err_log(|err| {
-            let err = format!("Failed to apply config with DNS: {err}");
-            logging!(error, Type::Config, "{err}");
-        })?;
+        // update_config_checked regenerates internally, so the separate
+        // Config::generate() call here was doing the work twice.
+        CoreManager::global()
+            .update_config_checked()
+            .await
+            .stringify_err_log(|err| {
+                let err = format!("Failed to apply config with DNS: {err}");
+                logging!(error, Type::Config, "{err}");
+            })?;
 
         logging!(info, Type::Config, "DNS config successfully applied");
     } else {
         // 当关闭DNS设置时，重新生成配置（不加载DNS配置文件）
         logging!(info, Type::Config, "DNS settings disabled, regenerating config");
 
-        Config::generate().await.stringify_err_log(|err| {
-            let err = format!("Failed to regenerate config: {err}");
-            logging!(error, Type::Config, "{err}");
-        })?;
-
-        CoreManager::global().update_config().await.stringify_err_log(|err| {
-            let err = format!("Failed to apply regenerated config: {err}");
-            logging!(error, Type::Config, "{err}");
-        })?;
+        CoreManager::global()
+            .update_config_checked()
+            .await
+            .stringify_err_log(|err| {
+                let err = format!("Failed to apply regenerated config: {err}");
+                logging!(error, Type::Config, "{err}");
+            })?;
 
         logging!(info, Type::Config, "Config regenerated successfully");
     }
@@ -227,8 +226,11 @@ pub async fn validate_dns_config() -> CmdResult<(bool, String)> {
         return Ok((false, "DNS config file not found".into()));
     }
 
-    CoreConfigValidator::validate_config_file(dns_path_str, None)
+    // Still returns the legacy pair: the frontend contract switches to
+    // ValidationOutcome in the follow-up commit that updates the TS side.
+    CoreConfigValidator::validate_config_file_outcome(dns_path_str, None)
         .await
+        .map(ValidationOutcome::into_legacy_pair)
         .stringify_err()
 }
 
