@@ -98,6 +98,13 @@ mod desktop {
             Arc::clone(&self.guard)
         }
 
+        /// Stops the guard without touching the current proxy settings. Used
+        /// when we lose ownership of the service: the guard must not keep
+        /// re-asserting a proxy that is no longer ours to manage.
+        pub fn stop_proxy_guard(&self) {
+            self.access_guard().write().stop();
+        }
+
         pub async fn refresh_guard(&self) {
             logging!(info, Type::Core, "Refreshing system proxy guard...");
             let verge = Config::verge().await.latest_arc();
@@ -294,6 +301,8 @@ mod mobile {
     crate::singleton!(Sysopt, SYSOPT);
 
     impl Sysopt {
+        pub const fn stop_proxy_guard(&self) {}
+
         pub async fn refresh_guard(&self) {}
 
         pub async fn wait_idle(&self) {}

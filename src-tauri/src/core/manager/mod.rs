@@ -51,7 +51,7 @@ pub struct CoreManager {
     config_update_in_progress: AtomicBool,
     // 串行化 start/stop/restart，避免生命周期操作互相穿插
     // （例如 restart 的 stop 与另一个 start 交错，留下无人管理的内核进程）。
-    lifecycle_lock: tokio::sync::Mutex<()>,
+    pub(crate) lifecycle_lock: tokio::sync::Mutex<()>,
 }
 
 #[derive(Debug)]
