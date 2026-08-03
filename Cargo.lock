@@ -7711,6 +7711,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-mihomo"
 version = "0.5.4"
+source = "git+https://github.com/celestialhq/tauri-plugin-mihomo?branch=main#6e9ce1e2452312b58279e7fe365aee040677af80"
 dependencies = [
  "base64 0.22.1",
  "bytes",
