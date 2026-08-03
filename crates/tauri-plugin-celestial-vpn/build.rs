@@ -37,6 +37,8 @@ fn build_mihomo_wrapper() {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
     let wrapper_dir = std::path::Path::new(&manifest_dir).join("golang/wrapper");
 
+    apply_mihomo_patches(std::path::Path::new(&manifest_dir));
+
     let jni_libs_dir = std::path::Path::new(&manifest_dir)
         .join("android/src/main/jniLibs")
         .join(android_abi);
@@ -101,6 +103,57 @@ fn build_mihomo_wrapper() {
     // #[link(name = "mihomo_wrapper")]) — at runtime the Android dynamic
     // linker resolves it from this same jniLibs/<abi>/ dir once packaged.
     println!("cargo:rustc-link-search=native={}", jni_libs_dir.display());
+}
+
+/// `golang/mihomo` is a pristine submodule of MetaCubeX/mihomo, so our
+/// Android-specific core fixes can't just be committed there. They live as
+/// patch files in `patches/` and get applied to the checkout right before the
+/// Go build.
+///
+/// Idempotent: a patch that already applies in reverse is treated as applied
+/// and skipped, so repeat local builds (where the working tree keeps the
+/// change) behave the same as a fresh CI checkout.
+fn apply_mihomo_patches(manifest_dir: &std::path::Path) {
+    let patches_dir = manifest_dir.join("patches");
+    let mihomo_dir = manifest_dir.join("golang/mihomo");
+
+    let Ok(entries) = std::fs::read_dir(&patches_dir) else {
+        return;
+    };
+
+    let mut patches: Vec<_> = entries
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|ext| ext == "patch"))
+        .collect();
+    // Apply in file-name order so numbered patches stack predictably.
+    patches.sort();
+
+    for patch in patches {
+        println!("cargo:rerun-if-changed={}", patch.display());
+
+        let git_apply = |extra: &[&str]| {
+            std::process::Command::new("git")
+                .current_dir(&mihomo_dir)
+                .arg("apply")
+                .args(extra)
+                .arg(&patch)
+                .status()
+        };
+
+        let already_applied = git_apply(&["--reverse", "--check"]).is_ok_and(|s| s.success());
+        if already_applied {
+            continue;
+        }
+
+        let status =
+            git_apply(&[]).unwrap_or_else(|e| panic!("failed to invoke `git apply` for {}: {e}", patch.display()));
+        assert!(
+            status.success(),
+            "failed to apply mihomo patch {} — the submodule may have moved past it",
+            patch.display()
+        );
+    }
 }
 
 /// Maps a Rust Android target triple to (Go GOARCH, NDK clang wrapper name, Android ABI dir name).

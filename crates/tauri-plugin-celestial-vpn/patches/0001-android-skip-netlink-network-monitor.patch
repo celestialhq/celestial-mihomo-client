@@ -1,0 +1,19 @@
+diff --git a/listener/sing_tun/server.go b/listener/sing_tun/server.go
+index ede0b6ac..1918fc3d 100644
+--- a/listener/sing_tun/server.go
++++ b/listener/sing_tun/server.go
+@@ -328,7 +328,13 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
+ 
+ 	var networkUpdateMonitor tun.NetworkUpdateMonitor
+ 	var defaultInterfaceMonitor tun.DefaultInterfaceMonitor
+-	if options.AutoRoute || options.AutoDetectInterface { // don't start NetworkUpdateMonitor because netlink banned by google on Android14+
++	// netlink sockets are banned by Google on Android 14+ (confirmed on real
++	// hardware: Pixel 8, Pixel 10 Pro XL, Galaxy S23 all fail identically here
++	// with "netlink socket in Android is banned by Google"), so
++	// NewNetworkUpdateMonitor always errors out on-device and the TUN listener
++	// never starts. Skip it on Android entirely; AutoDetectInterface is already
++	// forced off there (see enhance/tun.rs) so nothing else depends on it.
++	if runtime.GOOS != "android" && (options.AutoRoute || options.AutoDetectInterface) {
+ 		networkUpdateMonitor, err = tun.NewNetworkUpdateMonitor(log.SingLogger)
+ 		if err != nil {
+ 			err = E.Cause(err, "create NetworkUpdateMonitor")
