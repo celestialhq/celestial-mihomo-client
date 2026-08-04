@@ -6,8 +6,8 @@ use crate::{
         manager::RunningMode,
         owner_identity::current_owner_credentials,
         runstate::{
-            OwnerRecoveryReason, OwnerSample, OwnerStep, OwnerWatch, ServiceVersionCheck, ServiceVersionReply,
-            classify_service_version_reply,
+            OwnerRecoveryReason, OwnerSample, OwnerStep, OwnerWatch, PendingAction, ServiceVersionCheck,
+            ServiceVersionReply, classify_service_version_reply,
         },
         runtime_bundle::collect_runtime_bundle,
         sysopt::Sysopt,
@@ -61,6 +61,102 @@ static OWNER_MONITOR_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 fn session_matches_status(proof: &OwnerSessionProof, is_active: bool, active_generation: Option<u64>) -> bool {
     is_active && active_generation == Some(proof.generation)
+}
+
+#[cfg(target_os = "macos")]
+fn path_entry_exists_without_follow(path: &Path) -> std::io::Result<bool> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_service_install_markers() -> Vec<String> {
+    vec![
+        format!(
+            "/Library/LaunchDaemons/{}.plist",
+            celestial_service_ipc::MACOS_SERVICE_ID
+        ),
+        format!(
+            "/Library/PrivilegedHelperTools/{}.bundle",
+            celestial_service_ipc::MACOS_SERVICE_ID
+        ),
+        #[cfg(not(feature = "celestial-dev"))]
+        "/Library/LaunchDaemons/io.github.clashverge.helper.plist".to_owned(),
+        #[cfg(not(feature = "celestial-dev"))]
+        "/Library/PrivilegedHelperTools/io.github.clashverge.helper".to_owned(),
+    ]
+}
+
+#[cfg(target_os = "macos")]
+fn macos_service_install_marker_exists() -> std::io::Result<bool> {
+    for marker in macos_service_install_markers() {
+        if path_entry_exists_without_follow(Path::new(&marker))? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+#[cfg(windows)]
+#[allow(dead_code)] // consumed by RunStateEnv once the store is wired
+pub(crate) fn trusted_service_evidence() -> Result<bool> {
+    use windows_service::{
+        Error as WindowsServiceError,
+        service::ServiceAccess,
+        service_manager::{ServiceManager as WindowsServiceManager, ServiceManagerAccess},
+    };
+
+    const ERROR_SERVICE_DOES_NOT_EXIST: i32 = 1060;
+    let manager = WindowsServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)?;
+    match manager.open_service(celestial_service_ipc::WINDOWS_SERVICE_NAME, ServiceAccess::QUERY_STATUS) {
+        Ok(service) => {
+            drop(service);
+            Ok(true)
+        }
+        Err(WindowsServiceError::Winapi(error)) if error.raw_os_error() == Some(ERROR_SERVICE_DOES_NOT_EXIST) => {
+            Ok(false)
+        }
+        Err(error) => Err(error).context("failed to inspect Windows service registration"),
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn trusted_service_evidence() -> Result<bool> {
+    let unit = format!("{}.service", celestial_service_ipc::SERVICE_SLUG);
+    let output = StdCommand::new("systemctl")
+        .args(["show", "--property=LoadState", "--value", &unit])
+        .output()
+        .context("failed to inspect systemd service registration")?;
+    if !output.status.success() {
+        bail!(
+            "systemd service registration probe failed with status {}",
+            output.status
+        );
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim() != "not-found")
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn trusted_service_evidence() -> Result<bool> {
+    macos_service_install_marker_exists().context("failed to inspect launchd service registration")
+}
+
+/// Carry out a privileged operation against the service.
+///
+/// Blocking and platform-specific — SCM, systemd, launchd, elevation prompts —
+/// so it runs on a blocking thread rather than stalling the async runtime.
+#[allow(dead_code)] // consumed by RunStateEnv once the store is wired
+pub(crate) fn run_privileged_service_action(action: PendingAction) -> Result<()> {
+    let (operation, label): (fn() -> Result<()>, &'static str) = match action {
+        PendingAction::Install => (install_service, "install service"),
+        PendingAction::Uninstall => (uninstall_service, "uninstall service"),
+        PendingAction::Reinstall => (reinstall_service, "reinstall service"),
+        PendingAction::ForceReinstall => (force_reinstall_service, "force reinstall service"),
+    };
+    tokio::task::block_in_place(operation).with_context(|| format!("{label} failed"))
 }
 
 /// `get_version` is unauthenticated, so it still answers on a helper too old to

@@ -30,6 +30,31 @@ pub struct Config {
     runtime_config: Draft<IRuntime>,
 }
 
+/// Set when this session fell back to sidecar: TUN cannot work without the
+/// privileged service, but that is a per-session fact, not a change the user
+/// asked for, so it must not be written to their config.
+static TUN_SESSION_SUPPRESSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+impl Config {
+    pub fn tun_suppressed_for_session() -> bool {
+        TUN_SESSION_SUPPRESSED.load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    #[allow(dead_code)] // called when the store accepts a sidecar session
+    pub(crate) async fn suppress_tun_for_session() {
+        TUN_SESSION_SUPPRESSED.store(true, std::sync::atomic::Ordering::Release);
+        handle::Handle::refresh_verge();
+        let _ = tray::Tray::global().update_menu().await;
+    }
+
+    #[allow(dead_code)] // called when the store regains service capability
+    pub(crate) async fn restore_tun_for_session() {
+        TUN_SESSION_SUPPRESSED.store(false, std::sync::atomic::Ordering::Release);
+        handle::Handle::refresh_verge();
+        let _ = tray::Tray::global().update_menu().await;
+    }
+}
+
 impl Config {
     pub async fn global() -> &'static Self {
         static CONFIG: OnceCell<Config> = OnceCell::const_new();
