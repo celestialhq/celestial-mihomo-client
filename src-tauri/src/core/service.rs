@@ -1,17 +1,24 @@
 use crate::{
     config::Config,
     core::{
-        CoreManager, handle::Handle, manager::RunningMode, owner_identity::current_owner_credentials,
-        runtime_bundle::collect_runtime_bundle, sysopt::Sysopt, tray::Tray,
+        CoreManager,
+        handle::Handle,
+        manager::RunningMode,
+        owner_identity::current_owner_credentials,
+        runstate::{
+            OwnerRecoveryReason, OwnerSample, OwnerStep, OwnerWatch, ServiceVersionCheck, ServiceVersionReply,
+            classify_service_version_reply,
+        },
+        runtime_bundle::collect_runtime_bundle,
+        sysopt::Sysopt,
+        tray::Tray,
     },
     process::AsyncHandler,
     utils::dirs,
 };
 use anyhow::{Context as _, Result, anyhow, bail};
 use backon::{ConstantBuilder, Retryable as _};
-use celestial_service_ipc::{
-    MIN_REQUIRED_SERVICE_REVISION, OwnerSessionProof, ProtocolInfo, ProtocolVersion, StartClashRequest,
-};
+use celestial_service_ipc::{OwnerSessionProof, StartClashRequest};
 use clash_verge_logging::{Type, logging};
 use compact_str::CompactString;
 use once_cell::sync::Lazy;
@@ -52,115 +59,8 @@ pub(crate) fn clear_active_service_session() {
 /// matches exits instead of acting on a core it no longer describes.
 static OWNER_MONITOR_GENERATION: AtomicU64 = AtomicU64::new(0);
 
-/// Why we stopped trusting the service that was running our core.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OwnerRecoveryReason {
-    /// Another owner took the service over.
-    Displaced,
-    /// Still ours, but the core it was running is gone.
-    SameOwnerFailure,
-    /// We could not reach the service for long enough to give up.
-    TransportFailure,
-}
-
-/// How many consecutive bad samples we tolerate. Service restarts and slow
-/// status calls are normal; acting on the first one would tear down a working
-/// proxy over a blip.
-const SUSTAINED_SAMPLES: u8 = 3;
-
-fn owner_status_recovery_reason(
-    is_active: bool,
-    desired_running: bool,
-    service_state: celestial_service_ipc::ServiceLifecycleState,
-    core_pid: Option<u32>,
-    missing_core_samples: u8,
-) -> Option<OwnerRecoveryReason> {
-    if !is_active {
-        return Some(OwnerRecoveryReason::Displaced);
-    }
-    if !desired_running
-        || service_state == celestial_service_ipc::ServiceLifecycleState::Fatal
-        || (!matches!(
-            service_state,
-            celestial_service_ipc::ServiceLifecycleState::Starting
-                | celestial_service_ipc::ServiceLifecycleState::RecoveringCore
-        ) && core_pid.is_none()
-            && missing_core_samples >= SUSTAINED_SAMPLES)
-    {
-        return Some(OwnerRecoveryReason::SameOwnerFailure);
-    }
-    None
-}
-
-/// A service we cannot reach while the core's own endpoint still answers is a
-/// broken status channel, not a lost core — tearing down the proxy there would
-/// be the cure causing the disease.
-const fn transport_failure_recovery_reason(
-    failed_status_samples: u8,
-    owner_endpoint_available: bool,
-) -> Option<OwnerRecoveryReason> {
-    if failed_status_samples >= SUSTAINED_SAMPLES && !owner_endpoint_available {
-        Some(OwnerRecoveryReason::TransportFailure)
-    } else {
-        None
-    }
-}
-
 fn session_matches_status(proof: &OwnerSessionProof, is_active: bool, active_generation: Option<u64>) -> bool {
     is_active && active_generation == Some(proof.generation)
-}
-
-/// What the service answered when asked for its protocol version.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ServiceVersionReply {
-    code: u16,
-    message: String,
-    protocol: Option<ProtocolInfo>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum ServiceVersionCheck {
-    Ready,
-    NeedsReinstall(String),
-}
-
-/// A reachable service is not necessarily a usable one. Every authenticated
-/// call depends on the helper speaking the protocol this build expects, so an
-/// older installed helper has to be reported as needing reinstall rather than
-/// as ready — otherwise it accepts the connection and only fails later, at
-/// start_clash, with a much less obvious error.
-fn classify_service_version_reply(reply: &ServiceVersionReply) -> ServiceVersionCheck {
-    let client = ProtocolVersion::current();
-    if reply.code == 0
-        && reply
-            .protocol
-            .as_ref()
-            .is_some_and(|info| info.supports_client(client, MIN_REQUIRED_SERVICE_REVISION))
-    {
-        return ServiceVersionCheck::Ready;
-    }
-
-    let detail = if reply.code == 0 {
-        match reply.protocol.as_ref() {
-            Some(info) => format!(
-                "client requires epoch {} revision >= {}, service reports epoch {} revision {} (build {})",
-                client.epoch,
-                MIN_REQUIRED_SERVICE_REVISION,
-                info.protocol.epoch,
-                info.protocol.revision,
-                info.build_version
-            ),
-            None => "service did not report protocol information".to_owned(),
-        }
-    } else {
-        format!(
-            "protocol query returned code {} ({}) while expecting epoch {}",
-            reply.code, reply.message, client.epoch
-        )
-    };
-    ServiceVersionCheck::NeedsReinstall(format!(
-        "Service helper protocol mismatch: {detail}. Reinstall the service to continue"
-    ))
 }
 
 /// `get_version` is unauthenticated, so it still answers on a helper too old to
@@ -635,20 +535,6 @@ pub(super) async fn stop_core_by_service() -> Result<()> {
     Ok(())
 }
 
-async fn recover_after_sustained_status_failure(generation: u64, failed_status_samples: u8) -> bool {
-    if failed_status_samples < SUSTAINED_SAMPLES {
-        return false;
-    }
-
-    let owner_endpoint_available = Handle::mihomo().await.get_version().await.is_ok();
-    if let Some(reason) = transport_failure_recovery_reason(failed_status_samples, owner_endpoint_available) {
-        recover_after_owner_loss(generation, reason).await;
-        true
-    } else {
-        false
-    }
-}
-
 async fn recover_after_owner_loss(generation: u64, reason: OwnerRecoveryReason) {
     let manager = CoreManager::global();
     if !matches!(*manager.get_running_mode(), RunningMode::Service) {
@@ -707,8 +593,7 @@ async fn recover_after_owner_loss(generation: u64, reason: OwnerRecoveryReason) 
 fn start_owner_monitor() {
     let generation = OWNER_MONITOR_GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
     AsyncHandler::spawn(move || async move {
-        let mut missing_core_samples = 0_u8;
-        let mut failed_status_samples = 0_u8;
+        let mut watch = OwnerWatch::new();
         loop {
             tokio::time::sleep(Duration::from_secs(2)).await;
             if OWNER_MONITOR_GENERATION.load(Ordering::Acquire) != generation {
@@ -718,85 +603,84 @@ fn start_owner_monitor() {
                 break;
             }
 
-            let response = match current_owner_credentials() {
-                Ok(credentials) => celestial_service_ipc::get_status(&credentials).await,
-                Err(error) => Err(error),
-            };
-            let status = match response {
-                Ok(response) if response.code == celestial_service_ipc::ServiceErrorCode::NotActive as u16 => {
-                    recover_after_owner_loss(generation, OwnerRecoveryReason::Displaced).await;
-                    break;
-                }
-                Ok(response) if response.code == 0 => response.data,
-                Ok(response) => {
-                    logging!(
-                        debug,
-                        Type::Service,
-                        "service owner status returned error {}: {}",
-                        response.code,
-                        response.message
-                    );
-                    None
-                }
-                Err(error) => {
-                    logging!(debug, Type::Service, "service owner status unavailable: {error:#}");
-                    None
-                }
-            };
+            let sample = read_owner_sample().await;
+            let mut step = watch.observe(sample);
 
-            let Some(status) = status else {
-                failed_status_samples = failed_status_samples.saturating_add(1);
-                if failed_status_samples == SUSTAINED_SAMPLES {
+            // The service is unreachable often enough to be worth a second
+            // question: if the core's own endpoint still answers, only the
+            // status channel is broken and the proxy must stay up.
+            if step == OwnerStep::VerifyTransport {
+                if watch.just_became_sustained() {
                     logging!(
                         warn,
                         Type::Service,
                         "service owner status unavailable; preserving local proxy state for now"
                     );
                 }
-                if recover_after_sustained_status_failure(generation, failed_status_samples).await {
-                    break;
-                }
-                if failed_status_samples >= SUSTAINED_SAMPLES {
-                    failed_status_samples = 0;
-                }
-                continue;
-            };
-
-            // A live service that no longer knows our session generation means
-            // someone else owns it now.
-            let session_matches = ACTIVE_SERVICE_SESSION
-                .lock()
-                .as_ref()
-                .is_some_and(|proof| session_matches_status(proof, status.is_active, status.active_generation));
-            if !session_matches {
-                recover_after_owner_loss(generation, OwnerRecoveryReason::Displaced).await;
-                break;
+                let core_endpoint_answers = Handle::mihomo().await.get_version().await.is_ok();
+                step = watch.resolve_transport(core_endpoint_answers);
             }
 
-            failed_status_samples = 0;
-            missing_core_samples = if status.core_pid.is_none()
-                && !matches!(
-                    status.service_state,
-                    celestial_service_ipc::ServiceLifecycleState::Starting
-                        | celestial_service_ipc::ServiceLifecycleState::RecoveringCore
-                ) {
-                missing_core_samples.saturating_add(1)
-            } else {
-                0
-            };
-
-            if let Some(reason) = owner_status_recovery_reason(
-                status.is_active,
-                status.desired_core_should_be_running,
-                status.service_state,
-                status.core_pid,
-                missing_core_samples,
-            ) {
+            if let OwnerStep::Recover(reason) = step {
                 recover_after_owner_loss(generation, reason).await;
                 break;
             }
         }
     });
+}
+
+/// Turns one status call into a sample the decision logic understands. A live
+/// service that no longer knows our session generation is reported as NotActive
+/// rather than as a healthy status, because someone else owns it now.
+async fn read_owner_sample() -> OwnerSample {
+    let response = match current_owner_credentials() {
+        Ok(credentials) => celestial_service_ipc::get_status(&credentials).await,
+        Err(error) => {
+            logging!(debug, Type::Service, "service owner credentials unavailable: {error:#}");
+            return OwnerSample::Unreadable;
+        }
+    };
+
+    let response = match response {
+        Ok(response) => response,
+        Err(error) => {
+            logging!(debug, Type::Service, "service owner status unavailable: {error:#}");
+            return OwnerSample::Unreadable;
+        }
+    };
+
+    if response.code == celestial_service_ipc::ServiceErrorCode::NotActive as u16 {
+        return OwnerSample::NotActive;
+    }
+    if response.code != 0 {
+        logging!(
+            debug,
+            Type::Service,
+            "service owner status returned error {}: {}",
+            response.code,
+            response.message
+        );
+        return OwnerSample::Unreadable;
+    }
+
+    let Some(status) = response.data else {
+        return OwnerSample::Unreadable;
+    };
+
+    let session_matches = ACTIVE_SERVICE_SESSION
+        .lock()
+        .as_ref()
+        .is_some_and(|proof| session_matches_status(proof, status.is_active, status.active_generation));
+    if !session_matches {
+        return OwnerSample::NotActive;
+    }
+
+    OwnerSample::Status {
+        is_active: status.is_active,
+        desired_core_should_be_running: status.desired_core_should_be_running,
+        service_state: status.service_state,
+        core_pid: status.core_pid,
+    }
 }
 
 /// Retires any running monitor — used when we stop the core ourselves, so a
@@ -995,70 +879,8 @@ pub static SERVICE_MANAGER: Lazy<ServiceManager> = Lazy::new(ServiceManager::def
 
 #[cfg(test)]
 mod owner_monitor_tests {
-    use super::{
-        OWNER_MONITOR_GENERATION, OwnerRecoveryReason, OwnerSessionProof, ServiceVersionCheck, ServiceVersionReply,
-        claim_owner_recovery_generation, classify_service_version_reply, owner_status_recovery_reason,
-        session_matches_status, transport_failure_recovery_reason,
-    };
-    use celestial_service_ipc::ProtocolInfo;
-    use celestial_service_ipc::ServiceLifecycleState;
+    use super::{OWNER_MONITOR_GENERATION, OwnerSessionProof, claim_owner_recovery_generation, session_matches_status};
     use std::sync::atomic::{AtomicU64, Ordering};
-
-    #[test]
-    fn inactive_service_is_displacement_not_a_core_failure() {
-        assert_eq!(
-            owner_status_recovery_reason(false, true, ServiceLifecycleState::Running, Some(42), 0),
-            Some(OwnerRecoveryReason::Displaced)
-        );
-    }
-
-    #[test]
-    fn healthy_status_needs_no_recovery() {
-        assert_eq!(
-            owner_status_recovery_reason(true, true, ServiceLifecycleState::Running, Some(42), 0),
-            None
-        );
-    }
-
-    #[test]
-    fn a_missing_core_is_tolerated_until_it_is_sustained() {
-        // Two bad samples are a blip; the third is a failure.
-        assert_eq!(
-            owner_status_recovery_reason(true, true, ServiceLifecycleState::Running, None, 2),
-            None
-        );
-        assert_eq!(
-            owner_status_recovery_reason(true, true, ServiceLifecycleState::Running, None, 3),
-            Some(OwnerRecoveryReason::SameOwnerFailure)
-        );
-    }
-
-    #[test]
-    fn a_starting_core_without_a_pid_is_not_a_failure() {
-        for state in [ServiceLifecycleState::Starting, ServiceLifecycleState::RecoveringCore] {
-            assert_eq!(owner_status_recovery_reason(true, true, state, None, 10), None);
-        }
-    }
-
-    #[test]
-    fn fatal_service_state_recovers_immediately() {
-        assert_eq!(
-            owner_status_recovery_reason(true, true, ServiceLifecycleState::Fatal, Some(42), 0),
-            Some(OwnerRecoveryReason::SameOwnerFailure)
-        );
-    }
-
-    #[test]
-    fn unreachable_service_with_a_live_core_is_not_a_transport_failure() {
-        // The status channel is broken, not the core — tearing down here would
-        // kill a working proxy.
-        assert_eq!(transport_failure_recovery_reason(5, true), None);
-        assert_eq!(
-            transport_failure_recovery_reason(5, false),
-            Some(OwnerRecoveryReason::TransportFailure)
-        );
-        assert_eq!(transport_failure_recovery_reason(2, false), None);
-    }
 
     #[test]
     fn session_only_matches_its_own_generation() {
@@ -1078,60 +900,6 @@ mod owner_monitor_tests {
         assert_eq!(claim_owner_recovery_generation(&generation, 5), Some(6));
         // A second observer holding the same captured generation loses the race.
         assert_eq!(claim_owner_recovery_generation(&generation, 5), None);
-    }
-
-    #[test]
-    fn a_service_speaking_our_protocol_is_ready() {
-        let reply = ServiceVersionReply {
-            code: 0,
-            message: String::new(),
-            protocol: Some(ProtocolInfo::current()),
-        };
-        assert_eq!(classify_service_version_reply(&reply), ServiceVersionCheck::Ready);
-    }
-
-    #[test]
-    fn an_older_helper_needs_reinstall_rather_than_looking_ready() {
-        // The case that matters after bumping service-ipc: the helper still
-        // answers get_version, so a reachability-only check would call it Ready
-        // and then fail on the first authenticated call.
-        let mut info = ProtocolInfo::current();
-        info.protocol.epoch = info.protocol.epoch.wrapping_sub(1);
-        let reply = ServiceVersionReply {
-            code: 0,
-            message: String::new(),
-            protocol: Some(info),
-        };
-        assert!(matches!(
-            classify_service_version_reply(&reply),
-            ServiceVersionCheck::NeedsReinstall(_)
-        ));
-    }
-
-    #[test]
-    fn a_reply_without_protocol_info_is_not_ready() {
-        let reply = ServiceVersionReply {
-            code: 0,
-            message: String::new(),
-            protocol: None,
-        };
-        assert!(matches!(
-            classify_service_version_reply(&reply),
-            ServiceVersionCheck::NeedsReinstall(_)
-        ));
-    }
-
-    #[test]
-    fn an_error_code_is_not_ready_even_with_protocol_info() {
-        let reply = ServiceVersionReply {
-            code: 1,
-            message: "boom".into(),
-            protocol: Some(ProtocolInfo::current()),
-        };
-        assert!(matches!(
-            classify_service_version_reply(&reply),
-            ServiceVersionCheck::NeedsReinstall(_)
-        ));
     }
 
     #[test]

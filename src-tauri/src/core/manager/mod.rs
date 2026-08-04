@@ -23,7 +23,7 @@ use std::os::windows::io::OwnedHandle;
 
 pub(crate) static CLASH_LOGGER: Lazy<Arc<AsyncLogger>> = Lazy::new(|| Arc::new(AsyncLogger::new()));
 
-#[derive(Debug, serde::Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, serde::Serialize, PartialEq, Eq)]
 pub enum RunningMode {
     Service,
     Sidecar,

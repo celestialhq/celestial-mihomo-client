@@ -147,6 +147,8 @@ pub mod tray {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub(crate) mod owner_identity;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod runstate;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod runtime_bundle;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
