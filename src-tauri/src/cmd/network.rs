@@ -129,7 +129,9 @@ pub fn get_network_interfaces_info() -> CmdResult<Vec<NetworkInterface>> {
     Ok(result)
 }
 
-#[tauri::command]
+/// Still used by the embedded server's singleton check. No longer exposed as a
+/// command: the frontend asks `probe_listener` instead, which understands the
+/// actual listener transports and bind scope rather than probing one TCP port.
 pub fn is_port_in_use(port: u16) -> bool {
     TcpListener::bind(("127.0.0.1", port)).is_err()
 }

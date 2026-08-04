@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next'
 import { BaseDialog } from '@/components/base'
 import { useClash } from '@/hooks/use-clash'
 import { useProxiesData } from '@/providers/app-data-context'
-import { isPortInUse } from '@/services/cmds'
+import { probeListener } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 import {
   formatHostPort,
@@ -147,11 +147,22 @@ export const TunnelsViewer = forwardRef<TunnelsViewerRef>((_, ref) => {
       )
       return
     }
-    const inUse = await isPortInUse(Number(localPort))
-    if (inUse) {
+    // A tunnel binds both TCP and UDP, so probe both: a port free for TCP but
+    // taken for UDP would otherwise pass here and fail at core start.
+    const outcome = await probeListener({
+      address: `127.0.0.1:${Number(localPort)}`,
+      transports: ['tcp', 'udp'],
+    })
+    if (outcome.status === 'conflict') {
       showNotice.error('settings.modals.clashPort.messages.portInUse', {
-        port: localPort,
+        port: outcome.port,
       })
+      return
+    }
+    if (outcome.status === 'invalid') {
+      showNotice.error(
+        'settings.sections.clash.form.fields.tunnels.messages.invalidLocalPort',
+      )
       return
     }
 

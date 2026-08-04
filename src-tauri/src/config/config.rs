@@ -85,7 +85,21 @@ impl Config {
             logging_error!(Type::Core, verge_data.save_file().await);
         }
 
-        let validation_result = Self::generate_and_validate().await?;
+        // If the configured mixed port is taken, move to a free one before
+        // generating: a fallback already regenerates and validates, so running
+        // the normal path again would just redo the work.
+        let fallback_applied = match Self::resolve_startup_mixed_port().await {
+            Ok(applied) => applied,
+            Err(error) => {
+                Self::block_startup_core(&error);
+                return Err(error);
+            }
+        };
+        let validation_result = if fallback_applied {
+            None
+        } else {
+            Self::generate_and_validate().await?
+        };
 
         if let Some((msg_type, msg_content)) = validation_result {
             sleep(timing::STARTUP_ERROR_DELAY).await;
@@ -214,6 +228,11 @@ impl Config {
     }
 
     pub async fn verify_config_initialization() {
+        // Nothing to verify if the core was never allowed to start.
+        if Self::startup_core_block_reason().is_some() {
+            return;
+        }
+
         let backoff = ExponentialBuilder::default()
             .with_min_delay(std::time::Duration::from_millis(100))
             .with_max_delay(std::time::Duration::from_secs(2))

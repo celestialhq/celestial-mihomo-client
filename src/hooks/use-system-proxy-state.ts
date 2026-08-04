@@ -6,6 +6,7 @@ import { useVerge } from '@/hooks/use-verge'
 import { useClashConfigData, useSystemData } from '@/providers/app-data-context'
 import { getAutotemProxy } from '@/services/cmds'
 import { queryClient } from '@/services/query-client'
+import { resolveDisplayedMixedPort } from '@/utils/mixed-port'
 
 // 系统代理状态检测统一逻辑
 export const useSystemProxyState = () => {
@@ -35,7 +36,12 @@ export const useSystemProxyState = () => {
       return autoproxy.url === `http://${host}:${pacPort}/commands/pac`
     } else {
       if (!sysproxy?.enable) return false
-      const port = verge_mixed_port || clashConfig?.mixedPort || 7897
+      // Live config wins over the selected port: after a startup port
+      // fallback they can disagree, and the OS proxy points at the live one.
+      const port = resolveDisplayedMixedPort({
+        live: clashConfig?.mixedPort,
+        selected: verge_mixed_port,
+      })
       return sysproxy.server === `${host}:${port}`
     }
   })()

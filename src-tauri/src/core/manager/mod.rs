@@ -5,6 +5,7 @@ mod state;
 use anyhow::Result;
 use arc_swap::{ArcSwap, ArcSwapOption};
 use celestial_logger::AsyncLogger;
+use clash_verge_logging::{Type, logging};
 use once_cell::sync::Lazy;
 use std::{
     fmt,
@@ -117,11 +118,11 @@ impl CoreManager {
         self.last_update.store(Some(Arc::new(time)));
     }
 
-    fn try_start_config_update(&self) -> bool {
+    pub(crate) fn try_start_config_update(&self) -> bool {
         !self.config_update_in_progress.swap(true, Ordering::AcqRel)
     }
 
-    fn finish_config_update(&self) {
+    pub(crate) fn finish_config_update(&self) {
         self.config_update_in_progress.store(false, Ordering::Release);
     }
 
@@ -135,8 +136,57 @@ impl CoreManager {
     }
 
     pub async fn init(&self) -> Result<()> {
-        self.start_core().await?;
-        Ok(())
+        const MAX_PORT_FALLBACK_RETRIES: usize = 3;
+
+        if let Some(reason) = crate::config::Config::startup_core_block_reason() {
+            anyhow::bail!("core startup blocked after mixed proxy port fallback failure: {reason}");
+        }
+
+        // A core that fails to start because its port got taken between the
+        // startup probe and the actual bind is worth retrying on a new port —
+        // but only while nothing is running, and only a bounded number of times.
+        let mut retries = 0;
+        loop {
+            match self.start_core().await {
+                Ok(()) => {
+                    crate::config::Config::notify_startup_mixed_port_fallback();
+                    return Ok(());
+                }
+                Err(start_error) if retries < MAX_PORT_FALLBACK_RETRIES => {
+                    if !matches!(*self.get_running_mode(), RunningMode::NotRunning) {
+                        crate::config::Config::notify_startup_mixed_port_fallback();
+                        return Err(start_error);
+                    }
+                    match crate::config::Config::retry_startup_mixed_port_fallback().await {
+                        Ok(true) => {
+                            retries += 1;
+                            logging!(
+                                warn,
+                                Type::Core,
+                                "Retrying core startup after mixed proxy port fallback ({}/{})",
+                                retries,
+                                MAX_PORT_FALLBACK_RETRIES
+                            );
+                        }
+                        Ok(false) => {
+                            crate::config::Config::notify_startup_mixed_port_fallback();
+                            return Err(start_error);
+                        }
+                        Err(fallback_error) => {
+                            crate::config::Config::block_startup_core(&fallback_error);
+                            return Err(anyhow::anyhow!(
+                                "core startup failed: {start_error:#}; mixed proxy port fallback failed: \
+                                 {fallback_error:#}"
+                            ));
+                        }
+                    }
+                }
+                Err(error) => {
+                    crate::config::Config::notify_startup_mixed_port_fallback();
+                    return Err(error);
+                }
+            }
+        }
     }
 }
 

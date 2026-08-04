@@ -1165,6 +1165,7 @@ dependencies = [
  "serde_yaml_ng",
  "sha2 0.11.0",
  "smartstring",
+ "socket2 0.6.4",
  "sysproxy 0.5.4 (git+https://github.com/clash-verge-rev/sysproxy-rs?branch=0.5.4)",
  "tauri",
  "tauri-build",
