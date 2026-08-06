@@ -17,10 +17,13 @@ pub(crate) fn current_owner_credentials() -> Result<OwnerCredentials> {
 
 #[allow(clippy::unnecessary_wraps)] // Windows SID discovery is fallible; Unix keeps the shared API.
 pub(crate) fn current_owner_identity() -> Result<OwnerIdentity> {
+    // Reached through the sysinfo plugin's re-export, which is how the rest of the
+    // crate gets at libc — adding a direct dependency here would be a second version
+    // of the same bindings to keep in step.
     #[cfg(unix)]
     return Ok(OwnerIdentity::Unix {
-        uid: unsafe { libc::geteuid() },
-        gid: unsafe { libc::getegid() },
+        uid: unsafe { tauri_plugin_clash_verge_sysinfo::libc::geteuid() },
+        gid: unsafe { tauri_plugin_clash_verge_sysinfo::libc::getegid() },
     });
 
     #[cfg(windows)]

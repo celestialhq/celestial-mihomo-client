@@ -14,8 +14,11 @@ use crate::{
         tray::Tray,
     },
     process::AsyncHandler,
-    utils::dirs,
 };
+// Only the Windows and macOS installers resolve the helper binary this way; the
+// Linux ones shell out to packaged install/uninstall scripts beside the executable.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+use crate::utils::dirs;
 use anyhow::{Context as _, Result, anyhow, bail};
 use backon::{ConstantBuilder, Retryable as _};
 use celestial_service_ipc::{OwnerSessionProof, StartClashRequest};
