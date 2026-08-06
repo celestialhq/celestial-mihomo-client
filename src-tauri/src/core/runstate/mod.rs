@@ -11,14 +11,6 @@
 //! [`RunStateStore::probe`] (forces live IPC). What the answer *means* is decided by methods
 //! on [`RunState`], so no caller writes its own availability formula.
 
-//! NOTE: not yet wired into the app. `ServiceManager` becomes a thin façade
-//! over this store in the next stage, which also moves Running Mode ownership
-//! here — that rewiring changes `ServiceStatus`'s variants and makes
-//! `current()` async again, so it is kept separate. The state machine is
-//! nonetheless exercised: `FakeEnv` drives it through its own tests without a
-//! running app, an installed service, or elevation.
-#![allow(dead_code)]
-
 mod env;
 mod health;
 mod owner;
@@ -41,6 +33,9 @@ use tokio::sync::Notify;
 
 pub use env::{RealEnv, RunStateEnv};
 pub use health::{PendingAction, RunState, RunStateView, ServiceHealth};
+// The owner-liveness vocabulary describes watching a privileged service hold a
+// core on our behalf, which only the desktop service path ever does.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use owner::{OwnerRecoveryReason, OwnerSample, OwnerStep, OwnerWatch};
 pub use probe::{ServiceVersionCheck, ServiceVersionReply, classify_service_version_reply};
 
@@ -120,19 +115,26 @@ impl<E: RunStateEnv> RunStateStore<E> {
     }
 
     /// The Run State once any in-flight privileged operation has finished.
+    ///
+    /// The snapshot is the decision, not a separate check before it. Reading the slot twice —
+    /// once to decide whether to wait, once to build the snapshot — leaves a window in which an
+    /// operation claims it, and the snapshot then *describes* that operation instead of waiting
+    /// for it. `prepare_startup` reads this: it would see a requested install as a reason not to
+    /// start, where waiting would have told it whether the install worked.
     pub async fn settled(&self) -> RunState {
         loop {
             let notified = self.operation_done.notified();
             tokio::pin!(notified);
-            // Register as a waiter *before* checking the flag. `notify_waiters` wakes only
+            // Register as a waiter *before* reading the state. `notify_waiters` wakes only
             // those already registered and leaves no permit behind, so without this an
-            // operation finishing between the check and the await is a wakeup lost for good
+            // operation finishing between the read and the await is a wakeup lost for good
             // — and this future would then wait for some unrelated later operation, or
             // forever.
             notified.as_mut().enable();
 
-            if !self.operation_running.load(Ordering::Acquire) {
-                return self.state();
+            let state = self.state();
+            if !state.op_in_flight {
+                return state;
             }
             notified.await;
         }
@@ -143,6 +145,7 @@ impl<E: RunStateEnv> RunStateStore<E> {
     /// A *transport* failure is not an observation: the Service may simply be restarting, so
     /// the last confirmed health survives and the caller decides whether to retry. Only a
     /// reply we could read and reject updates health.
+    #[allow(dead_code, reason = "forced-refresh entry point for the service settings UI")]
     pub async fn probe(&self) -> Result<RunState> {
         let reply = self
             .env
@@ -251,6 +254,10 @@ impl<E: RunStateEnv> RunStateStore<E> {
     /// Accept Sidecar for the rest of this app session without any eligibility check.
     ///
     /// For builds and paths where Sidecar is the decided outcome rather than a fallback.
+    #[allow(
+        dead_code,
+        reason = "for builds where sidecar is the decided outcome, not a fallback"
+    )]
     pub fn accept_sidecar(&self) {
         let mut state = self.service.lock();
         if state.service.sidecar_allowed && state.service.pending.is_none() {
@@ -293,6 +300,11 @@ impl<E: RunStateEnv> RunStateStore<E> {
     ///
     /// A no-op from any other state, mirroring the rule that an already-requested or
     /// already-usable Service must not be downgraded to "needs installing".
+    // Deliberately not called from `prepare_startup` yet: it would make an absent
+    // service "needs attention", which suppresses the automatic TUN-off — correct only
+    // once there is a prompt offering to install. Wiring it before that UI exists would
+    // leave TUN silently switched on and not working, with nothing asking the user.
+    #[allow(dead_code, reason = "startup entry point, blocked on the install-prompt UI")]
     pub fn require_install_for_session(&self) -> Result<()> {
         let mut state = self.service.lock();
         if self.operation_running.load(Ordering::Acquire) {
@@ -356,8 +368,25 @@ impl<E: RunStateEnv> RunStateStore<E> {
     ///
     /// Closes the PAC endpoint without disturbing the Running Mode, so a handover cannot
     /// hand out a PAC script for a proxy port that is between owners.
+    ///
+    /// Every caller must pair this with [`Self::core_start_settled`]. A start attempt that
+    /// never happens — one abandoned before anything was stopped — otherwise leaves PAC
+    /// closed for a Core that is still serving, and nothing else would ever reopen it: PAC is
+    /// re-derived only when the Running Mode changes, and that is exactly what did not happen.
     pub fn core_starting(&self) {
         self.env.set_pac_available(false);
+    }
+
+    /// The start attempt is over, however it ended: PAC goes back to following the Running Mode.
+    ///
+    /// Idempotent and safe on every path, because it re-derives rather than restores. After a
+    /// start that succeeded the mode is already running and this confirms PAC open; after one
+    /// that was abandoned the mode never moved and this reopens PAC for the Core that kept
+    /// serving; after one that failed and stopped the Core the mode says NotRunning and PAC
+    /// stays shut.
+    pub fn core_start_settled(&self) {
+        let running = !matches!(**self.mode.load(), RunningMode::NotRunning);
+        self.env.set_pac_available(running);
     }
 
     /// Move to `mode` and re-derive everything that follows from it.
@@ -934,5 +963,139 @@ mod tests {
         let _guard = store.begin_operation().expect("slot should be free");
 
         assert!(!store.state().tun_capable());
+    }
+
+    // Multi-threaded on purpose, so operations really do start and finish underneath the reader.
+    // This is a guard, not a reproducer: the window it protects against is narrow enough that
+    // reverting the fix does not reliably fail it. What makes the invariant hold is that
+    // `settled` reads the slot once, inside the snapshot it returns; this fails if someone
+    // reintroduces a separate check before it.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_settled_snapshot_never_describes_an_operation_in_flight() {
+        let store = Arc::new(with_env(FakeEnv::new()));
+        store.observe(ServiceHealth::Ready);
+
+        for _ in 0..64 {
+            let claimer = {
+                let store = Arc::clone(&store);
+                tokio::spawn(async move {
+                    let guard = store.begin_operation();
+                    tokio::task::yield_now().await;
+                    drop(guard);
+                })
+            };
+
+            let settled = store.settled().await;
+            assert!(!settled.op_in_flight, "a settled snapshot describes a settled state");
+
+            claimer.await.expect("the claimer should not panic");
+        }
+    }
+
+    #[test]
+    fn an_abandoned_start_attempt_reopens_pac_for_the_core_that_kept_running() {
+        // The regression this pins: a start attempt given up before anything was stopped.
+        // `core_starting` closed PAC, the Running Mode never moved, and so nothing would ever
+        // re-derive PAC — the Core kept serving while its PAC endpoint stayed shut.
+        for mode in [RunningMode::Service, RunningMode::Sidecar] {
+            let store = with_env(FakeEnv::new());
+            store.core_started(mode);
+            store.core_starting();
+            assert_eq!(store.env().pac_available(), Some(false));
+
+            store.core_start_settled();
+
+            assert_eq!(store.env().pac_available(), Some(true), "{mode} kept serving");
+            assert_eq!(store.state().mode, mode, "an abandoned start is not a mode change");
+        }
+    }
+
+    #[test]
+    fn a_settled_start_leaves_pac_shut_when_no_core_is_running() {
+        let store = with_env(FakeEnv::new());
+        store.core_starting();
+
+        store.core_start_settled();
+
+        assert_eq!(store.env().pac_available(), Some(false));
+    }
+
+    #[test]
+    fn settling_a_start_is_idempotent_and_never_contradicts_the_mode() {
+        // Callers pair this with `core_starting` via a guard that runs on every path, so it
+        // also runs after a start that already opened PAC itself.
+        let store = with_env(FakeEnv::new());
+        store.core_starting();
+        store.core_started(RunningMode::Service);
+
+        store.core_start_settled();
+        store.core_start_settled();
+
+        assert_eq!(store.env().pac_available(), Some(true));
+    }
+
+    #[test]
+    fn the_operation_slot_tracks_the_guard_lifetime() {
+        let store = with_env(FakeEnv::new());
+        assert!(!store.operation_in_flight());
+
+        let guard = store.begin_operation().expect("slot should be free");
+        assert!(store.operation_in_flight());
+
+        drop(guard);
+        assert!(!store.operation_in_flight());
+    }
+
+    #[test]
+    fn performing_an_action_forwards_exactly_that_action() {
+        let store = with_env(FakeEnv::new());
+
+        store.perform(PendingAction::Install).expect("install should succeed");
+        store
+            .perform(PendingAction::Reinstall)
+            .expect("reinstall should succeed");
+
+        assert_eq!(
+            store.env().privileged_actions(),
+            vec![PendingAction::Install, PendingAction::Reinstall]
+        );
+    }
+
+    #[test]
+    fn a_successful_uninstall_records_the_service_as_absent() {
+        let store = with_env(FakeEnv::new());
+        store.observe(ServiceHealth::Ready);
+
+        store
+            .perform(PendingAction::Uninstall)
+            .expect("uninstall should succeed");
+
+        assert_eq!(store.state().health, ServiceHealth::NotInstalled);
+    }
+
+    #[test]
+    fn a_failed_uninstall_reports_unavailable_rather_than_absent() {
+        let store = with_env(FakeEnv::new().privileged_operations_fail("elevation declined"));
+        store.observe(ServiceHealth::Ready);
+
+        store
+            .perform(PendingAction::Uninstall)
+            .expect_err("uninstall should fail");
+
+        // "Absent" would offer to install a service that is still sitting there.
+        assert!(matches!(store.state().health, ServiceHealth::Unavailable(_)));
+    }
+
+    #[test]
+    fn a_failed_install_records_nothing_by_itself() {
+        let store = with_env(FakeEnv::new().privileged_operations_fail("elevation declined"));
+        store.observe(ServiceHealth::NotInstalled);
+
+        store.perform(PendingAction::Install).expect_err("install should fail");
+
+        // Unlike an uninstall, a failed install has no outcome worth recording: whether
+        // the service came back has to be asked, which is the caller's job.
+        assert_eq!(store.state().health, ServiceHealth::NotInstalled);
+        assert_eq!(store.env().privileged_actions(), vec![PendingAction::Install]);
     }
 }

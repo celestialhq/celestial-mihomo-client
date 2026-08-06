@@ -552,6 +552,16 @@ export const getRunningMode = async () => {
   return invoke<string>('get_running_mode')
 }
 
+// 获取运行状态快照（转换由后端推送到 verge://run-state-changed）
+export const getRunState = async () => {
+  return invoke<IRunState>('get_run_state')
+}
+
+// 本次会话改用 Sidecar，不再询问服务
+export const allowServiceSidecar = async () => {
+  return invoke<void>('allow_service_sidecar')
+}
+
 // 获取应用运行时间
 export const getAppUptime = async () => {
   return invoke<number>('get_app_uptime')

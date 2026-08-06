@@ -3,6 +3,7 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { useEffect } from 'react'
 
 import { useListen } from '@/hooks/use-listen'
+import { RUN_STATE_QUERY_KEY } from '@/hooks/use-system-state'
 import { queryClient } from '@/services/query-client'
 
 export const useLayoutEvents = (
@@ -64,8 +65,15 @@ export const useLayoutEvents = (
           'getAutotemProxy',
           'getRunningMode',
           'isServiceAvailable',
-          'getSystemState',
         ])
+      }),
+    )
+
+    register(
+      // The payload is the whole state, so write it straight in rather than
+      // invalidating and asking the backend for what it just told us.
+      addListener('verge://run-state-changed', ({ payload }) => {
+        queryClient.setQueryData(RUN_STATE_QUERY_KEY, payload as IRunState)
       }),
     )
 

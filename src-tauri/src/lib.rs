@@ -11,6 +11,8 @@ mod module;
 mod process;
 pub mod utils;
 
+// Only `setup_window_state` reads this, and window state is desktop-only.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::constants::files;
 use crate::{
     core::handle,
@@ -221,6 +223,9 @@ mod app_init {
             cmd::reinstall_service,
             cmd::repair_service,
             cmd::is_service_available,
+            cmd::allow_service_sidecar,
+            cmd::get_service_status,
+            cmd::get_run_state,
             cmd::get_clash_info,
             cmd::patch_clash_config,
             cmd::patch_clash_mode,

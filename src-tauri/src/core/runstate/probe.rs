@@ -1,8 +1,4 @@
 //! Classifying what a service version reply means.
-//!
-//! `classify_service_version_reply` is wired today; the health-classification
-//! half needs the Run State store, which lands in the next stage.
-#![allow(dead_code)]
 
 //! Turning raw Service probes into [`ServiceHealth`].
 //!

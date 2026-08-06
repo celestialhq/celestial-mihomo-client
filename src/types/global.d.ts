@@ -27,6 +27,42 @@ type ValidationOutcome =
   | { status: 'invalid'; kind: string; message: string }
   | { status: 'skipped'; reason: string }
 
+/** What the backend last observed about the privileged helper service. */
+type ServiceHealth =
+  | 'unknown'
+  | 'ready'
+  | 'notInstalled'
+  | 'versionMismatch'
+  | 'unavailable'
+
+/** A privileged operation this session asked for against the service. */
+type PendingServiceAction =
+  | 'install'
+  | 'uninstall'
+  | 'reinstall'
+  | 'forceReinstall'
+
+/**
+ * The single answer to "how is the core running, and what backs it".
+ *
+ * Carries the derived answers (`tunCapable`, `serviceUsable`,
+ * `serviceNeedsAttention`) rather than only the raw fields, so the UI never has
+ * to reinvent the backend's availability rules and then disagree with them.
+ */
+interface IRunState {
+  mode: 'Service' | 'Sidecar' | 'NotRunning'
+  service: ServiceHealth
+  serviceUnavailableReason: string | null
+  pendingAction: PendingServiceAction | null
+  sidecarAllowed: boolean
+  isAdmin: boolean
+  /** A privileged operation is in flight, so `service` may be stale. */
+  opInFlight: boolean
+  serviceUsable: boolean
+  tunCapable: boolean
+  serviceNeedsAttention: boolean
+}
+
 /**
  * Some interface for clash api
  */

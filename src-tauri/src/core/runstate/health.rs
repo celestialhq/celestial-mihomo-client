@@ -1,8 +1,3 @@
-//! Service health, run state and pending action — the vocabulary the Run State
-//! store is written in. Carried whole from upstream; the store that consumes it
-//! lands in the next stage, so parts are not wired yet.
-#![allow(dead_code)]
-
 //! Run State value types.
 //!
 //! The central distinction: [`ServiceHealth`] is what we *observed* about the Service,
@@ -102,11 +97,21 @@ impl RunState {
 
     /// The Service cannot be used and the user has to choose what to do about it.
     ///
-    /// A requested action always needs an answer. Otherwise it is only the states where the
-    /// Service is present but unusable: a Service that is simply absent, or a session that has
-    /// already settled on Sidecar, needs nothing from anyone.
+    /// A requested action always needs an answer — unless it is already being carried out,
+    /// which is a report of progress rather than a question. The legacy status could not tell
+    /// the two apart because readers blocked until the operation finished and so never saw the
+    /// request at all; now that every transition is pushed, an install started from the
+    /// settings page would otherwise raise a dialog on top of it, and an uninstall would raise
+    /// one offering to reinstall the very Service being removed.
+    ///
+    /// Otherwise it is only the states where the Service is present but unusable: a Service
+    /// that is simply absent, or a session that has already settled on Sidecar, needs nothing
+    /// from anyone.
     #[must_use]
     pub const fn service_needs_attention(&self) -> bool {
+        if self.op_in_flight {
+            return false;
+        }
         if self.pending.is_some() {
             return true;
         }
@@ -252,7 +257,7 @@ mod tests {
     }
 
     #[test]
-    fn a_requested_action_always_needs_an_answer() {
+    fn a_requested_action_needs_an_answer_until_it_is_being_carried_out() {
         for action in [
             PendingAction::Install,
             PendingAction::Uninstall,
@@ -261,7 +266,35 @@ mod tests {
         ] {
             let mut run_state = state(ServiceHealth::NotInstalled, false, false);
             run_state.pending = Some(action);
-            assert!(run_state.service_needs_attention(), "{action:?}");
+            assert!(run_state.service_needs_attention(), "{action:?} is still a question");
+
+            run_state.op_in_flight = true;
+            assert!(
+                !run_state.service_needs_attention(),
+                "{action:?} is under way, which is progress rather than a question"
+            );
+        }
+    }
+
+    #[test]
+    fn an_operation_under_way_is_never_a_decision_to_put_to_the_user() {
+        // The regression this pins: `handle_service_status` records the requested action
+        // before it claims the operation slot, so the pending action reaches the frontend
+        // the moment it is asked for. Readers used to block until the operation finished and
+        // so never saw it; now that every transition is pushed, treating it as a decision
+        // raises a dialog on top of an operation already running — and for an uninstall, one
+        // offering to reinstall the service being removed.
+        for health in [
+            ServiceHealth::Unknown,
+            ServiceHealth::Ready,
+            ServiceHealth::NotInstalled,
+            ServiceHealth::VersionMismatch,
+            ServiceHealth::Unavailable("boom".into()),
+        ] {
+            let mut run_state = state(health.clone(), false, true);
+            run_state.pending = Some(PendingAction::Uninstall);
+
+            assert!(!run_state.service_needs_attention(), "{health:?}");
         }
     }
 

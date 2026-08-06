@@ -6,8 +6,8 @@ use crate::{
         manager::RunningMode,
         owner_identity::current_owner_credentials,
         runstate::{
-            OwnerRecoveryReason, OwnerSample, OwnerStep, OwnerWatch, PendingAction, ServiceVersionCheck,
-            ServiceVersionReply, classify_service_version_reply,
+            OwnerRecoveryReason, OwnerSample, OwnerStep, OwnerWatch, PendingAction, RUN_STATE, ReadyWaitError,
+            RunState, ServiceHealth,
         },
         runtime_bundle::collect_runtime_bundle,
         sysopt::Sysopt,
@@ -27,10 +27,9 @@ use std::{
     env::current_exe,
     path::Path,
     process::Command as StdCommand,
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::atomic::{AtomicU64, Ordering},
     time::Duration,
 };
-use tokio::sync::Notify;
 
 /// The session handed out by the service for the core we started. Mutating
 /// calls are only authorised while this matches the service's own generation,
@@ -101,7 +100,6 @@ fn macos_service_install_marker_exists() -> std::io::Result<bool> {
 }
 
 #[cfg(windows)]
-#[allow(dead_code)] // consumed by RunStateEnv once the store is wired
 pub(crate) fn trusted_service_evidence() -> Result<bool> {
     use windows_service::{
         Error as WindowsServiceError,
@@ -148,7 +146,6 @@ pub(crate) fn trusted_service_evidence() -> Result<bool> {
 ///
 /// Blocking and platform-specific — SCM, systemd, launchd, elevation prompts —
 /// so it runs on a blocking thread rather than stalling the async runtime.
-#[allow(dead_code)] // consumed by RunStateEnv once the store is wired
 pub(crate) fn run_privileged_service_action(action: PendingAction) -> Result<()> {
     let (operation, label): (fn() -> Result<()>, &'static str) = match action {
         PendingAction::Install => (install_service, "install service"),
@@ -157,17 +154,6 @@ pub(crate) fn run_privileged_service_action(action: PendingAction) -> Result<()>
         PendingAction::ForceReinstall => (force_reinstall_service, "force reinstall service"),
     };
     tokio::task::block_in_place(operation).with_context(|| format!("{label} failed"))
-}
-
-/// `get_version` is unauthenticated, so it still answers on a helper too old to
-/// accept the owner-scoped calls — which is exactly the case we need to detect.
-async fn probe_service_version_once() -> Result<ServiceVersionReply> {
-    let response = celestial_service_ipc::get_version().await?;
-    Ok(ServiceVersionReply {
-        code: response.code,
-        message: response.message,
-        protocol: response.data,
-    })
 }
 
 /// Claims the right to recover, so two observers cannot both tear down.
@@ -184,9 +170,24 @@ fn claim_owner_recovery_generation(generation: &AtomicU64, captured_generation: 
         .map(|_| recovery_generation)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// The Run State flattened into the one-slot answer this app's callers expect.
+///
+/// Run State keeps an observation, a requested action and a session decision side by
+/// side, because they answer different questions. Most callers only ever asked "what
+/// should happen to the service now", so this collapses the three into that single
+/// answer — see [`ServiceStatus::from_run_state`] for which one wins.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
 pub enum ServiceStatus {
+    /// Nothing has been observed yet; no conclusion is available.
+    Checking,
     Ready,
+    /// No trusted installation evidence, and nothing has been asked about it.
+    NotInstalled,
+    /// Installed but speaking an incompatible protocol, and nothing has been asked yet.
+    NeedsReinstall,
+    /// The user settled on Sidecar for this session.
+    SidecarAllowed,
     InstallRequired,
     UninstallRequired,
     ReinstallRequired,
@@ -194,28 +195,81 @@ pub enum ServiceStatus {
     Unavailable(String),
 }
 
-/// Service status plus a guard that serialises install/uninstall.
-///
-/// This used to be wrapped in a `tokio::Mutex` by every caller, which meant the
-/// lock was held for the whole duration of an elevation prompt (UAC, pkexec,
-/// osascript) — every other reader of the service status blocked behind a
-/// dialog waiting on the user. Locking is internal now: status reads are cheap
-/// and never wait, while the long privileged operations serialise on their own
-/// flag.
-pub struct ServiceManager {
-    status: parking_lot::Mutex<ServiceStatus>,
-    operation_running: AtomicBool,
-    operation_done: Notify,
+impl ServiceStatus {
+    /// Collapse a Run State snapshot into the single status callers act on.
+    ///
+    /// The order is what makes the collapse lossless in practice: a requested action is
+    /// the newest intent and shadows everything, an accepted Sidecar shadows the
+    /// observation that prompted it, and only then does the last observation speak.
+    /// Reversing any pair would let a stale observation overwrite a live decision.
+    fn from_run_state(state: &RunState) -> Self {
+        if let Some(action) = state.pending {
+            return match action {
+                PendingAction::Install => Self::InstallRequired,
+                PendingAction::Uninstall => Self::UninstallRequired,
+                PendingAction::Reinstall => Self::ReinstallRequired,
+                PendingAction::ForceReinstall => Self::ForceReinstallRequired,
+            };
+        }
+        if state.sidecar_allowed {
+            return Self::SidecarAllowed;
+        }
+        match &state.health {
+            ServiceHealth::Unknown => Self::Checking,
+            ServiceHealth::Ready => Self::Ready,
+            ServiceHealth::NotInstalled => Self::NotInstalled,
+            ServiceHealth::VersionMismatch => Self::NeedsReinstall,
+            ServiceHealth::Unavailable(reason) => Self::Unavailable(reason.clone()),
+        }
+    }
 }
 
-/// Releases the operation slot and wakes one waiter, including on panic.
-struct OperationGuard<'a>(&'a ServiceManager);
-
-impl Drop for OperationGuard<'_> {
-    fn drop(&mut self) {
-        self.0.operation_running.store(false, Ordering::Release);
-        self.0.operation_done.notify_one();
+/// The privileged operation a status asks for, if it asks for one at all.
+///
+/// Deliberately exhaustive with no catch-all arm: a status added later cannot be
+/// silently treated as "nothing to do" — it stops compiling until someone decides.
+const fn requested_action(status: &ServiceStatus) -> Option<PendingAction> {
+    match status {
+        ServiceStatus::InstallRequired => Some(PendingAction::Install),
+        ServiceStatus::UninstallRequired => Some(PendingAction::Uninstall),
+        ServiceStatus::ReinstallRequired => Some(PendingAction::Reinstall),
+        ServiceStatus::ForceReinstallRequired => Some(PendingAction::ForceReinstall),
+        ServiceStatus::Checking
+        | ServiceStatus::Ready
+        | ServiceStatus::NotInstalled
+        | ServiceStatus::NeedsReinstall
+        | ServiceStatus::SidecarAllowed
+        | ServiceStatus::Unavailable(_) => None,
     }
+}
+
+/// Explain a status that asks for no privileged operation.
+///
+/// Only `Unavailable` is an error: the caller asked us to act on the service and there
+/// is a recorded reason we cannot. The rest are ordinary states that need nothing done.
+fn report_non_actionable_status(status: &ServiceStatus) -> Result<()> {
+    match status {
+        ServiceStatus::Ready => logging!(info, Type::Service, "服务就绪，直接启动"),
+        ServiceStatus::Checking => logging!(info, Type::Service, "服务状态尚未确定，暂不操作"),
+        ServiceStatus::NotInstalled => logging!(info, Type::Service, "服务未安装，等待用户决定"),
+        ServiceStatus::NeedsReinstall => logging!(info, Type::Service, "服务协议不兼容，等待用户决定"),
+        ServiceStatus::SidecarAllowed => logging!(info, Type::Service, "本次会话已选择 Sidecar 模式"),
+        ServiceStatus::Unavailable(reason) => {
+            logging!(info, Type::Service, "服务不可用: {}，将使用Sidecar模式", reason);
+            bail!("服务不可用: {reason}");
+        }
+        ServiceStatus::InstallRequired
+        | ServiceStatus::UninstallRequired
+        | ServiceStatus::ReinstallRequired
+        | ServiceStatus::ForceReinstallRequired => {
+            // Unreachable by construction: `requested_action` maps exactly these four to
+            // `Some`, and this runs only where it returned `None`. Reported rather than
+            // asserted — the two matches drifting apart is a bug worth failing loudly for,
+            // but not worth taking the process down over.
+            bail!("actionable status {status:?} reached the non-actionable path");
+        }
+    }
+    Ok(())
 }
 
 #[cfg(target_os = "windows")]
@@ -577,7 +631,7 @@ pub(super) async fn run_core_by_service(config_file: &Path) -> Result<()> {
     logging!(info, Type::Service, "正在尝试通过服务启动核心");
 
     SERVICE_MANAGER.refresh().await?;
-    let status = SERVICE_MANAGER.current();
+    let status = SERVICE_MANAGER.current().await;
 
     if !matches!(status, ServiceStatus::Ready) {
         logging!(warn, Type::Service, "service is not ready for core start: {:?}", status);
@@ -660,8 +714,9 @@ async fn recover_after_owner_loss(generation: u64, reason: OwnerRecoveryReason) 
     // pointing at a core we no longer control.
     Sysopt::global().stop_proxy_guard();
     clear_active_service_session();
-    manager.set_running_mode(RunningMode::NotRunning);
-    manager.after_core_process();
+    // Recording the stop also closes PAC and republishes the Run State, which is
+    // what the separate `after_core_process` call here used to do by hand.
+    manager.core_stopped();
 
     let mut last_error = None;
     for _ in 0..3 {
@@ -812,19 +867,18 @@ pub async fn is_service_available() -> Result<()> {
     Ok(())
 }
 
-pub async fn wait_and_check_service_available(manager: &ServiceManager) -> Result<()> {
-    wait_for_service_ipc(manager, "Waiting for service to be available").await
-}
-
-async fn wait_for_service_ipc(manager: &ServiceManager, reason: &str) -> Result<()> {
-    manager.mark_unavailable(reason);
+/// Wait for the service to come back and speak a protocol we accept.
+///
+/// Reaching the IPC path is not enough: a helper left over from an older install
+/// answers `connect` perfectly well and only fails later, on the authenticated calls
+/// that matter. So the wait ends on a *version* reply, and the store records the
+/// verdict — including a rejection, which must not be overwritten by a vaguer one.
+async fn wait_for_ready_service() -> Result<()> {
     let config = ServiceManager::config();
 
-    let backoff = ConstantBuilder::default()
-        .with_delay(config.retry_delay)
-        .with_max_times(config.max_retries);
-
-    let result = (|| async {
+    // The IPC path reappearing is the cheap precondition for the version probe; a
+    // freshly installed helper has not created it yet.
+    let path_ready = (|| async {
         if Path::new(celestial_service_ipc::IPC_PATH).exists() {
             celestial_service_ipc::connect().await?;
             Ok(())
@@ -832,55 +886,48 @@ async fn wait_for_service_ipc(manager: &ServiceManager, reason: &str) -> Result<
             Err(anyhow!("IPC path not ready"))
         }
     })
-    .retry(backoff)
+    .retry(
+        ConstantBuilder::default()
+            .with_delay(config.retry_delay)
+            .with_max_times(config.max_retries),
+    )
     .await;
 
-    if result.is_ok() {
-        manager.set_status(ServiceStatus::Ready);
+    if let Err(error) = path_ready {
+        RUN_STATE.observe(ServiceHealth::Unavailable(format!(
+            "service did not come back after the privileged operation: {error:#}"
+        )));
+        return Err(error);
     }
 
-    result
+    match RUN_STATE.await_ready(config.max_retries, config.retry_delay).await {
+        Ok(_) => Ok(()),
+        // `Rejected` already recorded *why* in health; replacing it here would turn a
+        // precise "reinstall needed" into a generic failure.
+        Err(ReadyWaitError::Rejected(error)) => Err(error),
+        Err(ReadyWaitError::Unreachable(error)) => {
+            RUN_STATE.observe(ServiceHealth::Unavailable(format!(
+                "service did not answer after the privileged operation: {error:#}"
+            )));
+            Err(error)
+        }
+    }
 }
 
 pub fn is_service_ipc_path_exists() -> bool {
     Path::new(celestial_service_ipc::IPC_PATH).exists()
 }
 
+/// A façade over [`RUN_STATE`], kept so the rest of the app keeps asking its
+/// service questions in the vocabulary it already uses.
+///
+/// It holds nothing: Service Health, the pending action and the privileged-operation
+/// lock all live in the store, which owns Running Mode alongside them so the two can
+/// never disagree. What used to be several statics updated in step by hand is now one
+/// state with one set of transitions.
+pub struct ServiceManager;
+
 impl ServiceManager {
-    pub fn default() -> Self {
-        Self {
-            status: parking_lot::Mutex::new(ServiceStatus::Unavailable("Need Checks".into())),
-            operation_running: AtomicBool::new(false),
-            operation_done: Notify::new(),
-        }
-    }
-
-    fn set_status(&self, status: ServiceStatus) {
-        *self.status.lock() = status;
-    }
-
-    /// Marks the service unusable without going through a full refresh — used
-    /// when a call has already proven the service cannot be reached.
-    pub fn mark_unavailable(&self, reason: impl Into<String>) {
-        self.set_status(ServiceStatus::Unavailable(reason.into()));
-    }
-
-    /// Waits until no other privileged operation is in flight, then claims the
-    /// slot. `Notify` stores a permit if the holder finished first, so a
-    /// release that races this call cannot leave us waiting forever.
-    async fn begin_operation(&self) -> OperationGuard<'_> {
-        loop {
-            if self
-                .operation_running
-                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-                .is_ok()
-            {
-                return OperationGuard(self);
-            }
-            self.operation_done.notified().await;
-        }
-    }
-
     pub const fn config() -> celestial_service_ipc::IpcConfig {
         celestial_service_ipc::IpcConfig {
             default_timeout: Duration::from_millis(150),
@@ -897,72 +944,75 @@ impl ServiceManager {
         Ok(())
     }
 
-    pub fn current(&self) -> ServiceStatus {
-        self.status.lock().clone()
+    /// The current status, once any privileged operation has finished.
+    ///
+    /// Async because it waits: reporting `Unavailable` while an install the user is
+    /// staring at a UAC prompt for is still running is how the app used to talk itself
+    /// into the sidecar fallback halfway through a successful install.
+    pub async fn current(&self) -> ServiceStatus {
+        ServiceStatus::from_run_state(&RUN_STATE.settled().await)
     }
 
+    /// Marks the service unusable without going through a full refresh — used
+    /// when a call has already proven the service cannot be reached.
+    pub fn mark_unavailable(&self, reason: impl Into<String>) {
+        RUN_STATE.observe(ServiceHealth::Unavailable(reason.into()));
+    }
+
+    /// Re-derive the service's health from scratch: platform evidence, then a live probe.
     pub async fn refresh(&self) -> Result<()> {
-        let status = self.check_service_comprehensive().await;
-        self.set_status(status);
+        let health = RUN_STATE.detect_service_health().await;
+        RUN_STATE.observe(health);
         Ok(())
     }
 
-    /// 综合服务状态检查（一次性完成所有检查）
-    pub async fn check_service_comprehensive(&self) -> ServiceStatus {
-        if let Err(err) = is_service_available().await {
-            return ServiceStatus::Unavailable(err.to_string());
-        }
-
-        // Reachable is not the same as usable — check the helper actually
-        // speaks our protocol before calling it Ready.
-        match probe_service_version_once().await {
-            Ok(reply) => match classify_service_version_reply(&reply) {
-                ServiceVersionCheck::Ready => ServiceStatus::Ready,
-                ServiceVersionCheck::NeedsReinstall(detail) => {
-                    logging!(warn, Type::Service, "{}", detail);
-                    ServiceStatus::ReinstallRequired
-                }
-            },
-            Err(err) => ServiceStatus::Unavailable(format!("service version probe failed: {err:#}")),
-        }
+    /// Settle this session on Sidecar, abandoning the pending service question.
+    pub fn allow_sidecar_for_session(&self) -> Result<()> {
+        RUN_STATE.allow_sidecar_for_session()
     }
 
     /// 根据服务状态执行相应操作
     pub async fn handle_service_status(&self, status: &ServiceStatus) -> Result<()> {
-        // Install/uninstall shell out to an elevation prompt; without this only
-        // the caller's own lock stopped two prompts appearing at once.
-        let _operation = self.begin_operation().await;
+        let Some(action) = requested_action(status) else {
+            return report_non_actionable_status(status);
+        };
 
-        match status {
-            ServiceStatus::Ready => {
-                logging!(info, Type::Service, "服务就绪，直接启动");
-                self.set_status(ServiceStatus::Ready);
+        // Claim the privileged-operation slot for the whole elevation prompt (UAC,
+        // pkexec, osascript). Readers wait in `current()` rather than seeing the
+        // half-finished state, and a second prompt cannot be raised behind the first.
+        //
+        // Claimed *before* the request is recorded, so a refused claim cannot leave a
+        // pending action behind with no operation ever running to retire it.
+        let guard = RUN_STATE.begin_operation()?;
+
+        // Record what is being asked for, so the Run State pushed to the frontend
+        // describes the operation in progress rather than the observation that preceded
+        // it — an install takes as long as the user takes to answer a UAC prompt, and
+        // for all of it the app used to still report "not installed".
+        RUN_STATE.request_action(action);
+        let outcome = RUN_STATE.perform(action);
+
+        // Release before waiting: the wait probes the service and publishes what it
+        // finds, and holding the slot across it would keep every reader blocked on a
+        // retry loop that has already told the store everything it learned.
+        drop(guard);
+
+        if let Err(error) = outcome {
+            // `perform` records an uninstall's outcome itself. Every other action has
+            // to have its request retired here, or a declined elevation prompt would
+            // leave the app asking forever for an operation the user already refused.
+            // Re-detecting beats assuming the worst: a *cancelled* reinstall leaves the
+            // perfectly good service that was already there still running.
+            if !matches!(action, PendingAction::Uninstall) {
+                let health = RUN_STATE.detect_service_health().await;
+                RUN_STATE.observe(health);
             }
-            ServiceStatus::ReinstallRequired => {
-                logging!(info, Type::Service, "服务需要重装，执行重装流程");
-                reinstall_service()?;
-                wait_and_check_service_available(self).await?;
-            }
-            ServiceStatus::ForceReinstallRequired => {
-                logging!(info, Type::Service, "服务需要强制重装，执行强制重装流程");
-                force_reinstall_service()?;
-                wait_and_check_service_available(self).await?;
-            }
-            ServiceStatus::InstallRequired => {
-                logging!(info, Type::Service, "需要安装服务，执行安装流程");
-                install_service()?;
-                wait_and_check_service_available(self).await?;
-            }
-            ServiceStatus::UninstallRequired => {
-                logging!(info, Type::Service, "服务需要卸载，执行卸载流程");
-                uninstall_service()?;
-                self.mark_unavailable("Service Uninstalled");
-            }
-            ServiceStatus::Unavailable(reason) => {
-                logging!(info, Type::Service, "服务不可用: {}，将使用Sidecar模式", reason);
-                self.mark_unavailable(reason.clone());
-                return Err(anyhow::anyhow!("服务不可用: {}", reason));
-            }
+            return Err(error);
+        }
+
+        // An uninstall has nothing to come back to; the store already recorded that.
+        if !matches!(action, PendingAction::Uninstall) {
+            wait_for_ready_service().await?;
         }
 
         // 防止服务安装成功后，内核未完全启动导致系统托盘无法获取代理节点信息
@@ -971,7 +1021,7 @@ impl ServiceManager {
     }
 }
 
-pub static SERVICE_MANAGER: Lazy<ServiceManager> = Lazy::new(ServiceManager::default);
+pub static SERVICE_MANAGER: ServiceManager = ServiceManager;
 
 #[cfg(test)]
 mod owner_monitor_tests {

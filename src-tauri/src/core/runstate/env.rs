@@ -5,8 +5,6 @@
 //! this trait rather than reaching for globals, the state machine can be exercised without
 //! a running app, an installed Service, or elevation.
 
-#![allow(dead_code)]
-
 use anyhow::Result;
 
 use super::health::{PendingAction, RunState};
@@ -61,7 +59,18 @@ impl RunStateEnv for RealEnv {
     }
 
     fn trusted_install_evidence(&self) -> Result<bool> {
-        crate::core::service::trusted_service_evidence()
+        // Mobile has no privileged helper to find evidence of, and that is a
+        // settled fact rather than a failed inspection: `Ok(false)` lets the
+        // store reach `NotInstalled` and stay there, where an `Err` would keep
+        // reporting a detection failure the user can do nothing about.
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        {
+            Ok(false)
+        }
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        {
+            crate::core::service::trusted_service_evidence()
+        }
     }
 
     fn is_elevated(&self) -> bool {
@@ -97,7 +106,15 @@ impl RunStateEnv for RealEnv {
     }
 
     fn run_privileged(&self, action: PendingAction) -> Result<()> {
-        crate::core::service::run_privileged_service_action(action)
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        {
+            let _ = action;
+            anyhow::bail!("privileged service operations are not available on this platform")
+        }
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        {
+            crate::core::service::run_privileged_service_action(action)
+        }
     }
 }
 

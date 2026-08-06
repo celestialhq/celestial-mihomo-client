@@ -17,7 +17,7 @@ use std::{
 };
 use tauri_plugin_shell::process::CommandChild;
 
-use crate::singleton;
+use crate::{core::runstate::RUN_STATE, singleton};
 #[cfg(target_os = "windows")]
 use std::os::windows::io::OwnedHandle;
 
@@ -55,19 +55,9 @@ pub struct CoreManager {
     pub(crate) lifecycle_lock: tokio::sync::Mutex<()>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct State {
-    running_mode: ArcSwap<RunningMode>,
     child_sidecar: ArcSwapOption<CommandChild>,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            running_mode: ArcSwap::new(Arc::new(RunningMode::NotRunning)),
-            child_sidecar: ArcSwapOption::new(None),
-        }
-    }
 }
 
 impl Default for CoreManager {
@@ -88,8 +78,13 @@ impl CoreManager {
         Self::default()
     }
 
+    /// The mode the Core is *actually* running in, as recorded by Run State.
+    ///
+    /// The manager no longer keeps its own copy: it starts and stops the Core and
+    /// reports those transitions, while the resulting state — and everything derived
+    /// from it, such as PAC availability — belongs to one owner.
     pub fn get_running_mode(&self) -> Arc<RunningMode> {
-        Arc::clone(&self.state.load().running_mode.load())
+        RUN_STATE.mode_arc()
     }
 
     pub fn take_child_sidecar(&self) -> Option<CommandChild> {
@@ -104,9 +99,26 @@ impl CoreManager {
         self.last_update.load_full()
     }
 
-    pub fn set_running_mode(&self, mode: RunningMode) {
-        let state = self.state.load();
-        state.running_mode.store(Arc::new(mode));
+    /// The Core is now running, and serving, in `mode`.
+    pub fn core_started(&self, mode: RunningMode) {
+        RUN_STATE.core_started(mode);
+    }
+
+    /// The Core is no longer running.
+    pub fn core_stopped(&self) {
+        RUN_STATE.core_stopped();
+    }
+
+    /// A start attempt is under way: the Core is not serving yet, whatever the mode says.
+    ///
+    /// Must be paired with [`Self::core_start_settled`] on every path out.
+    pub fn core_starting(&self) {
+        RUN_STATE.core_starting();
+    }
+
+    /// The start attempt is over, however it ended: PAC goes back to following the mode.
+    pub fn core_start_settled(&self) {
+        RUN_STATE.core_start_settled();
     }
 
     pub fn set_running_child_sidecar(&self, child: CommandChild) {

@@ -48,7 +48,6 @@ impl Handle {
     ///
     /// Sent on every transition, so the frontend does not have to poll to
     /// notice that the core stopped or that the service came back.
-    #[allow(dead_code)] // emitted by RunStateEnv::publish once the store is wired
     pub fn notify_run_state(state: &crate::core::runstate::RunStateView) {
         let Ok(state) = serde_json::to_value(state) else {
             return;

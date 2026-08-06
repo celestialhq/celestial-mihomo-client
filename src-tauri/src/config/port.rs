@@ -2,15 +2,14 @@ use super::{
     Config, ConfigType, IClashTemp, IVerge,
     snapshot::{capture_config_files, restore_files},
 };
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use crate::core::{
+    owner_identity::current_owner_credentials,
+    service::{SERVICE_MANAGER, ServiceStatus},
+};
 use crate::{
     constants::timing,
-    core::{
-        handle::Handle,
-        listener::ListenerBindScope,
-        owner_identity::current_owner_credentials,
-        service::{SERVICE_MANAGER, ServiceStatus},
-        validate::CoreConfigValidator,
-    },
+    core::{handle::Handle, listener::ListenerBindScope, validate::CoreConfigValidator},
     process::AsyncHandler,
     utils::port::find_next_available_port,
 };
@@ -227,9 +226,18 @@ fn report_fallback_error(message: String) {
     });
 }
 
+// Nothing outlives the app on mobile: the core runs in-process, so a port still
+// held at this point belongs to something else entirely.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[allow(clippy::unused_async, reason = "mirrors the desktop signature its caller awaits")]
+async fn owned_service_core_uses_port(_port: u16) -> bool {
+    false
+}
+
 // Only service-managed cores can survive into this startup phase; this app has not spawned its sidecar yet.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 async fn owned_service_core_uses_port(port: u16) -> bool {
-    if !matches!(SERVICE_MANAGER.current(), ServiceStatus::Ready) {
+    if !matches!(SERVICE_MANAGER.current().await, ServiceStatus::Ready) {
         return false;
     }
 

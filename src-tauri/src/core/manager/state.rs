@@ -61,7 +61,7 @@ impl CoreManager {
         )
         .map_err(|e| anyhow::anyhow!("failed to start embedded core: {e}"))?;
 
-        self.set_running_mode(RunningMode::Sidecar);
+        self.core_started(RunningMode::Sidecar);
         Ok(())
     }
 
@@ -69,7 +69,7 @@ impl CoreManager {
     pub(super) fn stop_core_by_sidecar(&self) {
         logging!(info, Type::Core, "Stopping embedded core");
         tauri_plugin_celestial_vpn::stop_core();
-        self.set_running_mode(RunningMode::NotRunning);
+        self.core_stopped();
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -137,7 +137,7 @@ impl CoreManager {
         logging!(trace, Type::Core, "Sidecar started with PID: {}", pid);
 
         self.set_running_child_sidecar(child);
-        self.set_running_mode(RunningMode::Sidecar);
+        self.core_started(RunningMode::Sidecar);
 
         AsyncHandler::spawn(|| async move {
             while let Some(event) = rx.recv().await {
@@ -172,7 +172,7 @@ impl CoreManager {
     pub(super) fn stop_core_by_sidecar(&self) {
         logging!(info, Type::Core, "Stopping sidecar");
         defer! {
-            self.set_running_mode(RunningMode::NotRunning);
+            self.core_stopped();
         }
         if let Some(child) = self.take_child_sidecar() {
             let pid = child.pid();
@@ -205,14 +205,14 @@ impl CoreManager {
         logging!(info, Type::Core, "Starting core in service mode");
         let config_file = Config::generate_file(crate::config::ConfigType::Run).await?;
         service::run_core_by_service(&config_file).await?;
-        self.set_running_mode(RunningMode::Service);
+        self.core_started(RunningMode::Service);
         Ok(())
     }
 
     pub(super) async fn stop_core_by_service(&self) -> Result<()> {
         logging!(info, Type::Core, "Stopping service");
         defer! {
-            self.set_running_mode(RunningMode::NotRunning);
+            self.core_stopped();
         }
         service::stop_core_by_service().await?;
         Ok(())
