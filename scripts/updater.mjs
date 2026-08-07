@@ -15,14 +15,13 @@ const ALPHA_UPDATE_JSON_PROXY = 'update-proxy.json'
 /// generate update.json
 /// upload to update tag's release asset
 async function resolveUpdater() {
-  const token = process.env.PUBLIC_RELEASE_TOKEN || process.env.GITHUB_TOKEN
+  const token = process.env.GITHUB_TOKEN
   if (token === undefined) {
-    throw new Error('GITHUB_TOKEN or PUBLIC_RELEASE_TOKEN is required')
+    throw new Error('GITHUB_TOKEN is required')
   }
 
   const repoFullName =
-    process.env.PUBLIC_RELEASE_REPO ||
-    `${context.repo.owner}/${context.repo.repo}`
+    process.env.RELEASE_REPO || `${context.repo.owner}/${context.repo.repo}`
   const [owner, repo] = repoFullName.split('/')
   if (!owner || !repo) {
     throw new Error(`Invalid repository name: ${repoFullName}`)
