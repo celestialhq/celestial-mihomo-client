@@ -577,8 +577,6 @@ const resolveServicePermission = async () => {
 // =======================
 // Other resource resolvers (service, mmdb, geosite, geoip, enableLoopback)
 // =======================
-const SERVICE_LATEST_URL =
-  'https://github.com/celestialhq/celestial-service-ipc/releases/latest'
 const SERVICE_URL_PREFIX =
   'https://github.com/celestialhq/celestial-service-ipc/releases/download'
 let SERVICE_VERSION
@@ -598,51 +596,35 @@ function serviceFileInfo(name) {
   }
 }
 
-function parseServiceVersionFromUrl(url) {
-  const match = url.match(/\/releases\/tag\/([^/?#]+)/)
-  return match ? decodeURIComponent(match[1]) : null
-}
+/**
+ * The service version this client is built against, taken from Cargo.lock.
+ *
+ * Deliberately not `releases/latest`. The bundled helper and the client speak a
+ * versioned protocol to each other, and resolving the helper independently of the code
+ * let the two drift apart in silence: a client built against service-ipc 2.5.3 shipped
+ * a 2.3.0 helper, whose reply the client rejected as an incompatible protocol. There
+ * was no way out from inside the app either, because reinstalling installed the same
+ * old helper again.
+ *
+ * Cargo.lock is the one place that records which service this client expects, so it
+ * decides. A missing release now fails the build, where it used to ship.
+ */
+async function getServiceVersion() {
+  const lockPath = path.join(cwd, 'Cargo.lock')
+  const lock = await fsp.readFile(lockPath, 'utf8')
+  const match = lock.match(
+    /\[\[package\]\]\s*\r?\nname = "celestial_service_ipc"\s*\r?\nversion = "([^"]+)"/,
+  )
 
-async function getLatestServiceVersion() {
-  if (!FORCE) {
-    const cached = await getCachedVersion('SERVICE_VERSION')
-    if (cached) {
-      SERVICE_VERSION = cached
-      return
-    }
-  }
-
-  const options = {}
-  const httpProxy =
-    process.env.HTTP_PROXY ||
-    process.env.http_proxy ||
-    process.env.HTTPS_PROXY ||
-    process.env.https_proxy
-  if (httpProxy) options.agent = new HttpsProxyAgent(httpProxy)
-
-  try {
-    const response = await fetch(SERVICE_LATEST_URL, {
-      ...options,
-      method: 'GET',
-      redirect: 'follow',
-    })
-    if (!response.ok)
-      throw new Error(
-        `Failed to fetch ${SERVICE_LATEST_URL}: ${response.status}`,
-      )
-
-    SERVICE_VERSION = parseServiceVersionFromUrl(response.url)
-    if (!SERVICE_VERSION)
-      throw new Error(
-        `Unable to resolve service release tag from ${response.url}`,
-      )
-
-    log_info(`Latest service version: ${SERVICE_VERSION}`)
-    await setCachedVersion('SERVICE_VERSION', SERVICE_VERSION)
-  } catch (err) {
-    log_error('Error fetching latest service version:', err.message)
+  if (!match) {
+    log_error(
+      'Unable to read the celestial_service_ipc version from Cargo.lock',
+    )
     process.exit(1)
   }
+
+  SERVICE_VERSION = `v${match[1]}`
+  log_info(`Service version pinned by Cargo.lock: ${SERVICE_VERSION}`)
 }
 
 async function findExtractedFile(dir, fileName) {
@@ -672,7 +654,7 @@ async function resolveServiceBundle() {
     return
   }
 
-  await getLatestServiceVersion()
+  await getServiceVersion()
 
   const archiveExt = platform === 'win32' ? 'zip' : 'tar.gz'
   const archiveFile = `celestial-service-ipc-${SERVICE_VERSION}-${SIDECAR_HOST}.${archiveExt}`
