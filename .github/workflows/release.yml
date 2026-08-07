@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PUBLIC_RELEASE_REPO: celestialhq/celestial-mihomo-client
+  RELEASE_REPO: ${{ github.repository }}
   RELEASE_SOURCE_BRANCH: main
   RUST_TOOLCHAIN: '1.95.0'
   NODE_VERSION: '24.15.0'
@@ -91,7 +91,7 @@ jobs:
           echo "release_name=$release_name" >> "$GITHUB_OUTPUT"
           echo "is_rc=$is_rc" >> "$GITHUB_OUTPUT"
           echo "is_prerelease=$is_prerelease" >> "$GITHUB_OUTPUT"
-          echo "download_url=https://github.com/${PUBLIC_RELEASE_REPO}/releases/download/${TAG_REF}" >> "$GITHUB_OUTPUT"
+          echo "download_url=https://github.com/${RELEASE_REPO}/releases/download/${TAG_REF}" >> "$GITHUB_OUTPUT"
 
           {
             echo "### Release metadata"
@@ -537,10 +537,8 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
           RELEASE_NAME: ${{ needs.prepare.outputs.release_name }}
           IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
-          PRIVATE_REPO: ${{ github.repository }}
-          PUBLIC_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
+          REPO: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLIC_RELEASE_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
         run: |
           bash .github/scripts/publish-stable-release.bash
           echo "published=true" >> "$GITHUB_OUTPUT"
@@ -565,7 +563,7 @@ jobs:
         if: env.TELEGRAM_BOT_TOKEN != ''
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
-          RELEASE_URL: https://github.com/${{ env.PUBLIC_RELEASE_REPO }}/releases/tag/${{ needs.prepare.outputs.tag_name }}
+          RELEASE_URL: https://github.com/${{ env.RELEASE_REPO }}/releases/tag/${{ needs.prepare.outputs.tag_name }}
           TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_RELEASE_CHAT_ID || '@celestial_releases' }}
           WINDOWS_RESULT: ${{ needs.windows.result }}
           MACOS_RESULT: ${{ needs.macos.result }}

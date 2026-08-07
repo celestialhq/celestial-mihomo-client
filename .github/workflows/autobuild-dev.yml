@@ -34,7 +34,7 @@ concurrency:
 env:
   TAG_NAME: autobuild
   RELEASE_NAME: Celestial AutoBuild
-  PUBLIC_RELEASE_REPO: celestialhq/celestial-mihomo-client
+  RELEASE_REPO: ${{ github.repository }}
   RUST_TOOLCHAIN: '1.95.0'
   NODE_VERSION: '24.15.0'
   ANDROID_NDK_VERSION: '27.3.13750724'
@@ -64,7 +64,7 @@ jobs:
         id: meta
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORCE_BUILD: ${{ github.event_name == 'workflow_dispatch' && inputs.force_build || false }}
           BUILD_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || (github.event_name == 'push' && github.sha || 'dev') }}
         run: |
@@ -79,7 +79,7 @@ jobs:
             git rev-parse HEAD
           )"
           latest_commit="$(git rev-parse --short "$latest_commit_full")"
-          download_url="https://github.com/${PUBLIC_RELEASE_REPO}/releases/download/${TAG_NAME}"
+          download_url="https://github.com/${RELEASE_REPO}/releases/download/${TAG_NAME}"
           version="${base_version}+autobuild.$(date -u +%m%d).${latest_commit}"
           should_run=true
 
@@ -109,7 +109,7 @@ jobs:
               version="$published_version"
               should_run=false
               existing_assets="$(
-                gh release view "$TAG_NAME" --repo "$PUBLIC_RELEASE_REPO" \
+                gh release view "$TAG_NAME" --repo "$RELEASE_REPO" \
                   --json assets -q '.assets[].name' 2>/dev/null || true
               )"
               expected=(
@@ -594,10 +594,8 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
           BUILD_COMMIT: ${{ needs.prepare.outputs.build_commit }}
           RELEASE_NAME: ${{ env.RELEASE_NAME }}
-          PRIVATE_REPO: ${{ github.repository }}
-          PUBLIC_REPO: ${{ env.PUBLIC_RELEASE_REPO }}
+          REPO: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLIC_RELEASE_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
         run: |
           bash .github/scripts/publish-autobuild-release.bash
           echo "published=true" >> "$GITHUB_OUTPUT"
@@ -622,7 +620,7 @@ jobs:
         if: env.TELEGRAM_BOT_TOKEN != ''
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
-          RELEASE_URL: https://github.com/${{ env.PUBLIC_RELEASE_REPO }}/releases/tag/${{ env.TAG_NAME }}
+          RELEASE_URL: https://github.com/${{ env.RELEASE_REPO }}/releases/tag/${{ env.TAG_NAME }}
           TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_TEST_CHAT_ID || '@celestial_ddev' }}
           WINDOWS_RESULT: ${{ needs.windows.result }}
           MACOS_RESULT: ${{ needs.macos.result }}
