@@ -186,6 +186,21 @@ pub fn subscription_hwid() -> Result<&'static str> {
         .map(String::as_str)
 }
 
+/// Build the identifier sent as `x-hwid`.
+///
+/// Remnawave 3.0 validates that header against `^[a-zA-Z0-9=-]{10,64}$` and, when it does
+/// not match, *ignores the header entirely* rather than reporting anything — so a single
+/// stray character silently stops the device from ever registering.
+///
+/// Base64url's alphabet is `A-Za-z0-9-_`, and `_` is the one character outside that set.
+/// It is folded onto `-` rather than switching to a different encoding: any other alphabet
+/// would change every existing identifier, and each device would then register anew against
+/// its subscription's device limit. Folding leaves untouched the identifiers that were
+/// already valid, and only rewrites the ones the panel was discarding anyway. The two
+/// characters collapsing into one costs a fraction of a bit against a 256-bit digest.
+///
+/// Length is fixed by construction: 16 characters of prefix plus 43 of unpadded base64
+/// over a SHA-256 digest is 59, inside the 10..=64 the panel allows.
 fn hardware_hwid(components: &[String]) -> Result<String> {
     if components.is_empty() {
         return Err(anyhow::anyhow!("No stable hardware identifiers are available"));
@@ -198,7 +213,8 @@ fn hardware_hwid(components: &[String]) -> Result<String> {
         hasher.update(b"\0");
     }
 
-    Ok(format!("celestial-hw-v1-{}", URL_SAFE_NO_PAD.encode(hasher.finalize())))
+    let digest = URL_SAFE_NO_PAD.encode(hasher.finalize()).replace('_', "-");
+    Ok(format!("celestial-hw-v1-{digest}"))
 }
 
 #[cfg(target_os = "macos")]
@@ -316,8 +332,10 @@ impl PathBufExec for PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::hardware_hwid;
+    use super::{URL_SAFE_NO_PAD, hardware_hwid};
     use anyhow::Result;
+    use base64::Engine as _;
+    use sha2::{Digest as _, Sha256};
 
     #[test]
     fn hardware_hwid_is_deterministic_and_versioned() -> Result<()> {
@@ -338,5 +356,45 @@ mod tests {
 
         assert_ne!(first, second);
         Ok(())
+    }
+
+    #[test]
+    fn hardware_hwid_only_uses_characters_the_panel_accepts() -> Result<()> {
+        // Remnawave 3.0 matches `x-hwid` against `^[a-zA-Z0-9=-]{10,64}$` and silently
+        // ignores the header when it does not match — there is no error to notice, the
+        // device simply never registers. Swept over many inputs rather than one sample
+        // because the offending character only appears in about half of all digests.
+        for index in 0..256 {
+            let hwid = hardware_hwid(&[format!("product_uuid={index}")])?;
+
+            assert!(
+                (10..=64).contains(&hwid.len()),
+                "{hwid} is {} characters, outside the accepted 10..=64",
+                hwid.len()
+            );
+            assert!(
+                hwid.chars().all(|c| c.is_ascii_alphanumeric() || c == '=' || c == '-'),
+                "{hwid} contains a character the panel rejects"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn the_rejected_character_really_does_occur_without_the_fold() {
+        // Keeps the sweep above from passing vacuously: if base64url never emitted `_`
+        // for any of those inputs, that test would prove nothing about the fold.
+        let produced_underscore = (0..256).any(|index| {
+            let mut hasher = Sha256::new();
+            hasher.update(b"celestial-subscription-hwid-v1\0");
+            hasher.update(format!("product_uuid={index}").as_bytes());
+            hasher.update(b"\0");
+            URL_SAFE_NO_PAD.encode(hasher.finalize()).contains('_')
+        });
+
+        assert!(
+            produced_underscore,
+            "base64url produced no '_' at all, so the sweep would not exercise the fold"
+        );
     }
 }
