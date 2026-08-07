@@ -54,7 +54,7 @@ impl RunStateEnv for RealEnv {
         Ok(ServiceVersionReply {
             code: response.code,
             message: response.message,
-            protocol: response.data,
+            reply: response.data,
         })
     }
 
@@ -124,7 +124,7 @@ pub use fake::FakeEnv;
 #[cfg(test)]
 mod fake {
     use anyhow::{Result, anyhow};
-    use celestial_service_ipc::ProtocolInfo;
+    use celestial_service_ipc::{ProtocolInfo, VersionReply};
     use parking_lot::Mutex;
 
     use super::{PendingAction, RunState, RunStateEnv, ServiceVersionReply};
@@ -173,7 +173,7 @@ mod fake {
             self.with_evidence(true).always_replying(Ok(ServiceVersionReply {
                 code: 0,
                 message: "ok".to_owned(),
-                protocol: Some(ProtocolInfo::current()),
+                reply: Some(VersionReply::Protocol(ProtocolInfo::current())),
             }))
         }
 
@@ -183,7 +183,7 @@ mod fake {
             self.with_evidence(true).always_replying(Ok(ServiceVersionReply {
                 code: 0,
                 message: "ok".to_owned(),
-                protocol: None,
+                reply: None,
             }))
         }
 

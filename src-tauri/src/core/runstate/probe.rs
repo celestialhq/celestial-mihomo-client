@@ -1,21 +1,30 @@
-//! Classifying what a service version reply means.
-
 //! Turning raw Service probes into [`ServiceHealth`].
 //!
 //! Everything here is a pure function of its arguments: the probing itself is an effect
 //! on [`super::env::RunStateEnv`], so these classifications are testable without IPC,
 //! systemd, SCM or launchd.
 
-use celestial_service_ipc::{MIN_REQUIRED_SERVICE_REVISION, ProtocolInfo, ProtocolVersion};
+use celestial_service_ipc::{MIN_REQUIRED_SERVICE_REVISION, ProtocolInfo, ProtocolVersion, VersionReply};
 
 use super::health::ServiceHealth;
 
 /// What the Service replied to a protocol-version query.
+///
+/// `reply` carries the whole answer rather than just its protocol description, because a
+/// service too old to have one still says something useful — its bare version string —
+/// and that is the case worth naming in the message the user gets.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceVersionReply {
     pub code: u16,
     pub message: String,
-    pub protocol: Option<ProtocolInfo>,
+    pub reply: Option<VersionReply>,
+}
+
+impl ServiceVersionReply {
+    /// The protocol description, when the Service was new enough to send one.
+    fn protocol(&self) -> Option<&ProtocolInfo> {
+        self.reply.as_ref().and_then(VersionReply::protocol)
+    }
 }
 
 /// The verdict on a [`ServiceVersionReply`].
@@ -39,16 +48,15 @@ pub fn classify_service_version_reply(reply: &ServiceVersionReply) -> ServiceVer
     let client = ProtocolVersion::current();
     if reply.code == 0
         && reply
-            .protocol
-            .as_ref()
+            .protocol()
             .is_some_and(|info| info.supports_client(client, MIN_REQUIRED_SERVICE_REVISION))
     {
         return ServiceVersionCheck::Ready;
     }
 
     let detail = if reply.code == 0 {
-        match reply.protocol.as_ref() {
-            Some(info) => format!(
+        match reply.reply.as_ref() {
+            Some(VersionReply::Protocol(info)) => format!(
                 "client requires epoch {} revision >= {}, service reports epoch {} revision {} (build {})",
                 client.epoch,
                 MIN_REQUIRED_SERVICE_REVISION,
@@ -56,6 +64,12 @@ pub fn classify_service_version_reply(reply: &ServiceVersionReply) -> ServiceVer
                 info.protocol.revision,
                 info.build_version
             ),
+            // An installed helper that predates the protocol handshake entirely. Naming
+            // the version it did report beats "reported nothing", which is what the user
+            // used to be told about a service sitting right there announcing itself.
+            Some(VersionReply::Legacy(version)) => {
+                format!("service reports version {version}, which predates the protocol handshake this client requires")
+            }
             None => "service did not report protocol information".to_owned(),
         }
     } else {
@@ -106,7 +120,7 @@ mod tests {
         ServiceVersionReply {
             code: 0,
             message: "ok".to_owned(),
-            protocol: Some(ProtocolInfo::current()),
+            reply: Some(VersionReply::Protocol(ProtocolInfo::current())),
         }
     }
 
@@ -124,7 +138,7 @@ mod tests {
         let reply = ServiceVersionReply {
             code: 0,
             message: "ok".to_owned(),
-            protocol: None,
+            reply: None,
         };
         let ServiceVersionCheck::NeedsReinstall(detail) = classify_service_version_reply(&reply) else {
             panic!("expected a reinstall verdict");
@@ -137,11 +151,33 @@ mod tests {
     }
 
     #[test]
+    fn a_helper_predating_the_handshake_needs_reinstall_and_is_named() {
+        // The reported case: an installed 2.3.0 helper answers with a bare version string.
+        // It used to fail to deserialize and surface as "invalid type: string \"2.3.0\",
+        // expected struct ProtocolInfo" — during an install, of all moments — instead of
+        // the one conclusion that helps: this service is too old, reinstall it.
+        let reply = ServiceVersionReply {
+            code: 0,
+            message: "ok".to_owned(),
+            reply: Some(VersionReply::Legacy("2.3.0".to_owned())),
+        };
+
+        let ServiceVersionCheck::NeedsReinstall(detail) = classify_service_version_reply(&reply) else {
+            panic!("a pre-handshake helper must ask for a reinstall");
+        };
+        assert!(
+            detail.contains("2.3.0"),
+            "detail should name the version the service reported: {detail}"
+        );
+        assert_eq!(probe_outcome(&reply), CurrentServiceProbe::VersionMismatch);
+    }
+
+    #[test]
     fn a_nonzero_code_needs_reinstall() {
         let reply = ServiceVersionReply {
             code: 7,
             message: "nope".to_owned(),
-            protocol: Some(ProtocolInfo::current()),
+            reply: Some(VersionReply::Protocol(ProtocolInfo::current())),
         };
         let ServiceVersionCheck::NeedsReinstall(detail) = classify_service_version_reply(&reply) else {
             panic!("expected a reinstall verdict");
@@ -156,7 +192,7 @@ mod tests {
         let reply = ServiceVersionReply {
             code: 0,
             message: "ok".to_owned(),
-            protocol: Some(info),
+            reply: Some(VersionReply::Protocol(info)),
         };
         assert!(matches!(
             classify_service_version_reply(&reply),
@@ -176,7 +212,7 @@ mod tests {
         let reply = ServiceVersionReply {
             code: 0,
             message: "ok".to_owned(),
-            protocol: Some(info),
+            reply: Some(VersionReply::Protocol(info)),
         };
         assert!(matches!(
             classify_service_version_reply(&reply),
@@ -189,12 +225,16 @@ mod tests {
         let mut old_epoch = ProtocolInfo::current();
         old_epoch.protocol.epoch = old_epoch.protocol.epoch.wrapping_add(1);
 
-        for protocol in [None, Some(old_epoch)] {
+        for answer in [
+            None,
+            Some(VersionReply::Protocol(old_epoch)),
+            Some(VersionReply::Legacy("2.3.0".to_owned())),
+        ] {
             for code in [0, 1] {
                 let reply = ServiceVersionReply {
                     code,
                     message: "unsupported command".to_owned(),
-                    protocol: protocol.clone(),
+                    reply: answer.clone(),
                 };
                 let ServiceVersionCheck::NeedsReinstall(detail) = classify_service_version_reply(&reply) else {
                     continue;

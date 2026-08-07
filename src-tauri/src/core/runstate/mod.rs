@@ -494,7 +494,9 @@ mod tests {
         ServiceVersionReply {
             code: 0,
             message: "ok".to_owned(),
-            protocol: Some(celestial_service_ipc::ProtocolInfo::current()),
+            reply: Some(celestial_service_ipc::VersionReply::Protocol(
+                celestial_service_ipc::ProtocolInfo::current(),
+            )),
         }
     }
 
