@@ -246,6 +246,25 @@ const fn requested_action(status: &ServiceStatus) -> Option<PendingAction> {
     }
 }
 
+/// The operation to actually carry out, given what is already on the machine.
+///
+/// Installing over a helper that is already there cannot work: the installer will not
+/// replace an existing registration, and the old helper then answers the readiness probe
+/// — so an install reports the very mismatch it was meant to clear, and the user is told
+/// to reinstall by a button that only ever offers to install. Installing over an existing
+/// helper *is* a reinstall, so that is what runs.
+///
+/// Only [`ServiceHealth::VersionMismatch`] escalates, because it is the one state that
+/// unambiguously means "a helper is installed and it is not the one we need".
+/// `Unavailable` covers a failed detection too, where uninstalling first would be acting
+/// on a guess.
+const fn resolve_action(requested: PendingAction, health: &ServiceHealth) -> PendingAction {
+    match (requested, health) {
+        (PendingAction::Install, ServiceHealth::VersionMismatch) => PendingAction::Reinstall,
+        _ => requested,
+    }
+}
+
 /// Explain a status that asks for no privileged operation.
 ///
 /// Only `Unavailable` is an error: the caller asked us to act on the service and there
@@ -976,7 +995,7 @@ impl ServiceManager {
 
     /// 根据服务状态执行相应操作
     pub async fn handle_service_status(&self, status: &ServiceStatus) -> Result<()> {
-        let Some(action) = requested_action(status) else {
+        let Some(requested) = requested_action(status) else {
             return report_non_actionable_status(status);
         };
 
@@ -987,6 +1006,16 @@ impl ServiceManager {
         // Claimed *before* the request is recorded, so a refused claim cannot leave a
         // pending action behind with no operation ever running to retire it.
         let guard = RUN_STATE.begin_operation()?;
+
+        let action = resolve_action(requested, &RUN_STATE.state().health);
+        if action != requested {
+            logging!(
+                info,
+                Type::Service,
+                "{requested:?} was asked for while an incompatible helper is installed; \
+                 performing {action:?} instead, which is the only form of it that can succeed"
+            );
+        }
 
         // Record what is being asked for, so the Run State pushed to the frontend
         // describes the operation in progress rather than the observation that preceded
@@ -1025,6 +1054,61 @@ impl ServiceManager {
 }
 
 pub static SERVICE_MANAGER: ServiceManager = ServiceManager;
+
+#[cfg(test)]
+#[allow(clippy::panic, reason = "tests assert by panicking")]
+mod resolve_action_tests {
+    use super::{PendingAction, ServiceHealth, resolve_action};
+
+    #[test]
+    fn installing_over_an_incompatible_helper_becomes_a_reinstall() {
+        // The reported dead end: an old helper is installed, the button asks to install,
+        // the installer will not replace what is registered, and the readiness probe then
+        // reports the same mismatch the install was meant to clear — with the only advice
+        // being "choose Reinstall", which that button never offered.
+        assert_eq!(
+            resolve_action(PendingAction::Install, &ServiceHealth::VersionMismatch),
+            PendingAction::Reinstall
+        );
+    }
+
+    #[test]
+    fn installing_is_left_alone_when_nothing_is_in_the_way() {
+        for health in [
+            ServiceHealth::Unknown,
+            ServiceHealth::NotInstalled,
+            ServiceHealth::Ready,
+            // Detection failed here, so there may be nothing installed at all;
+            // uninstalling first would be acting on a guess.
+            ServiceHealth::Unavailable("detection failed".to_owned()),
+        ] {
+            assert_eq!(
+                resolve_action(PendingAction::Install, &health),
+                PendingAction::Install,
+                "{health:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_other_action_is_carried_out_as_asked() {
+        for action in [
+            PendingAction::Uninstall,
+            PendingAction::Reinstall,
+            PendingAction::ForceReinstall,
+        ] {
+            for health in [
+                ServiceHealth::Unknown,
+                ServiceHealth::Ready,
+                ServiceHealth::NotInstalled,
+                ServiceHealth::VersionMismatch,
+                ServiceHealth::Unavailable("boom".to_owned()),
+            ] {
+                assert_eq!(resolve_action(action, &health), action, "{action:?} / {health:?}");
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod owner_monitor_tests {
