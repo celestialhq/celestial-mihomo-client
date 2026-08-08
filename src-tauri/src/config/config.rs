@@ -237,7 +237,18 @@ impl Config {
     }
 
     pub async fn generate() -> Result<()> {
-        let (mut config, exists_keys, logs) = enhance::enhance().await?;
+        let profiles = Self::profiles().await.latest_arc();
+        Self::generate_with_profiles(&profiles).await
+    }
+
+    /// Generate the Runtime Configuration from `profiles` rather than from the committed index.
+    ///
+    /// What lets a caller find out whether a configuration is valid before committing the
+    /// profile change that produces it — deleting a profile, above all, where committing first
+    /// and discovering the problem afterwards leaves the core on a configuration nothing
+    /// describes any more.
+    pub(crate) async fn generate_with_profiles(profiles: &IProfiles) -> Result<()> {
+        let (mut config, exists_keys, logs) = enhance::enhance(profiles).await?;
 
         sanitize_tunnels_proxy(&mut config);
 

@@ -27,7 +27,11 @@ use std::{
 use tauri_plugin_mihomo::models::{Proxies, ProxyType};
 use tokio::{fs, task::JoinHandle};
 
-/// Serialises whole-index writes so a read-modify-write cannot lose another's change.
+/// Serialises the operations that rewrite the whole profile index.
+///
+/// Always taken *outside* `Draft::with_data_modify`, never within it: the modify lock is taken
+/// inside, so acquiring this one from in there would invert the order against every caller that
+/// holds it across a modify — a deadlock rather than the lost write it exists to prevent.
 pub(crate) static PROFILE_WRITE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 // The activation task, and the generation that tells a running one it has been overtaken.
@@ -713,7 +717,11 @@ fn selected_nodes_need_confirmation(selected: &[PrfSelected], proxies: &Proxies)
 /// `previous` is an earlier snapshot, and its only job is to tell "this group is genuinely gone"
 /// apart from "this group has not loaded yet". A record is only ever discarded on the strength of
 /// two snapshots agreeing, because discarding it is what cannot be undone.
-fn reconcile_selected_nodes(selected: &[PrfSelected], previous: Option<&Proxies>, proxies: &Proxies) -> SelectedNodesPlan {
+fn reconcile_selected_nodes(
+    selected: &[PrfSelected],
+    previous: Option<&Proxies>,
+    proxies: &Proxies,
+) -> SelectedNodesPlan {
     let mut plan = SelectedNodesPlan {
         selected: Vec::with_capacity(selected.len()),
         activations: Vec::new(),
@@ -847,7 +855,10 @@ async fn select_node_with_timeout(group_name: &String, node: &String) -> Result<
     .with_context(|| format!("failed to select node [{node}] for group [{group_name}]"))
 }
 
-fn remaining_activations(activations: &[(String, String)], completed: &HashMap<String, String>) -> Vec<(String, String)> {
+fn remaining_activations(
+    activations: &[(String, String)],
+    completed: &HashMap<String, String>,
+) -> Vec<(String, String)> {
     activations
         .iter()
         .filter(|(group_name, node)| completed.get(group_name) != Some(node))
@@ -871,7 +882,11 @@ async fn apply_activations(
                 if !is_activation_current(generation) {
                     return None;
                 }
-                logging!(info, Type::Config, "Selected node for proxy: {group_name}, node: {node}");
+                logging!(
+                    info,
+                    Type::Config,
+                    "Selected node for proxy: {group_name}, node: {node}"
+                );
                 completed.insert(group_name, node);
                 activated_count += 1;
             }
@@ -889,14 +904,22 @@ async fn update_tray_after_activation(generation: u64) {
         return;
     }
     if let Err(err) = Tray::global().update_tooltip().await {
-        logging!(warn, Type::Config, "failed to update tray tooltip after activation: {err:#}");
+        logging!(
+            warn,
+            Type::Config,
+            "failed to update tray tooltip after activation: {err:#}"
+        );
     }
 
     if !is_activation_current(generation) {
         return;
     }
     if let Err(err) = Tray::global().update_menu().await {
-        logging!(warn, Type::Config, "failed to update tray menu after activation: {err:#}");
+        logging!(
+            warn,
+            Type::Config,
+            "failed to update tray menu after activation: {err:#}"
+        );
     }
 }
 
@@ -912,7 +935,6 @@ pub async fn record_selected_node(group_name: &str, node: &str) -> Result<()> {
     let recorded = Config::profiles()
         .await
         .with_data_modify(move |mut profiles| async move {
-            let _write = PROFILE_WRITE_LOCK.lock().await;
             let Some(current) = profiles.current.clone() else {
                 return Ok((profiles, false));
             };
@@ -969,7 +991,6 @@ async fn persist_reconciled_selected(
     let original_selected = original_selected.to_vec();
     let updated = profiles
         .with_data_modify(move |mut profiles| async move {
-            let _write = PROFILE_WRITE_LOCK.lock().await;
             if !is_activation_current(generation) || profiles.current.as_ref() != Some(&profile_uid) {
                 return Ok((profiles, false));
             }
@@ -1060,7 +1081,10 @@ async fn settle_pending_selections(selected: &[PrfSelected], completed: &mut Has
         }
 
         let plan = reconcile_selected_nodes(selected, None, &snapshot);
-        if apply_activations(&plan.activations, completed, generation).await.is_none() {
+        if apply_activations(&plan.activations, completed, generation)
+            .await
+            .is_none()
+        {
             return;
         }
         if is_activation_current(generation) {
@@ -1098,7 +1122,11 @@ async fn activate_selected_nodes_worker(
 
     let needs_confirmation = selected_nodes_need_confirmation(&selected, &first_snapshot);
     let immediate_plan = reconcile_selected_nodes(&selected, None, &first_snapshot);
-    logging!(debug, Type::Config, "immediate selected nodes activation plan: {immediate_plan:?}");
+    logging!(
+        debug,
+        Type::Config,
+        "immediate selected nodes activation plan: {immediate_plan:?}"
+    );
 
     let mut completed_activations = HashMap::new();
     if apply_activations(&immediate_plan.activations, &mut completed_activations, generation)
@@ -1122,7 +1150,11 @@ async fn activate_selected_nodes_worker(
             return Ok(());
         }
         let confirmed_plan = reconcile_selected_nodes(&selected, Some(&first_snapshot), &second_snapshot);
-        logging!(debug, Type::Config, "confirmed selected nodes activation plan: {confirmed_plan:?}");
+        logging!(
+            debug,
+            Type::Config,
+            "confirmed selected nodes activation plan: {confirmed_plan:?}"
+        );
         let Some(confirmed_activated_count) =
             apply_activations(&confirmed_plan.activations, &mut completed_activations, generation).await
         else {

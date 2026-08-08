@@ -6,8 +6,8 @@ use crate::{
     config::{
         Config, IProfiles, PrfItem, PrfOption, profiles,
         profiles::{
-            profiles_append_item_with_filedata_safe, profiles_delete_item_safe, profiles_patch_item_safe,
-            profiles_reorder_safe, profiles_save_file_safe,
+            profiles_append_item_with_filedata_safe, profiles_patch_item_safe, profiles_reorder_safe,
+            profiles_save_file_safe,
         },
         profiles_append_item_safe,
     },
@@ -156,11 +156,61 @@ pub async fn update_profile(index: String, option: Option<PrfOption>) -> CmdResu
 }
 
 /// 删除配置文件
+///
+/// Ordered so that nothing irreversible happens before the configuration without this profile
+/// is known to work. The index change is planned in memory, the Core is moved onto it, the
+/// index is written, and only then are the files unlinked. Deleting first and validating
+/// afterwards left the Core running a configuration that referred to profiles no longer on
+/// disk, with no way back.
 #[tauri::command]
 pub async fn delete_profile(index: String) -> CmdResult {
-    // 使用Send-safe helper函数
-    let should_update = profiles_delete_item_safe(&index).await.stringify_err()?;
-    profiles_save_file_safe().await.stringify_err()?;
+    // Outside `with_data_modify`, matching every other holder — see `PROFILE_WRITE_LOCK`.
+    let profile_write_guard = profiles::PROFILE_WRITE_LOCK.lock().await;
+
+    let result = Config::profiles()
+        .await
+        .with_data_modify(|mut candidate| async move {
+            let original = candidate.clone();
+            let (should_update, plan) = candidate.plan_delete_item(&index)?;
+            // Returning `original` rather than `candidate` is the rollback: the index the
+            // caller committed is the one whose configuration held.
+            let permit = if should_update {
+                // Bound before matching: the permit holds the staged configuration, and
+                // matching on it directly would keep it alive to the end of the match.
+                let applied = CoreManager::global()
+                    .update_config_forced_with_profiles(&candidate, &original)
+                    .await?;
+                match applied {
+                    Ok(permit) => Some(permit),
+                    Err(outcome) => return Ok((original, Err(outcome))),
+                }
+            } else {
+                candidate.save_file().await?;
+                None
+            };
+            let current = candidate.current.clone();
+            // The index no longer references them, so the files may go.
+            plan.cleanup().await;
+            Ok((candidate, Ok((should_update, current, permit))))
+        })
+        .await
+        .stringify_err()?;
+
+    let (should_update, current, config_update_permit) = match result {
+        Ok(result) => result,
+        Err(outcome) => {
+            logging!(warn, Type::Cmd, "[删除订阅] 配置未生效: {}", outcome);
+            handle_validation_notice(&outcome, ValidationNoticeTarget::Runtime, "运行时配置");
+            return Err(outcome.to_string().into());
+        }
+    };
+    if should_update {
+        logging_error!(Type::Config, profiles::activate_selected_nodes());
+    }
+    // Committed, so the staged configuration may be released and the index reopened.
+    drop(config_update_permit);
+    drop(profile_write_guard);
+
     if let Err(e) = Tray::global().update_tooltip().await {
         logging!(warn, Type::Cmd, "Warning: 异步更新托盘提示失败: {e}");
     }
@@ -169,24 +219,13 @@ pub async fn delete_profile(index: String) -> CmdResult {
         logging!(warn, Type::Cmd, "Warning: 异步更新托盘菜单失败: {e}");
     }
     if should_update {
-        match CoreManager::global().update_config_forced().await {
-            Ok(outcome) if outcome.is_valid() => {
-                handle::Handle::refresh_clash();
-                // 发送配置变更通知
-                logging!(info, Type::Cmd, "[删除订阅] 发送配置变更通知: {}", index);
-                handle::Handle::notify_profile_changed(&index);
-            }
-            Ok(outcome) => {
-                logging!(warn, Type::Cmd, "[删除订阅] 配置未生效: {}", outcome);
-                return Err(outcome.to_string().into());
-            }
-            Err(e) => {
-                logging!(error, Type::Cmd, "{}", e);
-                return Err(e.to_string().into());
-            }
+        handle::Handle::refresh_clash();
+        if let Some(current) = current.as_ref() {
+            logging!(info, Type::Cmd, "[删除订阅] 发送配置变更通知: {}", current);
+            handle::Handle::notify_profile_changed(current);
         }
     }
-    Timer::global().refresh().await.stringify_err()?;
+    logging_error!(Type::Timer, Timer::global().refresh().await);
     Ok(())
 }
 
@@ -390,6 +429,11 @@ pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult<ValidationO
         logging!(info, Type::Cmd, "当前正在切换配置，放弃请求");
         return Ok(ValidationOutcome::Busy);
     }
+    // A switch and a deletion both rewrite the index across awaits, and only one of them goes
+    // through `with_data_modify` — this is what stops the two interleaving. Taken before the
+    // configuration permit, the same order `delete_profile` uses.
+    // Spelled out because the `profiles` parameter shadows the module here.
+    let _profile_write_guard = crate::config::profiles::PROFILE_WRITE_LOCK.lock().await;
 
     let target_profile = profiles.current.as_ref();
 

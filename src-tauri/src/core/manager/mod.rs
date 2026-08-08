@@ -16,6 +16,17 @@ use std::os::windows::io::OwnedHandle;
 
 pub(crate) static CLASH_LOGGER: Lazy<Arc<AsyncLogger>> = Lazy::new(|| Arc::new(AsyncLogger::new()));
 
+tokio::task_local! {
+    /// Set while a configuration is being built from a candidate profile index that has not
+    /// been committed yet.
+    ///
+    /// Such an update may restart the Core, and a restart normally puts the profile's recorded
+    /// node choices back. Doing that here would restore them from an index that is still only a
+    /// proposal — and if it is rejected, from one that never existed. The caller restores once
+    /// it knows which index won.
+    pub(crate) static PROFILE_SELECTIONS_PENDING_COMMIT: bool;
+}
+
 #[derive(Debug, Clone, Copy, serde::Serialize, PartialEq, Eq)]
 pub enum RunningMode {
     Service,

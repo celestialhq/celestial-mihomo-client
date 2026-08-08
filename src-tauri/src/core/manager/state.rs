@@ -83,7 +83,14 @@ impl CoreManager {
     /// will not answer delays a start rather than blocking it.
     ///
     /// Repeat calls supersede each other, so every start path may call this without coordinating.
+    ///
+    /// Skipped while a candidate profile index is being validated: restoring there would put
+    /// back selections from an index that is still only a proposal, and the caller restores
+    /// once it knows which one won.
     async fn restore_selected_nodes(&self) {
+        if Self::profile_selections_pending_commit() {
+            return;
+        }
         crate::config::profiles::restore_selected_nodes().await;
     }
 

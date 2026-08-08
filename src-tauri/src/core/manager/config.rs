@@ -1,10 +1,10 @@
-use super::{ConfigUpdatePermit, CoreManager};
+use super::{ConfigUpdatePermit, CoreManager, PROFILE_SELECTIONS_PENDING_COMMIT};
 // Only the service-mode branch of `apply_config` reads this, and there is no
 // service on mobile.
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use super::RunningMode;
 use crate::{
-    config::{Config, ConfigType, runtime::IRuntime},
+    config::{Config, ConfigType, IProfiles, runtime::IRuntime},
     constants::timing,
     core::{
         handle,
@@ -79,7 +79,68 @@ impl CoreManager {
             self.set_last_update(Instant::now());
         }
 
-        self.perform_config_update(permit).await
+        self.perform_config_update(permit, None).await
+    }
+
+    /// Apply the configuration `candidate` produces, and hand back the permit only if it held.
+    ///
+    /// The permit is the caller's licence to commit: it still owns the staged configuration
+    /// when this returns, so nothing can slip between "the candidate validated" and "the
+    /// candidate is the committed index". Dropping it is the commit.
+    ///
+    /// `rollback` is the index to put the Core back on if the candidate turns out not to work
+    /// after the Core has already been changed. A candidate that simply fails validation needs
+    /// no rollback — nothing was applied — so that case only puts the node selections back.
+    pub(crate) async fn update_config_forced_with_profiles(
+        &self,
+        candidate: &IProfiles,
+        rollback: &IProfiles,
+    ) -> Result<std::result::Result<ConfigUpdatePermit<'_>, ValidationOutcome>> {
+        if handle::Handle::global().is_exiting() {
+            return Ok(Err(ValidationOutcome::Skipped {
+                reason: ValidationSkipReason::Exiting,
+            }));
+        }
+
+        let permit = self.config_update_permit().await;
+        self.set_last_update(Instant::now());
+        // Any activation still in flight was reading the index this is about to replace.
+        crate::config::profiles::supersede_selected_activation();
+
+        let outcome = match PROFILE_SELECTIONS_PENDING_COMMIT
+            .scope(true, self.perform_config_update(&permit, Some(candidate)))
+            .await
+        {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                self.restore_profile_config(&permit, rollback).await?;
+                return Err(error);
+            }
+        };
+        if !outcome.is_valid() {
+            // Validation failing means nothing reached the Core, so only the selections that
+            // were superseded above need putting back.
+            crate::config::profiles::restore_selected_nodes().await;
+            return Ok(Err(outcome));
+        }
+        match candidate.save_file().await {
+            Ok(()) => Ok(Ok(permit)),
+            Err(error) => {
+                self.restore_profile_config(&permit, rollback).await?;
+                Err(error)
+            }
+        }
+    }
+
+    /// Put the Core back on `profiles` after a candidate failed once it had already been applied.
+    async fn restore_profile_config(&self, permit: &ConfigUpdatePermit<'_>, profiles: &IProfiles) -> Result<()> {
+        let outcome = self.perform_config_update(permit, Some(profiles)).await?;
+        if outcome.is_valid() {
+            crate::config::profiles::restore_selected_nodes().await;
+            Ok(())
+        } else {
+            Err(anyhow!("failed to restore previous Core configuration: {outcome}"))
+        }
     }
 
     /// 只关心成败的调用方用这个：非 `Valid` 一律变成 `Err`，
@@ -115,10 +176,18 @@ impl CoreManager {
         true
     }
 
-    async fn perform_config_update(&self, permit: &ConfigUpdatePermit<'_>) -> Result<ValidationOutcome> {
+    async fn perform_config_update(
+        &self,
+        permit: &ConfigUpdatePermit<'_>,
+        profiles: Option<&IProfiles>,
+    ) -> Result<ValidationOutcome> {
+        let generated = match profiles {
+            Some(profiles) => Config::generate_with_profiles(profiles).await,
+            None => Config::generate().await,
+        };
         // Generation failures used to propagate as Err and leave the runtime draft
         // in place; surface them as an invalid outcome and drop the draft instead.
-        if let Err(err) = Config::generate().await {
+        if let Err(err) = generated {
             let message: String = err.to_string().into();
             Config::runtime().await.discard();
             return Ok(ValidationOutcome::invalid_from_message(message));
@@ -136,6 +205,13 @@ impl CoreManager {
         let permit = self.config_update_permit().await;
         Config::runtime().await.edit_draft(f);
         self.apply_generate_config_inner(&permit).await
+    }
+
+    /// Whether the caller is inside an update built from an uncommitted candidate index.
+    pub(crate) fn profile_selections_pending_commit() -> bool {
+        PROFILE_SELECTIONS_PENDING_COMMIT
+            .try_with(|pending| *pending)
+            .unwrap_or(false)
     }
 
     /// 调用方须已持有配置更新许可（见 [`CoreManager::config_update_permit`]）。

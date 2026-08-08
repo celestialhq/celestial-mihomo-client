@@ -12,12 +12,25 @@ pub enum FrontendEvent<'a> {
     /// The profile index changed underneath the frontend — a selection recorded on the
     /// user's behalf, or records repaired after reconciling them against the core.
     RefreshProfiles,
-    NoticeMessage { status: &'a str, message: String },
-    ProfileChanged { current_profile_id: &'a String },
-    TimerUpdated { profile_index: &'a String },
-    ProfileUpdateStarted { uid: &'a String },
-    ProfileUpdateCompleted { uid: &'a String },
-    RunStateChanged { state: serde_json::Value },
+    NoticeMessage {
+        status: &'a str,
+        message: String,
+    },
+    ProfileChanged {
+        current_profile_id: &'a String,
+    },
+    TimerUpdated {
+        profile_index: &'a String,
+    },
+    ProfileUpdateStarted {
+        uid: &'a String,
+    },
+    ProfileUpdateCompleted {
+        uid: &'a String,
+    },
+    RunStateChanged {
+        state: serde_json::Value,
+    },
 }
 
 #[derive(Debug)]
