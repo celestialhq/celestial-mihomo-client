@@ -1211,8 +1211,8 @@ dependencies = [
 
 [[package]]
 name = "celestial_service_ipc"
-version = "2.5.3"
-source = "git+https://github.com/celestialhq/celestial-service-ipc#45b55e528e380de171edd128a9dd60b4ad707c70"
+version = "2.5.4"
+source = "git+https://github.com/celestialhq/celestial-service-ipc#7353c95"
 dependencies = [
  "anyhow",
  "compact_str",
