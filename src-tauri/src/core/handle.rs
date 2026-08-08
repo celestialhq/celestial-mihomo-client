@@ -44,6 +44,10 @@ impl Handle {
         Self::send_event(FrontendEvent::RefreshVerge);
     }
 
+    pub fn refresh_profiles() {
+        Self::send_event(FrontendEvent::RefreshProfiles);
+    }
+
     /// Push a Run State snapshot to the frontend.
     ///
     /// Sent on every transition, so the frontend does not have to poll to

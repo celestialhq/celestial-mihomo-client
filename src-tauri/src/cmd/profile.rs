@@ -4,7 +4,7 @@ use crate::cmd::validate::{ValidationNoticeTarget, handle_validation_notice};
 use crate::utils::window_manager::WindowManager;
 use crate::{
     config::{
-        Config, IProfiles, PrfItem, PrfOption,
+        Config, IProfiles, PrfItem, PrfOption, profiles,
         profiles::{
             profiles_append_item_with_filedata_safe, profiles_delete_item_safe, profiles_patch_item_safe,
             profiles_reorder_safe, profiles_save_file_safe,
@@ -17,7 +17,7 @@ use crate::{
     utils::{dirs, help},
 };
 use clash_verge_draft::SharedDraft;
-use clash_verge_logging::{Type, logging};
+use clash_verge_logging::{Type, logging, logging_error};
 use scopeguard::defer;
 use smartstring::alias::String;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -293,6 +293,11 @@ async fn restore_previous_profile(prev_profile: &String) -> CmdResult<()> {
 async fn handle_success(current_value: Option<&String>) -> CmdResult<ValidationOutcome> {
     Config::profiles().await.apply();
     handle::Handle::refresh_clash();
+
+    // Committed above, so the activation reads the profile that actually won. A switch may
+    // prune records it cannot match: the configuration it belongs to has just been loaded, so
+    // a group the core does not have is genuinely gone rather than still arriving.
+    logging_error!(Type::Config, profiles::activate_selected_nodes());
 
     if let Err(e) = Tray::global().update_tooltip().await {
         logging!(warn, Type::Cmd, "Warning: 异步更新托盘提示失败: {e}");

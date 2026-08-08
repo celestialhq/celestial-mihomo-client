@@ -15,6 +15,7 @@ import {
   getRunningMode,
   getSystemProxy,
 } from '@/services/cmds'
+import { queryClient } from '@/services/query-client'
 
 import {
   ClashConfigContext,
@@ -148,6 +149,12 @@ export const AppDataProvider = ({
       refreshProxy().catch(() => {})
     }
 
+    // The profile index changed underneath us — a selection the backend recorded on the
+    // user's behalf, or records it repaired after reconciling them against the core.
+    const handleRefreshProfiles = () => {
+      void queryClient.invalidateQueries({ queryKey: ['getProfiles'] })
+    }
+
     const initializeListeners = async () => {
       try {
         const unlistenProfile = await listen<string>(
@@ -157,6 +164,16 @@ export const AppDataProvider = ({
         cleanupFns.push(unlistenProfile)
       } catch (error) {
         console.error('[AppDataProvider] 监听 Profile 事件失败:', error)
+      }
+
+      try {
+        const unlistenProfiles = await listen(
+          'verge://refresh-profiles',
+          handleRefreshProfiles,
+        )
+        cleanupFns.push(unlistenProfiles)
+      } catch (error) {
+        console.error('[AppDataProvider] 监听 Profiles 刷新事件失败:', error)
       }
 
       try {

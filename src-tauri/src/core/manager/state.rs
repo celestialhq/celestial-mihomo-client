@@ -68,6 +68,25 @@ async fn point_control_client_at(path: String) {
 }
 
 impl CoreManager {
+    /// Put the profile's recorded node choices back into the core that just started.
+    ///
+    /// mihomo restores each group's node from the `cache.db` in the directory it was started
+    /// against, and the app relied on that alone. It does not hold: `profile.store-selected`
+    /// comes from a merge template the user is free to replace, and a core started in a
+    /// directory nothing has run in has no cache to read. Both end with every `select` group on
+    /// the first entry of its `proxies:` list. The app already knows better — it records each
+    /// choice in the profile — so this is the record being put back.
+    ///
+    /// Awaited, and deliberately here rather than beside the proxy: the caller enables the
+    /// system proxy as soon as the start returns, and pointing it at a core still on the first
+    /// entry of every group is what this exists to prevent. The wait is bounded, so a core that
+    /// will not answer delays a start rather than blocking it.
+    ///
+    /// Repeat calls supersede each other, so every start path may call this without coordinating.
+    async fn restore_selected_nodes(&self) {
+        crate::config::profiles::restore_selected_nodes().await;
+    }
+
     pub async fn get_clash_logs(&self) -> Result<Vec<CompactString>> {
         match *self.get_running_mode() {
             RunningMode::Service => service::get_clash_logs_by_service().await,
@@ -96,6 +115,7 @@ impl CoreManager {
         .map_err(|e| anyhow::anyhow!("failed to start embedded core: {e}"))?;
 
         self.core_started(RunningMode::Sidecar);
+        self.restore_selected_nodes().await;
         Ok(())
     }
 
@@ -177,6 +197,7 @@ impl CoreManager {
         point_control_client_at(IClashTemp::guard_external_controller_ipc()).await;
 
         self.core_started(RunningMode::Sidecar);
+        self.restore_selected_nodes().await;
 
         AsyncHandler::spawn(|| async move {
             while let Some(event) = rx.recv().await {
@@ -260,6 +281,7 @@ impl CoreManager {
         }
 
         self.core_started(RunningMode::Service);
+        self.restore_selected_nodes().await;
         Ok(())
     }
 

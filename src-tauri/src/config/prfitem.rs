@@ -63,7 +63,9 @@ pub struct PrfItem {
     pub file_data: Option<String>,
 }
 
-#[derive(Default, Debug, Clone, Deserialize, Serialize)]
+/// Comparable because reconciling selections against the running core has to answer
+/// "did these records change while I was working" before it writes them back.
+#[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PrfSelected {
     pub name: Option<String>,
     pub now: Option<String>,

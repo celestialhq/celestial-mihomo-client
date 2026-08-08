@@ -178,7 +178,6 @@ const ProfilePage = () => {
 
   const {
     profiles = {},
-    activateSelected,
     patchProfiles,
     mutateProfiles,
     error,
@@ -382,34 +381,6 @@ const ProfilePage = () => {
     }
   }
 
-  const executeBackgroundTasks = useCallback(
-    async (
-      profile: string,
-      sequence: number,
-      abortController: AbortController,
-    ) => {
-      try {
-        if (
-          sequence === requestSequenceRef.current &&
-          switchingProfileRef.current === profile &&
-          !abortController.signal.aborted
-        ) {
-          await activateSelected(profiles)
-          debugLog(`[Profile] 后台处理完成，序列号: ${sequence}`)
-        } else {
-          debugProfileSwitch(
-            'BACKGROUND_TASK_SKIPPED',
-            profile,
-            `序列号过期或被中断: ${sequence} vs ${requestSequenceRef.current}`,
-          )
-        }
-      } catch (err: any) {
-        console.warn('Failed to activate selected proxies:', err)
-      }
-    },
-    [activateSelected, profiles],
-  )
-
   const activateProfile = useCallback(
     async (profile: string, notifySuccess: boolean) => {
       if (profiles.current === profile && !notifySuccess) {
@@ -490,20 +461,10 @@ const ProfilePage = () => {
           )
         }
 
-        debugLog(
-          `[Profile] 切换到 ${profile} 完成，序列号: ${currentSequence}，开始后台处理`,
-        )
-
-        // 延迟执行后台任务
-        setTimeout(
-          () =>
-            executeBackgroundTasks(
-              profile,
-              currentSequence,
-              currentAbortController,
-            ),
-          50,
-        )
+        // Re-applying the profile's saved node choices is the backend's job now: it runs
+        // on a core start as well as on a switch, which is the case this page could never
+        // cover, and one reconciler writing `selected` back is the point.
+        debugLog(`[Profile] 切换到 ${profile} 完成，序列号: ${currentSequence}`)
       } catch (err: any) {
         if (pendingRequestRef.current) {
           pendingRequestRef.current = null
@@ -539,7 +500,6 @@ const ProfilePage = () => {
       profiles,
       patchProfiles,
       mutateLogs,
-      executeBackgroundTasks,
       handleProfileInterrupt,
       cleanupSwitchState,
     ],
