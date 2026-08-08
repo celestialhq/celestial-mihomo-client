@@ -1,5 +1,5 @@
 use anyhow::{Context as _, Result, bail};
-use celestial_service_ipc::{RuntimeAsset, RuntimeBundle};
+use celestial_service_ipc::{RemoteProvider, RuntimeAsset, RuntimeBundle};
 use serde_yaml_ng::Value;
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
@@ -23,6 +23,7 @@ pub(crate) async fn collect_runtime_bundle(config_file: &Path, core_path: &Path)
         .ok_or_else(|| anyhow::anyhow!("runtime config has no parent directory"))?;
     let config_root = std::fs::canonicalize(config_root)?;
     let mut assets = Vec::new();
+    let mut remote_providers = Vec::new();
     let mut destinations = HashSet::new();
 
     collect_provider_assets(
@@ -31,6 +32,7 @@ pub(crate) async fn collect_runtime_bundle(config_file: &Path, core_path: &Path)
         &config_root,
         &mut destinations,
         &mut assets,
+        &mut remote_providers,
     )?;
     collect_provider_assets(
         &mut config,
@@ -38,6 +40,7 @@ pub(crate) async fn collect_runtime_bundle(config_file: &Path, core_path: &Path)
         &config_root,
         &mut destinations,
         &mut assets,
+        &mut remote_providers,
     )?;
     for filename in GEO_ASSETS {
         let source = config_root.join(filename);
@@ -52,6 +55,7 @@ pub(crate) async fn collect_runtime_bundle(config_file: &Path, core_path: &Path)
     Ok(RuntimeBundle {
         yaml: serde_yaml_ng::to_string(&config).context("failed to serialize service runtime config")?,
         assets,
+        remote_providers,
         core_path: core_path.to_string_lossy().into_owned(),
     })
 }
@@ -62,6 +66,7 @@ fn collect_provider_assets(
     config_root: &Path,
     destinations: &mut HashSet<String>,
     assets: &mut Vec<RuntimeAsset>,
+    remote_providers: &mut Vec<RemoteProvider>,
 ) -> Result<()> {
     let Some(providers) = config
         .as_mapping_mut()
@@ -75,9 +80,18 @@ fn collect_provider_assets(
         let Some(raw_path) = provider.get("path").and_then(Value::as_str) else {
             continue;
         };
-        let is_remote = provider.get("url").and_then(Value::as_str).is_some();
-        let destination = if is_remote {
-            provider_destination(config_root, raw_path)?
+        let url = provider.get("url").and_then(Value::as_str).map(str::to_owned);
+        let destination = if let Some(url) = url {
+            let destination = provider_destination(config_root, raw_path)?;
+            // The core fetches and owns this file, so it is not an asset to copy. It is
+            // recorded only so staging can tell a reusable download cache from a stale one:
+            // the core will not re-fetch a provider whose file already exists, so a changed
+            // `url` behind an unchanged path has to invalidate the cache explicitly.
+            remote_providers.push(RemoteProvider {
+                destination: destination.clone(),
+                url,
+            });
+            destination
         } else {
             let source = local_provider_source(config_root, raw_path)?;
             let destination = destination_below_root(config_root, &source)?;

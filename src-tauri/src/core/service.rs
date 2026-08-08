@@ -21,7 +21,7 @@ use crate::{
 use crate::utils::dirs;
 use anyhow::{Context as _, Result, anyhow, bail};
 use backon::{ConstantBuilder, Retryable as _};
-use celestial_service_ipc::{OwnerSessionProof, StartClashRequest};
+use celestial_service_ipc::{OwnerSessionProof, ServiceErrorCode, StageRuntimeOutcome, StartClashRequest};
 use clash_verge_logging::{Type, logging};
 use compact_str::CompactString;
 use once_cell::sync::Lazy;
@@ -602,6 +602,63 @@ fn force_reinstall_service() -> Result<()> {
 }
 
 /// 尝试使用服务启动core
+/// How a request to stage a runtime ended.
+///
+/// Kept separate from the decision the caller makes about it, so that decision stays a pure
+/// function of this. The variants differ in how much they let anyone conclude: a refusal is
+/// the service's verdict on this particular bundle, while no answer at all says nothing.
+pub(super) enum StageRequest {
+    Refused { code: u16, message: CompactString },
+    Answered(StageRuntimeOutcome),
+}
+
+impl StageRequest {
+    /// Whether a refusal is about the bundle itself, and so would be repeated by a restart.
+    ///
+    /// "This bundle names an asset I will not accept" survives being started from — a fresh
+    /// start materialises the same bundle and is refused the same way, so replacing a working
+    /// core would add an outage to a failure that already happened.
+    pub(super) const fn is_about_the_bundle(code: u16) -> bool {
+        code == ServiceErrorCode::InvalidRuntimeAsset as u16
+            || code == ServiceErrorCode::InvalidInstallLocation as u16
+    }
+}
+
+/// Have the service make the running core's runtime match `config_file`, without restarting it.
+///
+/// This exists because the core refuses to reload a configuration from outside the directory
+/// the service started it in — so in service mode every config change used to be a stop and a
+/// start, which tears the TUN interface down and takes the device's network with it.
+///
+/// `Err` means the request got no answer. A refusal, and `RestartRequired`, both come back as
+/// `Ok`: neither is a failure of this function, and only the caller can decide what to do.
+pub(super) async fn stage_runtime_by_service(config_file: &Path) -> Result<StageRequest> {
+    let session = active_service_session()?;
+    let credentials = current_owner_credentials()?;
+
+    let verge_config = Config::verge().await;
+    let clash_core = verge_config.latest_arc().get_valid_clash_core();
+    drop(verge_config);
+    let bin_ext = if cfg!(windows) { ".exe" } else { "" };
+    let bin_path = current_exe()?.with_file_name(format!("{clash_core}{bin_ext}"));
+
+    let runtime = collect_runtime_bundle(config_file, &bin_path).await?;
+    let response = celestial_service_ipc::stage_runtime(&credentials, &session, &runtime)
+        .await
+        .context("无法连接到Celestial Service")?;
+
+    if response.code > 0 {
+        return Ok(StageRequest::Refused {
+            code: response.code,
+            message: response.message.as_str().into(),
+        });
+    }
+    response
+        .data
+        .map(StageRequest::Answered)
+        .context("Celestial Service 未返回运行时暂存结果")
+}
+
 pub(super) async fn start_with_existing_service(config_file: &Path) -> Result<()> {
     logging!(info, Type::Service, "尝试使用现有服务启动核心");
     clear_active_service_session();
@@ -679,7 +736,16 @@ pub(super) async fn get_clash_logs_by_service() -> Result<Vec<CompactString>> {
     }
 
     logging!(info, Type::Service, "成功获取服务模式下的 Clash 日志");
-    Ok(response.data.unwrap_or_default())
+    // Converted rather than moved: the service crate is on compact_str 0.10 while this
+    // workspace is held at 0.9 by celestial_logger, so the two `CompactString` types are
+    // distinct even though they are the same idea. One seam is cheaper than a third fork
+    // release, and it disappears once the logger is bumped.
+    Ok(response
+        .data
+        .unwrap_or_default()
+        .into_iter()
+        .map(|line| CompactString::from(line.as_str()))
+        .collect())
 }
 
 /// 通过服务停止core

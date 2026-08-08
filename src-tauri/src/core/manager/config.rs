@@ -1,4 +1,4 @@
-use super::CoreManager;
+use super::{CoreManager, RunningMode};
 use crate::{
     config::{Config, ConfigType, runtime::IRuntime},
     constants::timing,
@@ -154,7 +154,71 @@ impl CoreManager {
     // first-ever enable naturally hits "nothing listening yet" and falls
     // through to start_core_by_sidecar, which is what actually boots it.
     async fn apply_config(&self, path: PathBuf) -> Result<()> {
+        // In service mode the core is started by the service against its own directory and
+        // refuses a reload from anywhere else — "path is not subpath of home directory or
+        // SAFE_PATHS". Every config change therefore fell through to a full restart, which
+        // tears the TUN interface down and takes the device's network with it: a subscription
+        // refresh, including an automatic one, dropped every connection the user had.
+        //
+        // So the configuration has to be materialised where the core will accept it, which
+        // only the service can do.
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        if matches!(*self.get_running_mode(), RunningMode::Service) {
+            return self.apply_config_by_service(&path).await;
+        }
+
         let path = dirs::path_to_str(&path)?;
+        self.reload_or_restart(path).await
+    }
+
+    /// Ask the service to stage the runtime, and reload the core from where it put it.
+    ///
+    /// Falls back to replacing the core whenever staging did not happen, except when the
+    /// service refused the bundle itself: a restart materialises the same bundle and is
+    /// refused the same way, so it would add an outage to a failure that already happened.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    async fn apply_config_by_service(&self, path: &std::path::Path) -> Result<()> {
+        use crate::core::service::{StageRequest, stage_runtime_by_service};
+        use celestial_service_ipc::StageRuntimeOutcome;
+
+        match stage_runtime_by_service(path).await {
+            Ok(StageRequest::Answered(StageRuntimeOutcome::Staged { config_path })) => {
+                self.reload_or_restart(&config_path).await
+            }
+            Ok(StageRequest::Answered(StageRuntimeOutcome::RestartRequired { reason })) => {
+                logging!(
+                    info,
+                    Type::Core,
+                    "Service declined to stage the runtime ({reason:?}); replacing the core instead"
+                );
+                self.restart_to_apply().await
+            }
+            Ok(StageRequest::Refused { code, message }) if StageRequest::is_about_the_bundle(code) => {
+                logging!(error, Type::Core, "Service rejected the runtime bundle: {message}");
+                Config::runtime().await.discard();
+                Err(anyhow!("Failed to apply config: {message}"))
+            }
+            Ok(StageRequest::Refused { message, .. }) => {
+                logging!(
+                    warn,
+                    Type::Core,
+                    "Service refused to stage the runtime ({message}); replacing the core instead"
+                );
+                self.restart_to_apply().await
+            }
+            Err(error) => {
+                logging!(
+                    warn,
+                    Type::Core,
+                    "Failed to stage the service runtime, replacing the core instead: {error}"
+                );
+                self.restart_to_apply().await
+            }
+        }
+    }
+
+    /// Reload the core from `path`, replacing it if it will not take the configuration.
+    async fn reload_or_restart(&self, path: &str) -> Result<()> {
         match self.reload_config(path).await {
             Ok(_) => {
                 Config::runtime().await.apply();
@@ -167,18 +231,22 @@ impl CoreManager {
                     Type::Core,
                     "Failed to apply configuration by mihomo api, restart core to apply it, error msg: {err}"
                 );
-                match self.restart_core().await {
-                    Ok(_) => {
-                        Config::runtime().await.apply();
-                        logging!(info, Type::Core, "Configuration applied after restart");
-                        Ok(())
-                    }
-                    Err(err) => {
-                        logging!(error, Type::Core, "Failed to restart core: {}", err);
-                        Config::runtime().await.discard();
-                        Err(anyhow!("Failed to apply config: {}", err))
-                    }
-                }
+                self.restart_to_apply().await
+            }
+        }
+    }
+
+    async fn restart_to_apply(&self) -> Result<()> {
+        match self.restart_core().await {
+            Ok(_) => {
+                Config::runtime().await.apply();
+                logging!(info, Type::Core, "Configuration applied after restart");
+                Ok(())
+            }
+            Err(err) => {
+                logging!(error, Type::Core, "Failed to restart core: {}", err);
+                Config::runtime().await.discard();
+                Err(anyhow!("Failed to apply config: {}", err))
             }
         }
     }
