@@ -47,6 +47,10 @@ fn restore_default_size_if_needed(window: &WebviewWindow) {
 }
 
 #[cfg(any(target_os = "android", target_os = "ios"))]
+#[allow(
+    clippy::missing_const_for_fn,
+    reason = "signature mirrors the desktop implementation above"
+)]
 fn restore_default_size_if_needed(_window: &WebviewWindow) {}
 
 /// 构建新的 WebView 窗口

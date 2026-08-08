@@ -287,6 +287,13 @@ pub use desktop::Sysopt;
 // Android/iOS: no system-wide proxy support, only VPN/TUN mode exists there.
 #[cfg(any(target_os = "android", target_os = "ios"))]
 mod mobile {
+    #![allow(
+        clippy::unused_async,
+        clippy::missing_const_for_fn,
+        clippy::unnecessary_wraps,
+        reason = "signatures mirror the desktop Sysopt"
+    )]
+
     use anyhow::Result;
 
     #[derive(Default)]

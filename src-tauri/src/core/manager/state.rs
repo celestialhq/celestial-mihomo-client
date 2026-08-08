@@ -90,7 +90,7 @@ impl CoreManager {
 
         tauri_plugin_celestial_vpn::start_core(
             &config_yaml,
-            &dirs::path_to_str(&home_dir)?,
+            dirs::path_to_str(&home_dir)?,
             crate::constants::network::DEFAULT_EXTERNAL_CONTROLLER,
         )
         .map_err(|e| anyhow::anyhow!("failed to start embedded core: {e}"))?;

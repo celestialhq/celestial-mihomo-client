@@ -2,6 +2,17 @@ use std::time::Duration;
 
 pub mod network {
     pub const DEFAULT_EXTERNAL_CONTROLLER: &str = "127.0.0.1:9097";
+    /// The same endpoint split apart, because the mobile core is configured with
+    /// the host and port as separate values. Parsing the combined constant at
+    /// runtime meant two `expect()` calls on something already known at compile
+    /// time; `endpoint_parts_agree` below keeps the two spellings in step.
+    ///
+    /// Compiled for mobile, and under `test` so the guard runs on the desktop CI
+    /// that would otherwise never see these.
+    #[cfg(any(target_os = "android", target_os = "ios", test))]
+    pub const DEFAULT_EXTERNAL_CONTROLLER_HOST: &str = "127.0.0.1";
+    #[cfg(any(target_os = "android", target_os = "ios", test))]
+    pub const DEFAULT_EXTERNAL_CONTROLLER_PORT: u16 = 9097;
     /// `IClashTemp::new()` guarantees the generated config's `secret` field
     /// is never empty, falling back to this literal placeholder — mihomo's
     /// auth middleware applies to every transport (including the LocalSocket
@@ -49,4 +60,23 @@ pub mod tun {
     pub const DEFAULT_STACK: &str = "gvisor";
 
     pub const DNS_HIJACK: &[&str] = &["any:53"];
+}
+
+#[cfg(test)]
+mod tests {
+    use super::network::{
+        DEFAULT_EXTERNAL_CONTROLLER, DEFAULT_EXTERNAL_CONTROLLER_HOST, DEFAULT_EXTERNAL_CONTROLLER_PORT,
+    };
+
+    /// The combined endpoint and its parts are written out separately, so nothing
+    /// but this stops one being edited without the other. Desktop configures the
+    /// core with the combined form and mobile with the parts; if they drift, the
+    /// two platforms quietly talk to different addresses.
+    #[test]
+    fn endpoint_parts_agree() {
+        assert_eq!(
+            DEFAULT_EXTERNAL_CONTROLLER,
+            format!("{DEFAULT_EXTERNAL_CONTROLLER_HOST}:{DEFAULT_EXTERNAL_CONTROLLER_PORT}")
+        );
+    }
 }

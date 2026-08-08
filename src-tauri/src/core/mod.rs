@@ -15,6 +15,13 @@ pub mod win_uwp;
 pub mod updater;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 pub mod updater {
+    #![allow(
+        clippy::unused_async,
+        clippy::missing_const_for_fn,
+        clippy::unnecessary_wraps,
+        reason = "signatures mirror the desktop updater module"
+    )]
+
     pub struct SilentUpdater;
 
     impl SilentUpdater {
@@ -44,6 +51,13 @@ pub mod updater {
 pub mod autostart;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 pub mod autostart {
+    #![allow(
+        clippy::unused_async,
+        clippy::missing_const_for_fn,
+        clippy::unnecessary_wraps,
+        reason = "signatures mirror the desktop autostart module"
+    )]
+
     use anyhow::Result;
 
     pub async fn update_launch() -> Result<()> {
@@ -60,6 +74,13 @@ pub mod autostart {
 pub mod hotkey;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 pub mod hotkey {
+    #![allow(
+        clippy::unused_async,
+        clippy::missing_const_for_fn,
+        clippy::unnecessary_wraps,
+        reason = "signatures mirror the desktop hotkey module"
+    )]
+
     use anyhow::Result;
     use smartstring::alias::String;
 
@@ -93,6 +114,13 @@ pub mod hotkey {
 pub mod tray;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 pub mod tray {
+    #![allow(
+        clippy::unused_async,
+        clippy::missing_const_for_fn,
+        clippy::unnecessary_wraps,
+        reason = "signatures mirror the desktop tray module"
+    )]
+
     use crate::config::IVerge;
     use anyhow::Result;
 

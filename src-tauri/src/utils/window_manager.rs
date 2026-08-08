@@ -215,6 +215,9 @@ impl WindowManager {
     }
 
     /// 激活窗口（取消最小化、显示、设置焦点）
+    // On mobile the unminimize step below is cfg'd out, leaving a shape clippy reads as a
+    // plain if/else initialiser. The flag really is accumulated across several steps.
+    #[allow(clippy::useless_let_if_seq, reason = "flag accumulates across cfg'd steps")]
     fn activate_window(window: &WebviewWindow<Wry>) -> WindowOperationResult {
         logging!(info, Type::Window, "开始激活窗口");
 

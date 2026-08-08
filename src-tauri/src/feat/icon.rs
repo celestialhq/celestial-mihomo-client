@@ -384,6 +384,10 @@ fn export_platform_process_icon(source: &Path, target: &Path) -> bool {
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+#[allow(
+    clippy::missing_const_for_fn,
+    reason = "signature mirrors the per-platform implementations above"
+)]
 fn export_platform_process_icon(_source: &Path, _target: &Path) -> bool {
     false
 }

@@ -1,4 +1,8 @@
-use super::{ConfigUpdatePermit, CoreManager, RunningMode};
+use super::{ConfigUpdatePermit, CoreManager};
+// Only the service-mode branch of `apply_config` reads this, and there is no
+// service on mobile.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use super::RunningMode;
 use crate::{
     config::{Config, ConfigType, runtime::IRuntime},
     constants::timing,

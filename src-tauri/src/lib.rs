@@ -1,4 +1,11 @@
 #![allow(non_snake_case)]
+// The mobile build compiles a desktop-shaped crate with the desktop entry points
+// cfg'd out, so a large amount of code is legitimately unreferenced there: the
+// tray, the system proxy, the privileged service, the whole window layer. On this
+// target "never used" says nothing about whether the item is needed, and treating
+// it as a finding drowns the ones that mean something. Desktop keeps the lint at
+// full strength, which is where it can still tell the truth.
+#![cfg_attr(any(target_os = "android", target_os = "ios"), allow(dead_code))]
 #![recursion_limit = "512"]
 
 mod cmd;
@@ -114,16 +121,10 @@ mod app_init {
 
         #[cfg(any(target_os = "android", target_os = "ios"))]
         {
-            let (host, port) = crate::constants::network::DEFAULT_EXTERNAL_CONTROLLER
-                .split_once(':')
-                .expect("DEFAULT_EXTERNAL_CONTROLLER must be host:port");
             tauri_plugin_mihomo::Builder::new()
                 .protocol(tauri_plugin_mihomo::models::Protocol::Http)
-                .external_host(host)
-                .external_port(
-                    port.parse::<u16>()
-                        .expect("DEFAULT_EXTERNAL_CONTROLLER port must be a valid u16"),
-                )
+                .external_host(crate::constants::network::DEFAULT_EXTERNAL_CONTROLLER_HOST)
+                .external_port(crate::constants::network::DEFAULT_EXTERNAL_CONTROLLER_PORT)
                 .secret(crate::constants::network::DEFAULT_EXTERNAL_CONTROLLER_SECRET)
                 .pool_config(pool_config)
                 .build()
@@ -169,6 +170,10 @@ mod app_init {
     }
 
     #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[allow(
+        clippy::unnecessary_wraps,
+        reason = "signature mirrors the desktop implementation above"
+    )]
     pub fn setup_autostart(_app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
@@ -187,6 +192,10 @@ mod app_init {
     }
 
     #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[allow(
+        clippy::unnecessary_wraps,
+        reason = "signature mirrors the desktop implementation above"
+    )]
     pub fn setup_window_state(_app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }

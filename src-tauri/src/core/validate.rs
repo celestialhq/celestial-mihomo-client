@@ -348,7 +348,11 @@ impl CoreConfigValidator {
         // and `apply_generate_config` only applies the config when the outcome is
         // valid — reporting a skip here would stop mobile from ever applying a
         // config at all.
+        // The `return` is what keeps this block and the desktop one below it
+        // interchangeable; dropping it would make one of them a tail expression
+        // and the other a statement.
         #[cfg(any(target_os = "android", target_os = "ios"))]
+        #[allow(clippy::needless_return, reason = "paired with the cfg'd block below")]
         {
             logging!(info, Type::Validate, "移动端跳过子进程验证（尚无内核）");
             return Ok(ValidationOutcome::Valid);
