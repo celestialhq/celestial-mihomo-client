@@ -119,16 +119,37 @@ jobs:
                 "Celestial_${version}_arm64_portable.zip"
                 "Celestial_${version}_aarch64.dmg"
                 "Celestial_${version}_x64.dmg"
+                "Celestial_${version}_aarch64.app.tar.gz"
+                "Celestial_${version}_x64.app.tar.gz"
                 "Celestial_${version}_amd64.AppImage"
                 "Celestial_${version}_amd64.deb"
                 "Celestial-${version}-1.x86_64.rpm"
                 "Celestial_${version}_universal.apk"
               )
 
+              # An artifact the updater manifest is built from is useless
+              # without its signature beside it: the generator skips the pair
+              # and that platform silently vanishes from update.json, which is
+              # how macOS and Linux went without updates unnoticed.
+              signed=(
+                "Celestial_${version}_x64-setup.exe"
+                "Celestial_${version}_arm64-setup.exe"
+                "Celestial_${version}_aarch64.app.tar.gz"
+                "Celestial_${version}_x64.app.tar.gz"
+                "Celestial_${version}_amd64.AppImage"
+              )
+
               for asset in "${expected[@]}"; do
                 if ! grep -Fxq "$asset" <<< "$existing_assets" ||
                    ! grep -Fxq "${asset}.sha256" <<< "$existing_assets"; then
                   echo "Missing release asset: $asset"
+                  should_run=true
+                fi
+              done
+
+              for asset in "${signed[@]}"; do
+                if ! grep -Fxq "${asset}.sig" <<< "$existing_assets"; then
+                  echo "Missing updater signature: ${asset}.sig"
                   should_run=true
                 fi
               done
@@ -246,9 +267,11 @@ jobs:
           - arch: Apple Silicon
             runner: macos-latest
             target: aarch64-apple-darwin
+            updater_arch: aarch64
           - arch: Intel x64
             runner: macos-15-intel
             target: x86_64-apple-darwin
+            updater_arch: x64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -306,12 +329,34 @@ jobs:
 
       - name: Collect DMG and updater files
         shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          UPDATER_ARCH: ${{ matrix.updater_arch }}
         run: |
           set -euo pipefail
           mkdir -p release-assets
           find target/${{ matrix.target }}/release/bundle -type f \
             \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.sig' \) \
             -exec cp {} release-assets/ \;
+
+          # Tauri names the macOS updater bundle after the product alone --
+          # "Celestial.app.tar.gz" -- with neither the version nor the
+          # architecture in it. Both macOS jobs therefore emitted the same
+          # filename, the merged download clobbered one with the other, and the
+          # manifest generator skips any asset whose name lacks the version. The
+          # result was a release with no macOS updater entry at all.
+          #
+          # Renaming is safe: the signature covers the archive's bytes, not its
+          # name. It has to happen before the checksums are written, so the
+          # .sha256 files are named after the assets that ship.
+          shopt -s nullglob
+          for src in release-assets/*.app.tar.gz release-assets/*.app.tar.gz.sig; do
+            name="${src##*/}"
+            product="${name%%.app.tar.gz*}"
+            suffix="${name#*.app.tar.gz}"
+            mv "$src" \
+              "release-assets/${product}_${VERSION}_${UPDATER_ARCH}.app.tar.gz${suffix}"
+          done
 
       - name: Generate SHA-256 files
         run: node .github/scripts/checksum-assets.mjs release-assets
@@ -388,8 +433,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
+          # No '*.AppImage.tar.gz': that is a Tauri v1 artifact. v2 signs the
+          # AppImage itself, which is what the updater manifest points at.
           find target/x86_64-unknown-linux-gnu/release/bundle -type f \
-            \( -name '*.AppImage' -o -name '*.AppImage.tar.gz' -o \
+            \( -name '*.AppImage' -o \
                -name '*.deb' -o -name '*.rpm' -o -name '*.sig' \) \
             -exec cp {} release-assets/ \;
 

@@ -35,7 +35,10 @@ for (const asset of assets) {
     await setPlatform(['darwin', 'darwin-intel', 'darwin-x86_64'], name)
   } else if (name.endsWith('_aarch64.app.tar.gz')) {
     await setPlatform(['darwin-aarch64'], name)
-  } else if (name.endsWith('_amd64.AppImage.tar.gz')) {
+  } else if (name.endsWith('_amd64.AppImage')) {
+    // Tauri v2 signs the AppImage itself and emits `.AppImage.sig` beside it.
+    // The `.AppImage.tar.gz` this used to look for is a v1 artifact that no
+    // build here has ever produced, so Linux never got an updater entry.
     await setPlatform(['linux', 'linux-x86_64', 'linux-x86_64-appimage'], name)
   } else if (name.endsWith('_amd64.deb')) {
     await setPlatform(['linux-x86_64-deb'], name)
