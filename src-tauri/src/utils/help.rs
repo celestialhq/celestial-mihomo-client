@@ -74,6 +74,37 @@ pub async fn save_yaml<T: Serialize + Sync>(path: &PathBuf, data: &T, prefix: Op
     Ok(())
 }
 
+/// Save YAML so the file is either the old content or the new one, never a
+/// half-written mix.
+///
+/// `save_yaml` truncates in place, so losing power — or simply failing — partway
+/// through leaves a truncated document behind. For the profile index that is the
+/// difference between a bad write and a user's whole subscription list becoming
+/// unparseable. Writing beside the target and renaming makes the swap atomic on
+/// every platform this ships to.
+pub async fn save_yaml_atomic<T: Serialize + Sync>(path: &PathBuf, data: &T, prefix: Option<&str>) -> Result<()> {
+    let data_str = with_encryption(|| async { serde_yaml_ng::to_string(data) }).await?;
+
+    let yaml_str = match prefix {
+        Some(prefix) => format!("{prefix}\n\n{data_str}"),
+        None => data_str,
+    };
+
+    let path_str = path.as_os_str().to_string_lossy().to_string();
+    let temp_path = path.with_extension("yaml.tmp");
+
+    tokio::fs::write(&temp_path, yaml_str.as_bytes())
+        .await
+        .with_context(|| format!("failed to stage file \"{path_str}\""))?;
+
+    if let Err(error) = tokio::fs::rename(&temp_path, path).await {
+        let _ = tokio::fs::remove_file(&temp_path).await;
+        return Err(error).with_context(|| format!("failed to save file \"{path_str}\""));
+    }
+
+    Ok(())
+}
+
 const ALPHABET: [char; 62] = [
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
     'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',

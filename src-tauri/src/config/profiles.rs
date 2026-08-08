@@ -51,6 +51,28 @@ pub struct CleanupResult {
     pub failed_deletions: usize,
 }
 
+/// The files a planned deletion will remove once it is committed.
+///
+/// Kept separate from the index change so the irreversible half happens last:
+/// nothing is unlinked until the index that stops referencing it has been
+/// written, so a failed write leaves the profile intact rather than orphaning it.
+pub(crate) struct ProfileDeletePlan {
+    files: Vec<String>,
+}
+
+impl ProfileDeletePlan {
+    pub(crate) async fn cleanup(self) {
+        let Ok(dir) = dirs::app_profiles_dir() else {
+            return;
+        };
+        for file in self.files {
+            if let Err(error) = dir.join(file.as_str()).remove_if_exists().await {
+                logging!(warn, Type::Config, "清理已删除订阅文件失败: {file} - {error}");
+            }
+        }
+    }
+}
+
 macro_rules! patch {
     ($lv: expr, $rv: expr, $key: tt) => {
         if ($rv.$key).is_some() {
@@ -93,7 +115,7 @@ impl IProfiles {
     }
 
     pub async fn save_file(&self) -> Result<()> {
-        help::save_yaml(&dirs::profiles_path()?, self, Some("# Profiles Config for Celestial")).await
+        help::save_yaml_atomic(&dirs::profiles_path()?, self, Some("# Profiles Config for Celestial")).await
     }
 
     /// 只修改current，valid和chain
@@ -276,34 +298,36 @@ impl IProfiles {
 
     /// delete item
     /// if delete the current then return true
-    pub async fn delete_item(&mut self, uid: &String) -> Result<bool> {
-        let current = self.current.as_ref().unwrap_or(uid);
-        let current = current.clone();
-        let delete_uids = {
-            let item = self.get_item(uid)?;
-            let option = item.option.as_ref();
-            option.map_or(Vec::new(), |op| {
-                [
-                    op.merge.clone(),
-                    op.script.clone(),
-                    op.rules.clone(),
-                    op.proxies.clone(),
-                    op.groups.clone(),
-                ]
-                .into_iter()
-                .collect::<Vec<_>>()
-            })
-        };
+    /// Work out what deleting `uid` would remove, without removing anything.
+    ///
+    /// Splitting the plan from the deletion is what makes this recoverable: the
+    /// files are the only part that cannot be undone, so they are not touched
+    /// until the index that stops referencing them has actually been written. It
+    /// used to delete first, so a failed save left the files gone and the index
+    /// still pointing at them.
+    pub(crate) fn plan_delete_item(&mut self, uid: &String) -> Result<(bool, ProfileDeletePlan)> {
+        let current = self.current.as_ref().unwrap_or(uid).clone();
+        let delete_uids = self.get_item(uid)?.option.as_ref().map_or_else(Vec::new, |op| {
+            [
+                op.merge.clone(),
+                op.script.clone(),
+                op.rules.clone(),
+                op.proxies.clone(),
+                op.groups.clone(),
+            ]
+            .into_iter()
+            .collect::<Vec<_>>()
+        });
         let mut items = self.items.take().unwrap_or_default();
+        let mut files = Vec::new();
 
-        // remove the main item (if exists) and delete its file
         if let Some(file) = Self::take_item_file_by_uid(&mut items, Some(uid.as_str())) {
-            let _ = dirs::app_profiles_dir()?.join(file.as_str()).remove_if_exists().await;
+            files.push(file);
         }
 
         for delete_uid in delete_uids {
             if let Some(file) = Self::take_item_file_by_uid(&mut items, delete_uid.as_deref()) {
-                let _ = dirs::app_profiles_dir()?.join(file.as_str()).remove_if_exists().await;
+                files.push(file);
             }
         }
 
@@ -319,8 +343,19 @@ impl IProfiles {
         }
 
         self.items = Some(items);
+        Ok((current == *uid, ProfileDeletePlan { files }))
+    }
+
+    /// delete item
+    /// if delete the current then return true
+    pub async fn delete_item(&mut self, uid: &String) -> Result<bool> {
+        let (should_update, plan) = self.plan_delete_item(uid)?;
+
+        // Only once the index no longer references them.
         self.save_file().await?;
-        Ok(current == *uid)
+        plan.cleanup().await;
+
+        Ok(should_update)
     }
 
     /// 获取current指向的订阅内容
@@ -607,4 +642,69 @@ pub async fn profiles_draft_update_item_safe(index: &String, item: &mut PrfItem)
             Ok((profiles, ()))
         })
         .await
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::panic, reason = "tests assert by panicking")]
+mod tests {
+    use super::*;
+
+    fn deletion_item(uid: &str, kind: &str, file: &str, merge: Option<&str>) -> PrfItem {
+        PrfItem {
+            uid: Some(uid.into()),
+            itype: Some(kind.into()),
+            file: Some(file.into()),
+            option: merge.map(|uid| PrfOption {
+                merge: Some(uid.into()),
+                ..PrfOption::default()
+            }),
+            ..PrfItem::default()
+        }
+    }
+
+    #[test]
+    fn planning_a_deletion_removes_nothing_and_picks_a_replacement() -> Result<()> {
+        // The plan is the whole point: it drops the entries and names the files,
+        // but touching the files is left to `cleanup`, which only runs once the
+        // index has been written. A profile owns its chain files, so deleting it
+        // takes them with it.
+        let mut profiles = IProfiles {
+            current: Some("a".into()),
+            items: Some(vec![
+                deletion_item("a", "remote", "a.yaml", Some("owned")),
+                deletion_item("owned", "merge", "owned.yaml", None),
+                deletion_item("b", "local", "b.yaml", None),
+            ]),
+        };
+
+        let (should_update, plan) = profiles.plan_delete_item(&"a".into())?;
+
+        assert!(should_update, "deleting the current profile has to move the selection");
+        assert_eq!(
+            profiles.current.as_deref(),
+            Some("b"),
+            "the selection should land on the remaining real profile"
+        );
+        assert_eq!(plan.files, vec![String::from("a.yaml"), String::from("owned.yaml")]);
+        assert!(profiles.get_item("owned").is_err(), "the chain entry goes too");
+        Ok(())
+    }
+
+    #[test]
+    fn deleting_a_profile_that_is_not_current_leaves_the_selection_alone() -> Result<()> {
+        let mut profiles = IProfiles {
+            current: Some("a".into()),
+            items: Some(vec![
+                deletion_item("a", "remote", "a.yaml", None),
+                deletion_item("b", "local", "b.yaml", None),
+            ]),
+        };
+
+        let (should_update, plan) = profiles.plan_delete_item(&"b".into())?;
+
+        assert!(!should_update);
+        assert_eq!(profiles.current.as_deref(), Some("a"));
+        assert_eq!(plan.files, vec![String::from("b.yaml")]);
+        Ok(())
+    }
 }
