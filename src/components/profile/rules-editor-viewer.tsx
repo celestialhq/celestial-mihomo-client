@@ -80,14 +80,17 @@ function loadYamlDocument(value: string) {
   return yaml.load(value)
 }
 
+/// Read a chain file that a profile may not have one of.
+///
+/// Only an absent *reference* is handled here. A referenced file that does not
+/// exist yet is answered by the backend with an empty document, so a genuine
+/// read failure still surfaces instead of being swallowed — this used to catch
+/// everything, and an unreadable file then opened as an empty editor that saved
+/// its emptiness back over the real contents.
 async function readOptionalProfileFile(index: string) {
   if (!index) return ''
 
-  try {
-    return await readProfileFile(index)
-  } catch {
-    return ''
-  }
+  return await readProfileFile(index)
 }
 
 const portValidator = (value: string): boolean => {

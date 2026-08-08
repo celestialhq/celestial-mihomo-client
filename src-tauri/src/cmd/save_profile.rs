@@ -38,18 +38,32 @@ pub async fn save_profile_file(index: String, file_data: Option<String>) -> CmdR
         (path, is_merge)
     };
 
-    // 读取原始内容（在释放profiles_guard后进行）
-    let original_content = PrfItem {
-        file: Some(rel_path.clone()),
-        ..Default::default()
-    }
-    .read_file()
-    .await
-    .stringify_err()?;
-
     let profiles_dir = dirs::app_profiles_dir().stringify_err()?;
     let file_path = profiles_dir.join(rel_path.as_str());
     let file_path_str = file_path.to_string_lossy().to_string();
+
+    // 读取原始内容（在释放profiles_guard后进行）
+    //
+    // A chain file that has never been saved has no file on disk yet, and that is
+    // an ordinary state rather than an error. Reading it unconditionally failed
+    // the whole save, so the first edit to such a file could never be written.
+    let original_existed = fs::try_exists(&file_path).await.map_err(|err| {
+        String::from(format!(
+            "failed to check profile file \"{}\": {err}",
+            file_path.display()
+        ))
+    })?;
+    let original_content = if original_existed {
+        PrfItem {
+            file: Some(rel_path.clone()),
+            ..Default::default()
+        }
+        .read_file()
+        .await
+        .stringify_err()?
+    } else {
+        String::new()
+    };
 
     // 保存新的配置文件
     fs::write(&file_path, &file_data).await.stringify_err()?;
@@ -63,9 +77,9 @@ pub async fn save_profile_file(index: String, file_data: Option<String>) -> CmdR
     );
 
     let outcome = if is_merge_file {
-        handle_merge_file(&file_path_str, &file_path, &original_content).await?
+        handle_merge_file(&file_path_str, &file_path, &original_content, original_existed).await?
     } else {
-        handle_full_validation(&file_path_str, &file_path, &original_content).await?
+        handle_full_validation(&file_path_str, &file_path, &original_content, original_existed).await?
     };
 
     if outcome.is_valid()
@@ -79,14 +93,28 @@ pub async fn save_profile_file(index: String, file_data: Option<String>) -> CmdR
     Ok(outcome)
 }
 
-async fn restore_original(file_path: &std::path::Path, original_content: &str) -> Result<(), String> {
-    fs::write(file_path, original_content).await.stringify_err()
+/// Put the file back the way it was before the rejected save.
+///
+/// "The way it was" includes not existing: writing an empty file instead would
+/// leave a rejected first edit behind as a real, empty chain file, which the
+/// enhancer then reads and applies.
+async fn restore_original(
+    file_path: &std::path::Path,
+    original_content: &str,
+    original_existed: bool,
+) -> Result<(), String> {
+    if original_existed {
+        fs::write(file_path, original_content).await.stringify_err()
+    } else {
+        fs::remove_file(file_path).await.stringify_err()
+    }
 }
 
 async fn handle_merge_file(
     file_path_str: &str,
     file_path: &std::path::Path,
     original_content: &str,
+    original_existed: bool,
 ) -> CmdResult<ValidationOutcome> {
     logging!(info, Type::Config, "[cmd配置save] 检测到merge文件，只进行语法验证");
 
@@ -102,13 +130,13 @@ async fn handle_merge_file(
         }
         Ok(outcome) => {
             logging!(warn, Type::Config, "[cmd配置save] merge文件语法验证失败: {}", outcome);
-            restore_original(file_path, original_content).await?;
+            restore_original(file_path, original_content, original_existed).await?;
             handle_validation_notice(&outcome, ValidationNoticeTarget::Merge, "合并配置文件");
             Ok(outcome)
         }
         Err(e) => {
             logging!(error, Type::Config, "[cmd配置save] 验证过程发生错误: {}", e);
-            restore_original(file_path, original_content).await?;
+            restore_original(file_path, original_content, original_existed).await?;
             Err(e.to_string().into())
         }
     }
@@ -118,6 +146,7 @@ async fn handle_full_validation(
     file_path_str: &str,
     file_path: &std::path::Path,
     original_content: &str,
+    original_existed: bool,
 ) -> CmdResult<ValidationOutcome> {
     match CoreConfigValidator::validate_config_file_outcome(file_path_str, None).await {
         Ok(outcome) if outcome.is_valid() => {
@@ -126,7 +155,7 @@ async fn handle_full_validation(
         }
         Ok(outcome) => {
             logging!(warn, Type::Config, "[cmd配置save] 验证失败: {}", outcome);
-            restore_original(file_path, original_content).await?;
+            restore_original(file_path, original_content, original_existed).await?;
 
             // The kind carried by the outcome already distinguishes script from
             // YAML failures, so the notice target only needs the file's nature.
@@ -141,7 +170,7 @@ async fn handle_full_validation(
         }
         Err(e) => {
             logging!(error, Type::Config, "[cmd配置save] 验证过程发生错误: {}", e);
-            restore_original(file_path, original_content).await?;
+            restore_original(file_path, original_content, original_existed).await?;
             Err(e.to_string().into())
         }
     }

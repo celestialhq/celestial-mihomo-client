@@ -485,6 +485,22 @@ pub async fn read_profile_file(index: String) -> CmdResult<String> {
             ..Default::default()
         }
     };
+    // A chain file that has never been saved has no file on disk, which is an
+    // ordinary state and not a failure. Answering with an empty document lets the
+    // caller distinguish it from a file it genuinely could not read — the
+    // frontend used to swallow every read error into an empty editor, which then
+    // saved that emptiness back over whatever was really there.
+    if let Some(file) = item.file.as_ref() {
+        let path = dirs::app_profiles_dir().stringify_err()?.join(file.as_str());
+        match tokio::fs::try_exists(&path).await {
+            Ok(true) => {}
+            Ok(false) => return Ok(String::new()),
+            Err(err) => {
+                return Err(format!("failed to check profile file \"{}\": {err}", path.display()).into());
+            }
+        }
+    }
+
     let data = item.read_file().await.stringify_err()?;
     Ok(data)
 }

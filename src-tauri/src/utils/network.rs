@@ -186,13 +186,15 @@ impl NetworkManager {
         let mut parsed = Url::parse(url)?;
         let mut extra_headers = subscription_headers()?;
 
-        if !parsed.username().is_empty()
-            && let Some(pass) = parsed.password()
-        {
+        // A password is optional in basic auth, and `user@host` with no password
+        // at all is a legitimate credential. Requiring one meant those URLs sent
+        // no Authorization header whatsoever, so the request went out anonymous
+        // and came back rejected.
+        if !parsed.username().is_empty() {
             let username = percent_encoding::percent_decode_str(parsed.username())
                 .decode_utf8_lossy()
                 .into_owned();
-            let password = percent_encoding::percent_decode_str(pass)
+            let password = percent_encoding::percent_decode_str(parsed.password().unwrap_or_default())
                 .decode_utf8_lossy()
                 .into_owned();
             let auth_str = format!("{}:{}", username, password);
