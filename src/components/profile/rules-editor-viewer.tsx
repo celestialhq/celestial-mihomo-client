@@ -288,6 +288,8 @@ export const RulesEditorViewer = (props: Props) => {
 
   const [prevData, setPrevData] = useState('')
   const [currData, setCurrData] = useState('')
+  /// Whether the sequences below hold what the file actually contains yet.
+  const hasLoadedSeqConfigRef = useRef(false)
   const [visualization, setVisualization] = useState(!IS_MOBILE_PLATFORM)
   const [match, setMatch] = useState(() => (_: string) => true)
 
@@ -433,6 +435,7 @@ export const RulesEditorViewer = (props: Props) => {
     }
   }
   const fetchContent = useCallback(async () => {
+    hasLoadedSeqConfigRef.current = false
     const data = await readOptionalProfileFile(property)
     const obj = loadYamlDocument(data) as ISeqProfileConfig | null
 
@@ -442,6 +445,7 @@ export const RulesEditorViewer = (props: Props) => {
 
     setPrevData(data)
     setCurrData(data)
+    hasLoadedSeqConfigRef.current = true
   }, [property])
 
   useEffect(() => {
@@ -459,6 +463,14 @@ export const RulesEditorViewer = (props: Props) => {
 
   // 优化：异步处理大数据yaml.dump，避免UI卡死
   useEffect(() => {
+    // The three sequences start empty, and this effect runs on mount — before
+    // `fetchContent` has had a chance to fill them from the file. Serializing
+    // then writes `{prepend: [], append: [], delete: []}` over the editor's
+    // buffer, so the user's existing rules are gone before they ever appear.
+    if (!hasLoadedSeqConfigRef.current) {
+      return
+    }
+
     if (!(prependSeq && appendSeq && deleteSeq)) {
       return
     }

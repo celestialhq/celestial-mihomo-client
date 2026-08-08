@@ -74,16 +74,27 @@ export const ProxiesEditorViewer = (props: Props) => {
   const [appendSeq, setAppendSeq] = useState<IProxyConfig[]>([])
   const [deleteSeq, setDeleteSeq] = useState<string[]>([])
 
+  // A node's `name` doubles as its SortableContext item id, its React key and
+  // what drag-reordering is keyed on. A node without one — pasting YAML that
+  // omits `name` in advanced mode is the easy way to get there — makes
+  // @dnd-kit run `'id' in item` against null and throw, taking the whole
+  // visual editor down with it. Such nodes are hidden here rather than
+  // repaired: the YAML still holds them, so advanced mode can show and fix
+  // what visual mode cannot render.
+  const hasValidName = (proxy: IProxyConfig) =>
+    typeof proxy?.name === 'string' && proxy.name.length > 0
+
   const filteredPrependSeq = useMemo(
-    () => prependSeq.filter((proxy) => match(proxy.name)),
+    () =>
+      prependSeq.filter((proxy) => hasValidName(proxy) && match(proxy.name)),
     [prependSeq, match],
   )
   const filteredProxyList = useMemo(
-    () => proxyList.filter((proxy) => match(proxy.name)),
+    () => proxyList.filter((proxy) => hasValidName(proxy) && match(proxy.name)),
     [proxyList, match],
   )
   const filteredAppendSeq = useMemo(
-    () => appendSeq.filter((proxy) => match(proxy.name)),
+    () => appendSeq.filter((proxy) => hasValidName(proxy) && match(proxy.name)),
     [appendSeq, match],
   )
 
