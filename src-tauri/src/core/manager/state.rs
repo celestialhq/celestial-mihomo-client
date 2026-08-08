@@ -33,6 +33,40 @@ use {
     },
 };
 
+/// Point the control-plane client at wherever the core actually opened its API.
+///
+/// The two backings do not agree on that path and cannot be made to. The sidecar is told
+/// to listen on this client's own `ipc_path()`; the service derives the core's endpoint
+/// from the owner identity instead, so that two users' cores can never share one, and it
+/// deliberately does not accept a path from an unprivileged client.
+///
+/// Leaving the client pointed at the sidecar's path is why service mode came up with
+/// working traffic and a dead control plane: proxying runs on the core's own listen
+/// ports, but logs, connections, rules, proxy switching and delay tests all go through
+/// this socket — and every one of them was talking to a pipe nobody was listening on.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+async fn point_control_client_at(path: String) {
+    use tauri_plugin_mihomo::MihomoExt as _;
+
+    logging!(info, Type::Core, "core control API endpoint: {}", path);
+
+    // Scoped so the write guard is released before anything is logged: every caller of
+    // the control client takes a read guard, and holding the write side across a log
+    // write would stall them for no reason.
+    let outcome = {
+        let mut mihomo = handle::Handle::app_handle().mihomo().write().await;
+        mihomo.update_socket_path(path)
+    };
+
+    if let Err(error) = outcome {
+        logging!(
+            error,
+            Type::Core,
+            "failed to point the control client at the core's API: {error}"
+        );
+    }
+}
+
 impl CoreManager {
     pub async fn get_clash_logs(&self) -> Result<Vec<CompactString>> {
         match *self.get_running_mode() {
@@ -137,6 +171,11 @@ impl CoreManager {
         logging!(trace, Type::Core, "Sidecar started with PID: {}", pid);
 
         self.set_running_child_sidecar(child);
+
+        // Set explicitly rather than relying on the plugin's initial value: a session that
+        // has been in service mode left it pointing at the service's per-owner endpoint.
+        point_control_client_at(IClashTemp::guard_external_controller_ipc()).await;
+
         self.core_started(RunningMode::Sidecar);
 
         AsyncHandler::spawn(|| async move {
@@ -205,6 +244,21 @@ impl CoreManager {
         logging!(info, Type::Core, "Starting core in service mode");
         let config_file = Config::generate_file(crate::config::ConfigType::Run).await?;
         service::run_core_by_service(&config_file).await?;
+
+        // Before reporting the mode, so nothing reacting to the transition reaches for the
+        // control API while it still points at the sidecar's socket. Unreachable on mobile,
+        // where `run_core_by_service` above has already failed — there is no service there,
+        // and the in-process core is reached over HTTP rather than a socket path.
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        match service::core_api_ipc_path() {
+            Ok(path) => point_control_client_at(path).await,
+            Err(error) => logging!(
+                error,
+                Type::Core,
+                "cannot determine where the service opened the core's API: {error:#}"
+            ),
+        }
+
         self.core_started(RunningMode::Service);
         Ok(())
     }

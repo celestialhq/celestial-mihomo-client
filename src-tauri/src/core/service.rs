@@ -4,7 +4,7 @@ use crate::{
         CoreManager,
         handle::Handle,
         manager::RunningMode,
-        owner_identity::current_owner_credentials,
+        owner_identity::{current_owner_credentials, current_owner_identity},
         runstate::{
             OwnerRecoveryReason, OwnerSample, OwnerStep, OwnerWatch, PendingAction, RUN_STATE, ReadyWaitError,
             RunState, ServiceHealth,
@@ -934,6 +934,16 @@ async fn wait_for_ready_service() -> Result<()> {
             Err(error)
         }
     }
+}
+
+/// Where the service opened the core's control API for this user.
+///
+/// The service does not take this path from us: it derives the core's endpoint from the
+/// owner identity, so that two users' cores can never end up sharing one. That makes it
+/// different from the path the sidecar is told to listen on, and something the client has
+/// to be told rather than assume.
+pub(crate) fn core_api_ipc_path() -> Result<String> {
+    Ok(celestial_service_ipc::mihomo_ipc_path(&current_owner_identity()?))
 }
 
 pub fn is_service_ipc_path_exists() -> bool {
