@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { BaseDialog, Switch } from '@/components/base'
 import { useClashInfo } from '@/hooks/use-clash'
 import { useVerge } from '@/hooks/use-verge'
-import { isPortInUse } from '@/services/cmds'
+import { probeListener } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 import getSystem from '@/utils/get-system'
 
@@ -151,8 +151,13 @@ export const ClashPortViewer = forwardRef<ClashPortViewerRef>((_, ref) => {
 
     for (const port of changedPorts) {
       try {
-        const inUse = await isPortInUse(port)
-        if (inUse) {
+        // Mixed and SOCKS carry UDP too, so probe both transports for them.
+        const outcome = await probeListener({
+          address: `127.0.0.1:${port}`,
+          transports:
+            port === mixedPort || port === socksPort ? ['tcp', 'udp'] : ['tcp'],
+        })
+        if (outcome.status === 'conflict') {
           showNotice.error('settings.modals.clashPort.messages.portInUse', {
             port,
           })

@@ -552,6 +552,16 @@ export const getRunningMode = async () => {
   return invoke<string>('get_running_mode')
 }
 
+// 获取运行状态快照（转换由后端推送到 verge://run-state-changed）
+export const getRunState = async () => {
+  return invoke<IRunState>('get_run_state')
+}
+
+// 本次会话改用 Sidecar，不再询问服务
+export const allowServiceSidecar = async () => {
+  return invoke<void>('allow_service_sidecar')
+}
+
 // 获取应用运行时间
 export const getAppUptime = async () => {
   return invoke<number>('get_app_uptime')
@@ -607,13 +617,45 @@ export async function getNextUpdateTime(uid: string) {
   return invoke<number | null>('get_next_update_time', { uid })
 }
 
-export const isPortInUse = async (port: number) => {
-  try {
-    return await invoke<boolean>('is_port_in_use', { port })
-  } catch (error) {
-    console.error('检查端口使用状态失败:', error)
-    return false
-  }
+interface ToggleableProxyPort {
+  enabled: boolean
+  port: number
+}
+
+export interface ProxyPortSettings {
+  mixedPort: number
+  socks: ToggleableProxyPort
+  http: ToggleableProxyPort
+  redir: ToggleableProxyPort
+  tproxy: ToggleableProxyPort
+}
+
+export type ListenerTransport = 'tcp' | 'udp'
+
+export interface ListenerProbe {
+  address: string
+  transports: ListenerTransport[]
+}
+
+export type ListenerProbeOutcome =
+  | { status: 'available' }
+  | { status: 'conflict'; port: number; transport: ListenerTransport }
+  | { status: 'invalid'; message: string }
+  | { status: 'indeterminate'; message: string }
+
+export type SaveProxyPortsOutcome =
+  | { status: 'saved' }
+  | { status: 'conflict'; port: number; transport: ListenerTransport }
+
+/** Replaces the old is_port_in_use: the backend knows the real listener
+ *  transports and bind scope, so it can tell a UDP-only conflict from a TCP
+ *  one and skip sockets already owned by our own core. */
+export const probeListener = async (request: ListenerProbe) => {
+  return invoke<ListenerProbeOutcome>('probe_listener', { request })
+}
+
+export const saveProxyPorts = async (settings: ProxyPortSettings) => {
+  return invoke<SaveProxyPortsOutcome>('save_proxy_ports', { settings })
 }
 
 // Android only — TEMPORARY test surface for the VpnService permission/fd

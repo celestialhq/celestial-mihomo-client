@@ -11,6 +11,8 @@ mod module;
 mod process;
 pub mod utils;
 
+// Only `setup_window_state` reads this, and window state is desktop-only.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::constants::files;
 use crate::{
     core::handle,
@@ -195,7 +197,8 @@ mod app_init {
             tauri_plugin_clash_verge_sysinfo::commands::get_app_uptime,
             tauri_plugin_clash_verge_sysinfo::commands::app_is_admin,
             tauri_plugin_clash_verge_sysinfo::commands::export_diagnostic_info,
-            cmd::is_port_in_use,
+            cmd::probe_listener,
+            cmd::save_proxy_ports,
             cmd::get_sys_proxy,
             cmd::get_auto_proxy,
             cmd::open_app_dir,
@@ -220,6 +223,9 @@ mod app_init {
             cmd::reinstall_service,
             cmd::repair_service,
             cmd::is_service_available,
+            cmd::allow_service_sidecar,
+            cmd::get_service_status,
+            cmd::get_run_state,
             cmd::get_clash_info,
             cmd::patch_clash_config,
             cmd::patch_clash_mode,

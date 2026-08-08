@@ -14,6 +14,7 @@ pub enum FrontendEvent<'a> {
     TimerUpdated { profile_index: &'a String },
     ProfileUpdateStarted { uid: &'a String },
     ProfileUpdateCompleted { uid: &'a String },
+    RunStateChanged { state: serde_json::Value },
 }
 
 #[derive(Debug)]
@@ -41,6 +42,7 @@ impl NotificationSystem {
             FrontendEvent::TimerUpdated { profile_index } => ("verge://timer-updated", Ok(json!(profile_index))),
             FrontendEvent::ProfileUpdateStarted { uid } => ("profile-update-started", Ok(json!({ "uid": uid }))),
             FrontendEvent::ProfileUpdateCompleted { uid } => ("profile-update-completed", Ok(json!({ "uid": uid }))),
+            FrontendEvent::RunStateChanged { state } => ("verge://run-state-changed", Ok(state)),
         }
     }
 

@@ -1,5 +1,6 @@
 pub mod backup;
 pub mod handle;
+pub mod listener;
 pub mod logger;
 pub mod manager;
 mod notification;
@@ -140,17 +141,49 @@ pub mod tray {
 // elevated TUN permissions) has no Android analogue — Android grants VPN
 // access via a one-time user permission dialog on `VpnService`, not an
 // installable privileged helper.
+// Owner credentials and the runtime bundle exist only to talk to the
+// privileged service, so they follow `service`'s desktop gating rather than
+// being compiled into the Android build that has no service at all.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub(crate) mod owner_identity;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod runtime_bundle;
+
+// Run State, unlike the service itself, is not desktop-only: it also owns the
+// Running Mode, which mobile has just as much as desktop — the core there runs
+// in-process rather than under a privileged helper, but it still starts, stops
+// and is reported to the frontend. Only the Service-shaped questions degrade,
+// which `RealEnv` answers for mobile without a service.
+pub(crate) mod runstate;
+
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod service;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 pub mod service {
-    use anyhow::Result;
-    use once_cell::sync::Lazy;
-    use tokio::sync::Mutex;
+    // Every signature here mirrors the desktop module so that callers compile
+    // unchanged. The shapes are dictated by the real implementation, not by what a
+    // stub would need on its own, so the usual "this needn't be async / could be
+    // const / never returns Err" advice does not apply.
+    #![allow(
+        clippy::unused_async,
+        clippy::missing_const_for_fn,
+        clippy::unnecessary_wraps,
+        reason = "signatures mirror the desktop service module"
+    )]
 
-    #[derive(Debug, Clone, PartialEq, Eq)]
+    use anyhow::Result;
+
+    /// Mirrors the desktop enum so the shared command layer and the frontend see one
+    /// vocabulary. Mobile only ever reaches `NotInstalled`: there is no privileged
+    /// helper to install, and saying so is more use to the UI than a vague error.
+    #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+    #[serde(tag = "status", rename_all = "camelCase")]
     pub enum ServiceStatus {
+        Checking,
         Ready,
+        NotInstalled,
+        NeedsReinstall,
+        SidecarAllowed,
         InstallRequired,
         UninstallRequired,
         ReinstallRequired,
@@ -158,36 +191,37 @@ pub mod service {
         Unavailable(String),
     }
 
-    #[derive(Clone)]
-    pub struct ServiceManager(ServiceStatus);
+    pub struct ServiceManager;
 
     impl ServiceManager {
-        pub fn default() -> Self {
-            Self(ServiceStatus::Unavailable("not available on this platform".into()))
-        }
-
         pub fn config() -> celestial_service_ipc::IpcConfig {
             celestial_service_ipc::IpcConfig::default()
         }
 
-        pub async fn init(&mut self) -> Result<()> {
+        pub async fn init(&self) -> Result<()> {
             anyhow::bail!("service mode is not available on this platform")
         }
 
-        pub fn current(&self) -> ServiceStatus {
-            self.0.clone()
+        pub async fn current(&self) -> ServiceStatus {
+            ServiceStatus::NotInstalled
         }
 
-        pub async fn refresh(&mut self) -> Result<()> {
+        pub async fn refresh(&self) -> Result<()> {
             Ok(())
         }
 
-        pub async fn handle_service_status(&mut self, _status: &ServiceStatus) -> Result<()> {
+        // The core runs in-process here, so the sidecar is not a fallback to accept —
+        // it is the only thing there is, and the question is never asked.
+        pub fn allow_sidecar_for_session(&self) -> Result<()> {
+            Ok(())
+        }
+
+        pub async fn handle_service_status(&self, _status: &ServiceStatus) -> Result<()> {
             anyhow::bail!("service mode is not available on this platform")
         }
     }
 
-    pub static SERVICE_MANAGER: Lazy<Mutex<ServiceManager>> = Lazy::new(|| Mutex::new(ServiceManager::default()));
+    pub static SERVICE_MANAGER: ServiceManager = ServiceManager;
 
     pub async fn is_service_available() -> Result<()> {
         anyhow::bail!("service mode is not available on this platform")
@@ -198,6 +232,10 @@ pub mod service {
     }
 
     pub(super) async fn get_clash_logs_by_service() -> Result<Vec<compact_str::CompactString>> {
+        anyhow::bail!("service mode is not available on this platform")
+    }
+
+    pub(crate) async fn update_writer_by_service(_writer: &celestial_service_ipc::WriterConfig) -> Result<()> {
         anyhow::bail!("service mode is not available on this platform")
     }
 

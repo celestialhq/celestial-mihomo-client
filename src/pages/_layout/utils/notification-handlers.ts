@@ -85,6 +85,16 @@ export const handleNoticeMessage = (
         'settings.feedback.notifications.clash.changeFailed',
         msg,
       ),
+    // The backend turns TUN off once it is certain the run state cannot support
+    // it; this only reports what already happened.
+    'tun_mode::auto_disabled': () =>
+      showNotice.info(
+        'settings.sections.system.notifications.tunMode.autoDisabled',
+      ),
+    'tun_mode::auto_disable_failed': () =>
+      showNotice.error(
+        'settings.sections.system.notifications.tunMode.autoDisableFailed',
+      ),
   }
 
   const handler = handlers[status]

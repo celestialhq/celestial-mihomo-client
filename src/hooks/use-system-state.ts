@@ -1,11 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
 
-import { getRunningMode, isAdmin, isServiceAvailable } from '@/services/cmds'
-import { showNotice } from '@/services/notice-service'
+import { getRunState } from '@/services/cmds'
 import getSystem from '@/utils/get-system'
-
-import { useVerge } from './use-verge'
 
 // TUN mode on Android goes through VpnService's one-time permission dialog
 // (requested on demand when the user toggles it on), not an installable
@@ -13,108 +9,55 @@ import { useVerge } from './use-verge'
 // the way desktop's admin/service checks do.
 const IS_MOBILE_PLATFORM = getSystem() === 'android'
 
-export interface SystemState {
-  runningMode: 'Sidecar' | 'Service'
-  isAdminMode: boolean
-  isServiceOk: boolean
+/** Shared so the `verge://run-state-changed` listener can push straight into it. */
+export const RUN_STATE_QUERY_KEY = ['getRunState'] as const
+
+const defaultRunState: IRunState = {
+  mode: 'NotRunning',
+  service: 'unknown',
+  serviceUnavailableReason: null,
+  pendingAction: null,
+  sidecarAllowed: false,
+  isAdmin: false,
+  opInFlight: false,
+  serviceUsable: false,
+  tunCapable: false,
+  serviceNeedsAttention: false,
 }
-
-const defaultSystemState = {
-  runningMode: 'Sidecar',
-  isAdminMode: false,
-  isServiceOk: false,
-} as SystemState
-
-// Grace period for service initialization during startup
-const STARTUP_GRACE_MS = 10_000
 
 /**
  * 自定义 hook 用于获取系统运行状态
  * 包括运行模式、管理员状态、系统服务是否可用
+ *
+ * The backend owns this state and pushes every transition, so this hook only
+ * reads. It used to poll every two seconds, wait out a fixed ten-second startup
+ * grace period, and turn TUN off itself when it decided the service was missing
+ * — three separate guesses at a question the backend can answer exactly, and
+ * which it now answers via `tunCapable`.
  */
 export function useSystemState() {
-  const { verge, patchVerge } = useVerge()
-  const disablingTunRef = useRef(false)
-  const [isStartingUp, setIsStartingUp] = useState(true)
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsStartingUp(false), STARTUP_GRACE_MS)
-    return () => clearTimeout(timer)
-  }, [])
-
   const {
-    data: systemState = defaultSystemState,
+    data: runState = defaultRunState,
     refetch: mutateSystemState,
     isLoading,
   } = useQuery({
-    queryKey: ['getSystemState'],
-    queryFn: async () => {
-      const [runningMode, isAdminMode, isServiceOk] = await Promise.all([
-        getRunningMode(),
-        isAdmin(),
-        isServiceAvailable(),
-      ])
-      return { runningMode, isAdminMode, isServiceOk } as SystemState
-    },
-    refetchInterval: isStartingUp ? 2000 : 30000,
+    queryKey: RUN_STATE_QUERY_KEY,
+    queryFn: getRunState,
+    // A safety net for a dropped event, not the way state normally arrives.
+    refetchInterval: 60_000,
   })
 
-  const isSidecarMode = systemState.runningMode === 'Sidecar'
-  const isServiceMode = systemState.runningMode === 'Service'
-  const isTunModeAvailable =
-    IS_MOBILE_PLATFORM || systemState.isAdminMode || systemState.isServiceOk
-
-  const enable_tun_mode = verge?.enable_tun_mode
-  const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    if (enable_tun_mode === undefined) return
-
-    if (
-      !disablingTunRef.current &&
-      enable_tun_mode &&
-      !isTunModeAvailable &&
-      !isLoading &&
-      !isStartingUp
-    ) {
-      disablingTunRef.current = true
-      patchVerge({ enable_tun_mode: false })
-        .then(() => {
-          showNotice.info(
-            'settings.sections.system.notifications.tunMode.autoDisabled',
-          )
-        })
-        .catch((err) => {
-          console.error('[useVerge] 自动关闭TUN模式失败:', err)
-          showNotice.error(
-            'settings.sections.system.notifications.tunMode.autoDisableFailed',
-          )
-        })
-        .finally(() => {
-          // 避免 verge 数据更新不及时导致重复执行关闭 Tun 模式
-          cooldownTimerRef.current = setTimeout(() => {
-            disablingTunRef.current = false
-            cooldownTimerRef.current = null
-          }, 1000)
-        })
-    }
-
-    return () => {
-      if (cooldownTimerRef.current != null) {
-        clearTimeout(cooldownTimerRef.current)
-        cooldownTimerRef.current = null
-        disablingTunRef.current = false
-      }
-    }
-  }, [enable_tun_mode, isTunModeAvailable, patchVerge, isLoading, isStartingUp])
-
   return {
-    runningMode: systemState.runningMode,
-    isAdminMode: systemState.isAdminMode,
-    isServiceOk: systemState.isServiceOk,
-    isSidecarMode,
-    isServiceMode,
-    isTunModeAvailable,
+    runState,
+    runningMode: runState.mode,
+    isAdminMode: runState.isAdmin,
+    isServiceOk: runState.serviceUsable,
+    isSidecarMode: runState.mode === 'Sidecar',
+    isServiceMode: runState.mode === 'Service',
+    // Android's TUN *is* VpnService, granted by a permission dialog rather than
+    // backed by a privileged helper, so the service question never applies.
+    isTunModeAvailable: IS_MOBILE_PLATFORM || runState.tunCapable,
+    serviceNeedsAttention: runState.serviceNeedsAttention,
     mutateSystemState,
     isLoading,
   }

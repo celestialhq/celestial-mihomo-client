@@ -5,6 +5,7 @@ mod state;
 use anyhow::Result;
 use arc_swap::{ArcSwap, ArcSwapOption};
 use celestial_logger::AsyncLogger;
+use clash_verge_logging::{Type, logging};
 use once_cell::sync::Lazy;
 use std::{
     fmt,
@@ -16,13 +17,13 @@ use std::{
 };
 use tauri_plugin_shell::process::CommandChild;
 
-use crate::singleton;
+use crate::{core::runstate::RUN_STATE, singleton};
 #[cfg(target_os = "windows")]
 use std::os::windows::io::OwnedHandle;
 
 pub(crate) static CLASH_LOGGER: Lazy<Arc<AsyncLogger>> = Lazy::new(|| Arc::new(AsyncLogger::new()));
 
-#[derive(Debug, serde::Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, serde::Serialize, PartialEq, Eq)]
 pub enum RunningMode {
     Service,
     Sidecar,
@@ -51,22 +52,12 @@ pub struct CoreManager {
     config_update_in_progress: AtomicBool,
     // 串行化 start/stop/restart，避免生命周期操作互相穿插
     // （例如 restart 的 stop 与另一个 start 交错，留下无人管理的内核进程）。
-    lifecycle_lock: tokio::sync::Mutex<()>,
+    pub(crate) lifecycle_lock: tokio::sync::Mutex<()>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct State {
-    running_mode: ArcSwap<RunningMode>,
     child_sidecar: ArcSwapOption<CommandChild>,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            running_mode: ArcSwap::new(Arc::new(RunningMode::NotRunning)),
-            child_sidecar: ArcSwapOption::new(None),
-        }
-    }
 }
 
 impl Default for CoreManager {
@@ -87,8 +78,13 @@ impl CoreManager {
         Self::default()
     }
 
+    /// The mode the Core is *actually* running in, as recorded by Run State.
+    ///
+    /// The manager no longer keeps its own copy: it starts and stops the Core and
+    /// reports those transitions, while the resulting state — and everything derived
+    /// from it, such as PAC availability — belongs to one owner.
     pub fn get_running_mode(&self) -> Arc<RunningMode> {
-        Arc::clone(&self.state.load().running_mode.load())
+        RUN_STATE.mode_arc()
     }
 
     pub fn take_child_sidecar(&self) -> Option<CommandChild> {
@@ -103,9 +99,26 @@ impl CoreManager {
         self.last_update.load_full()
     }
 
-    pub fn set_running_mode(&self, mode: RunningMode) {
-        let state = self.state.load();
-        state.running_mode.store(Arc::new(mode));
+    /// The Core is now running, and serving, in `mode`.
+    pub fn core_started(&self, mode: RunningMode) {
+        RUN_STATE.core_started(mode);
+    }
+
+    /// The Core is no longer running.
+    pub fn core_stopped(&self) {
+        RUN_STATE.core_stopped();
+    }
+
+    /// A start attempt is under way: the Core is not serving yet, whatever the mode says.
+    ///
+    /// Must be paired with [`Self::core_start_settled`] on every path out.
+    pub fn core_starting(&self) {
+        RUN_STATE.core_starting();
+    }
+
+    /// The start attempt is over, however it ended: PAC goes back to following the mode.
+    pub fn core_start_settled(&self) {
+        RUN_STATE.core_start_settled();
     }
 
     pub fn set_running_child_sidecar(&self, child: CommandChild) {
@@ -117,11 +130,11 @@ impl CoreManager {
         self.last_update.store(Some(Arc::new(time)));
     }
 
-    fn try_start_config_update(&self) -> bool {
+    pub(crate) fn try_start_config_update(&self) -> bool {
         !self.config_update_in_progress.swap(true, Ordering::AcqRel)
     }
 
-    fn finish_config_update(&self) {
+    pub(crate) fn finish_config_update(&self) {
         self.config_update_in_progress.store(false, Ordering::Release);
     }
 
@@ -135,8 +148,57 @@ impl CoreManager {
     }
 
     pub async fn init(&self) -> Result<()> {
-        self.start_core().await?;
-        Ok(())
+        const MAX_PORT_FALLBACK_RETRIES: usize = 3;
+
+        if let Some(reason) = crate::config::Config::startup_core_block_reason() {
+            anyhow::bail!("core startup blocked after mixed proxy port fallback failure: {reason}");
+        }
+
+        // A core that fails to start because its port got taken between the
+        // startup probe and the actual bind is worth retrying on a new port —
+        // but only while nothing is running, and only a bounded number of times.
+        let mut retries = 0;
+        loop {
+            match self.start_core().await {
+                Ok(()) => {
+                    crate::config::Config::notify_startup_mixed_port_fallback();
+                    return Ok(());
+                }
+                Err(start_error) if retries < MAX_PORT_FALLBACK_RETRIES => {
+                    if !matches!(*self.get_running_mode(), RunningMode::NotRunning) {
+                        crate::config::Config::notify_startup_mixed_port_fallback();
+                        return Err(start_error);
+                    }
+                    match crate::config::Config::retry_startup_mixed_port_fallback().await {
+                        Ok(true) => {
+                            retries += 1;
+                            logging!(
+                                warn,
+                                Type::Core,
+                                "Retrying core startup after mixed proxy port fallback ({}/{})",
+                                retries,
+                                MAX_PORT_FALLBACK_RETRIES
+                            );
+                        }
+                        Ok(false) => {
+                            crate::config::Config::notify_startup_mixed_port_fallback();
+                            return Err(start_error);
+                        }
+                        Err(fallback_error) => {
+                            crate::config::Config::block_startup_core(&fallback_error);
+                            return Err(anyhow::anyhow!(
+                                "core startup failed: {start_error:#}; mixed proxy port fallback failed: \
+                                 {fallback_error:#}"
+                            ));
+                        }
+                    }
+                }
+                Err(error) => {
+                    crate::config::Config::notify_startup_mixed_port_fallback();
+                    return Err(error);
+                }
+            }
+        }
     }
 }
 

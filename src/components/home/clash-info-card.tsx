@@ -4,12 +4,14 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useClash } from '@/hooks/use-clash'
+import { useVerge } from '@/hooks/use-verge'
 import {
   useClashConfigData,
   useRulesData,
   useSystemData,
   useUptimeData,
 } from '@/providers/app-data-context'
+import { resolveDisplayedMixedPort } from '@/utils/mixed-port'
 
 import { EnhancedCard } from './enhanced-card'
 
@@ -24,6 +26,7 @@ const formatUptime = (uptimeMs: number) => {
 export const ClashInfoCard = () => {
   const { t } = useTranslation()
   const { version: clashVersion } = useClash()
+  const { verge } = useVerge()
   const { clashConfig } = useClashConfigData()
   const { rules } = useRulesData()
   const { uptime } = useUptimeData()
@@ -61,7 +64,10 @@ export const ClashInfoCard = () => {
             {t('home.components.clashInfo.fields.mixedPort')}
           </Typography>
           <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-            {clashConfig.mixedPort || '-'}
+            {resolveDisplayedMixedPort({
+              live: clashConfig.mixedPort,
+              selected: verge?.verge_mixed_port,
+            })}
           </Typography>
         </Stack>
         <Divider />
@@ -87,6 +93,7 @@ export const ClashInfoCard = () => {
   }, [
     clashConfig,
     clashVersion,
+    verge?.verge_mixed_port,
     t,
     formattedUptime,
     rules.length,

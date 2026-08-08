@@ -22,6 +22,19 @@ struct QueryParam {
 }
 
 // 关闭 embedded server 的信号发送端
+/// Whether the local PAC endpoint should serve. Derived from the running mode,
+/// never set independently: a PAC script pointing at a proxy port nothing is
+/// listening on is worse than no PAC at all.
+static PAC_AVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+pub fn set_pac_available(available: bool) {
+    PAC_AVAILABLE.store(available, std::sync::atomic::Ordering::Release);
+}
+
+pub fn pac_available() -> bool {
+    PAC_AVAILABLE.load(std::sync::atomic::Ordering::Acquire)
+}
+
 static SHUTDOWN_SENDER: OnceCell<Mutex<Option<oneshot::Sender<()>>>> = OnceCell::new();
 
 /// check whether there is already exists
