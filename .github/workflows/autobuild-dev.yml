@@ -549,6 +549,10 @@ jobs:
         needs.android.result == 'success'
       )
     runs-on: ubuntu-latest
+    # Publishing is uploads and API calls, not a build. Without a ceiling a
+    # single stalled request held this job — and with it the whole concurrency
+    # group — for over an hour, ignoring cancellation.
+    timeout-minutes: 30
     outputs:
       published: ${{ steps.publish.outputs.published }}
     steps:

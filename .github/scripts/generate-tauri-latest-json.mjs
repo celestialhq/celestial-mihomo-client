@@ -59,16 +59,55 @@ await fs.writeFile(
   )}\n`,
 )
 
+const SIGNATURE_TIMEOUT_MS = 30_000
+const SIGNATURE_ATTEMPTS = 4
+
+/**
+ * Fetch a signature, refusing to wait forever for it.
+ *
+ * Node's `fetch` has no default timeout, so a connection that stalls rather
+ * than failing hangs this script — and with it the publish step, and with that
+ * the whole concurrency group, until someone notices and cancels by hand. One
+ * such stall held a release job for over an hour with every asset already
+ * uploaded. A bounded wait turns that into a retry, and a bounded number of
+ * retries turns a genuinely unreachable asset into a failure that says so.
+ */
+async function fetchSignature(url, name) {
+  let lastError
+  for (let attempt = 1; attempt <= SIGNATURE_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(SIGNATURE_TIMEOUT_MS),
+      })
+      if (!response.ok) {
+        throw new Error(`status ${response.status}`)
+      }
+      return (await response.text()).trim()
+    } catch (error) {
+      lastError = error
+      if (attempt < SIGNATURE_ATTEMPTS) {
+        const delay = 2 ** (attempt - 1) * 1000
+        console.log(
+          `Failed to download ${name} (attempt ${attempt}/${SIGNATURE_ATTEMPTS}): ${error.message}; retrying in ${delay}ms`,
+        )
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+    }
+  }
+  throw new Error(
+    `Failed to download ${name} after ${SIGNATURE_ATTEMPTS} attempts: ${lastError?.message}`,
+  )
+}
+
 async function setPlatform(keys, assetName) {
   const asset = assetsByName.get(assetName)
   const signature = assetsByName.get(`${assetName}.sig`)
   if (!asset?.browser_download_url || !signature?.browser_download_url) return
 
-  const response = await fetch(signature.browser_download_url)
-  if (!response.ok) {
-    throw new Error(`Failed to download ${signature.name}: ${response.status}`)
-  }
-  const signatureText = (await response.text()).trim()
+  const signatureText = await fetchSignature(
+    signature.browser_download_url,
+    signature.name,
+  )
 
   for (const key of keys) {
     platforms[key] = {
