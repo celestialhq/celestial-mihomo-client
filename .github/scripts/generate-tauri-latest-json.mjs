@@ -1,5 +1,12 @@
 import fs from 'node:fs/promises'
 
+// Declared up here, not beside `fetchSignature` below: the top-level loop calls
+// it before execution ever reaches that point. Function declarations hoist,
+// `const` does not, so leaving these next to their user is a
+// use-before-initialization error that only appears at runtime.
+const SIGNATURE_TIMEOUT_MS = 30_000
+const SIGNATURE_ATTEMPTS = 4
+
 const assetsJsonPath = process.argv[2] || 'release-assets.json'
 const outputPath = process.argv[3] || 'latest.json'
 const version = requiredEnv('VERSION')
@@ -58,9 +65,6 @@ await fs.writeFile(
     2,
   )}\n`,
 )
-
-const SIGNATURE_TIMEOUT_MS = 30_000
-const SIGNATURE_ATTEMPTS = 4
 
 /**
  * Fetch a signature, refusing to wait forever for it.
