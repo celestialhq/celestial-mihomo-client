@@ -1,4 +1,4 @@
-use super::{CoreManager, RunningMode};
+use super::{ConfigUpdatePermit, CoreManager, RunningMode};
 use crate::{
     config::{Config, ConfigType, runtime::IRuntime},
     constants::timing,
@@ -10,7 +10,6 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use clash_verge_logging::{Type, logging};
-use scopeguard::defer;
 use smartstring::alias::String;
 use std::{collections::HashSet, path::PathBuf, time::Instant};
 use tauri_plugin_mihomo::Error as MihomoError;
@@ -46,14 +45,23 @@ impl CoreManager {
             });
         }
 
-        // Two overlapping updates used to interleave generate/validate/apply,
+        // Two overlapping updates would otherwise interleave generate/validate/apply,
         // so the core could end up running a config assembled from both.
-        if !self.try_start_config_update() {
-            logging!(info, Type::Core, "Configuration update is already running");
-            return Ok(ValidationOutcome::Busy);
-        }
-        defer! {
-            self.finish_config_update();
+        let permit = self.config_update_permit().await;
+        self.update_config_with_permit(&permit, force).await
+    }
+
+    /// [`Self::update_config_with_force`] for a caller that already owns the staged
+    /// configuration, so that staging and applying stay one indivisible operation.
+    pub(crate) async fn update_config_with_permit(
+        &self,
+        permit: &ConfigUpdatePermit<'_>,
+        force: bool,
+    ) -> Result<ValidationOutcome> {
+        if handle::Handle::global().is_exiting() {
+            return Ok(ValidationOutcome::Skipped {
+                reason: ValidationSkipReason::Exiting,
+            });
         }
 
         if !force && !self.should_update_config() {
@@ -67,13 +75,21 @@ impl CoreManager {
             self.set_last_update(Instant::now());
         }
 
-        self.perform_config_update().await
+        self.perform_config_update(permit).await
     }
 
     /// 只关心成败的调用方用这个：非 `Valid` 一律变成 `Err`，
     /// 免得 `Skipped`/`Busy` 被当成“更新成功”。
     pub async fn update_config_checked(&self) -> Result<()> {
-        let outcome = self.update_config_forced().await?;
+        Self::into_checked(self.update_config_forced().await?)
+    }
+
+    /// [`Self::update_config_checked`] for a caller that already owns the staged configuration.
+    pub(crate) async fn update_config_checked_with_permit(&self, permit: &ConfigUpdatePermit<'_>) -> Result<()> {
+        Self::into_checked(self.update_config_with_permit(permit, true).await?)
+    }
+
+    fn into_checked(outcome: ValidationOutcome) -> Result<()> {
         if outcome.is_valid() {
             Ok(())
         } else {
@@ -95,7 +111,7 @@ impl CoreManager {
         true
     }
 
-    async fn perform_config_update(&self) -> Result<ValidationOutcome> {
+    async fn perform_config_update(&self, permit: &ConfigUpdatePermit<'_>) -> Result<ValidationOutcome> {
         // Generation failures used to propagate as Err and leave the runtime draft
         // in place; surface them as an invalid outcome and drop the draft instead.
         if let Err(err) = Config::generate().await {
@@ -104,7 +120,7 @@ impl CoreManager {
             return Ok(ValidationOutcome::invalid_from_message(message));
         }
 
-        self.apply_generate_config_inner().await
+        self.apply_generate_config_inner(permit).await
     }
 
     /// 在已提交的 runtime 草稿上直接跑验证+应用，不重新生成整份配置。
@@ -113,20 +129,13 @@ impl CoreManager {
     where
         F: FnOnce(&mut IRuntime),
     {
-        if !self.try_start_config_update() {
-            logging!(info, Type::Core, "Configuration update is already running");
-            return Ok(ValidationOutcome::Busy);
-        }
-        defer! {
-            self.finish_config_update();
-        }
-
+        let permit = self.config_update_permit().await;
         Config::runtime().await.edit_draft(f);
-        self.apply_generate_config_inner().await
+        self.apply_generate_config_inner(&permit).await
     }
 
-    /// 调用方须已持有配置更新许可（见 `try_start_config_update`）。
-    async fn apply_generate_config_inner(&self) -> Result<ValidationOutcome> {
+    /// 调用方须已持有配置更新许可（见 [`CoreManager::config_update_permit`]）。
+    async fn apply_generate_config_inner(&self, _permit: &ConfigUpdatePermit<'_>) -> Result<ValidationOutcome> {
         match CoreConfigValidator::global().validate_config_outcome().await {
             Ok(outcome) if outcome.is_valid() => {
                 let run_path = Config::generate_file(ConfigType::Run).await?;

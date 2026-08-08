@@ -117,6 +117,10 @@ impl CoreManager {
             return Err(format!("Invalid clash core: {}", clash_core).into());
         }
 
+        // Held from the edit to the update: the verge draft is one global slot, and
+        // committing it while another patch has staged its own change would publish that
+        // change unvalidated. See `ConfigUpdatePermit`.
+        let permit = self.config_update_permit().await;
         Config::verge().await.edit_draft(|d| {
             d.clash_core = Some(clash_core.to_owned());
         });
@@ -125,7 +129,7 @@ impl CoreManager {
         let verge_data = Config::verge().await.latest_arc();
         verge_data.save_file().await.map_err(|e| e.to_string())?;
 
-        self.update_config_checked().await.stringify_err()?;
+        self.update_config_checked_with_permit(&permit).await.stringify_err()?;
         Ok(())
     }
 

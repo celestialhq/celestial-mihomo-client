@@ -619,8 +619,7 @@ impl StageRequest {
     /// start materialises the same bundle and is refused the same way, so replacing a working
     /// core would add an outage to a failure that already happened.
     pub(super) const fn is_about_the_bundle(code: u16) -> bool {
-        code == ServiceErrorCode::InvalidRuntimeAsset as u16
-            || code == ServiceErrorCode::InvalidInstallLocation as u16
+        code == ServiceErrorCode::InvalidRuntimeAsset as u16 || code == ServiceErrorCode::InvalidInstallLocation as u16
     }
 }
 

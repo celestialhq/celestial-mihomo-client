@@ -17,7 +17,6 @@ use crate::{
 };
 use anyhow::{Context as _, Result, anyhow, bail};
 use clash_verge_logging::{Type, logging};
-use scopeguard::defer;
 
 pub async fn probe_listener(request: ListenerProbe) -> Result<ListenerProbeOutcome> {
     AsyncHandler::spawn_blocking(move || probe_listener_sync(&request))
@@ -29,12 +28,10 @@ pub async fn probe_listener(request: ListenerProbe) -> Result<ListenerProbeOutco
 pub async fn save_proxy_ports(settings: ProxyPortSettings) -> Result<SaveProxyPortsOutcome> {
     settings.validate()?;
     let manager = CoreManager::global();
-    if !manager.try_start_config_update() {
-        bail!("configuration update is already running");
-    }
-    defer! {
-        manager.finish_config_update();
-    }
+    // Held across staging, probing, validating and activating: this edits the same global
+    // drafts every other configuration change does, and `discard_proxy_port_drafts` below
+    // would otherwise throw away a concurrent patch's staged edit. See `ConfigUpdatePermit`.
+    let _permit = manager.config_update_permit().await;
 
     let current = current_runtime_mapping().await?;
     stage_proxy_ports(&settings).await;

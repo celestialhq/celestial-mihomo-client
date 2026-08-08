@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, IVerge},
-    core::handle,
+    core::{CoreManager, handle},
 };
 use clash_verge_logging::{Type, logging};
 use std::env;
@@ -8,9 +8,18 @@ use tauri_plugin_clipboard_manager::ClipboardExt as _;
 
 /// Toggle system proxy on/off
 pub async fn toggle_system_proxy() -> bool {
-    let verge = Config::verge().await;
-    let current = verge.latest_arc().enable_system_proxy.unwrap_or(false);
-    let auto_close_connection = verge.latest_arc().auto_close_connection.unwrap_or(false);
+    // The flip is derived from the current value, so the read has to happen under the same
+    // permit as the write. See `ConfigUpdatePermit`.
+    let permit = CoreManager::global().config_update_permit().await;
+    // One snapshot for both reads, so they cannot disagree about which configuration
+    // they came from.
+    let (current, auto_close_connection) = {
+        let verge = Config::verge().await.latest_arc();
+        (
+            verge.enable_system_proxy.unwrap_or(false),
+            verge.auto_close_connection.unwrap_or(false),
+        )
+    };
 
     // 如果当前系统代理即将关闭，且自动关闭连接设置为true，则关闭所有连接
     if current
@@ -21,7 +30,8 @@ pub async fn toggle_system_proxy() -> bool {
     }
 
     let requested = !current;
-    let patch_result = super::patch_verge(
+    let patch_result = super::patch_verge_with_permit(
+        &permit,
         &IVerge {
             enable_system_proxy: Some(requested),
             ..IVerge::default()
@@ -29,6 +39,8 @@ pub async fn toggle_system_proxy() -> bool {
         false,
     )
     .await;
+    // The read and the write are done; what follows only refreshes the interface.
+    drop(permit);
 
     match patch_result {
         Ok(_) => {
@@ -45,18 +57,26 @@ pub async fn toggle_system_proxy() -> bool {
 /// Toggle TUN mode on/off
 /// Returns the updated toggle state
 pub async fn toggle_tun_mode(not_save_file: Option<bool>) -> bool {
+    // Read and write under one permit. Reading first and patching second let a fast
+    // off-then-on double toggle derive both flips from the same starting value, so the
+    // second one re-applied what the first had already done and the tunnel stayed down.
+    let permit = CoreManager::global().config_update_permit().await;
     let current = Config::verge().await.latest_arc().enable_tun_mode.unwrap_or(false);
     let enable = !current;
 
-    match super::patch_verge(
+    let patch_result = super::patch_verge_with_permit(
+        &permit,
         &IVerge {
             enable_tun_mode: Some(enable),
             ..IVerge::default()
         },
         not_save_file.unwrap_or(false),
     )
-    .await
-    {
+    .await;
+    // The read and the write are done; what follows only refreshes the interface.
+    drop(permit);
+
+    match patch_result {
         Ok(_) => {
             handle::Handle::refresh_verge();
             enable

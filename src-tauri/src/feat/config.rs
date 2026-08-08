@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, IVerge},
-    core::{CoreManager, autostart, handle, hotkey, logger::Logger, sysopt, tray},
+    core::{CoreManager, autostart, handle, hotkey, logger::Logger, manager::ConfigUpdatePermit, sysopt, tray},
     module::{auto_backup::AutoBackupManager, lightweight},
 };
 use anyhow::Result;
@@ -11,9 +11,15 @@ use serde_yaml_ng::Mapping;
 
 /// Patch Clash configuration
 pub async fn patch_clash(patch: &Mapping) -> Result<()> {
+    // Held across the whole patch: see `ConfigUpdatePermit`. Taken before the first
+    // `edit_draft` so that staging, applying and committing are one operation.
+    let permit = CoreManager::global().config_update_permit().await;
     Config::clash().await.edit_draft(|d| d.patch_config(patch));
 
-    let res = {
+    // Not `?` inside the block: that returned from `patch_clash` directly, so the `Err`
+    // arm below never ran and a failed patch left its edit staged in the draft for
+    // whatever committed next to pick up.
+    let res = async {
         // 激活订阅
         if patch.get("secret").is_some() || patch.get("external-controller").is_some() {
             Config::generate().await?;
@@ -23,11 +29,12 @@ pub async fn patch_clash(patch: &Mapping) -> Result<()> {
                 tray::Tray::global().update_menu_and_icon().await;
             }
             Config::runtime().await.edit_draft(|d| d.patch_config(patch));
-            CoreManager::global().update_config_checked().await?;
+            CoreManager::global().update_config_checked_with_permit(&permit).await?;
         }
         handle::Handle::refresh_clash();
         <Result<()>>::Ok(())
-    };
+    }
+    .await;
     match res {
         Ok(()) => {
             Config::clash().await.apply();
@@ -199,14 +206,18 @@ fn determine_update_flags(patch: &IVerge) -> UpdateFlags {
 }
 
 #[allow(clippy::cognitive_complexity)]
-async fn process_terminated_flags(update_flags: UpdateFlags, patch: &IVerge) -> Result<()> {
+async fn process_terminated_flags(
+    permit: &ConfigUpdatePermit<'_>,
+    update_flags: UpdateFlags,
+    patch: &IVerge,
+) -> Result<()> {
     // Process updates based on flags
     if update_flags.contains(UpdateFlags::RESTART_CORE) {
         Config::generate().await?;
         CoreManager::global().restart_core().await?;
     }
     if update_flags.contains(UpdateFlags::CLASH_CONFIG) {
-        CoreManager::global().update_config_checked().await?;
+        CoreManager::global().update_config_checked_with_permit(permit).await?;
         handle::Handle::refresh_clash();
     }
     if update_flags.contains(UpdateFlags::VERGE_CONFIG) {
@@ -269,14 +280,31 @@ async fn process_terminated_flags(update_flags: UpdateFlags, patch: &IVerge) -> 
 }
 
 pub async fn patch_verge(patch: &IVerge, not_save_file: bool) -> Result<()> {
+    // Held across the whole patch: see `ConfigUpdatePermit`. Toggling TUN off and straight
+    // back on used to run two of these at once, and the first committed the second's staged
+    // value while the Core kept the first's — the setting read as enabled with no tunnel
+    // behind it.
+    let permit = CoreManager::global().config_update_permit().await;
+    patch_verge_with_permit(&permit, patch, not_save_file).await
+}
+
+/// [`patch_verge`] for a caller that already owns the staged configuration.
+///
+/// A caller that derives the patch from the current configuration — a toggle, say — needs
+/// this: reading outside the permit and writing inside it lets two fast toggles compute
+/// their flip from the same starting value, so the second one re-applies the first.
+pub(crate) async fn patch_verge_with_permit(
+    permit: &ConfigUpdatePermit<'_>,
+    patch: &IVerge,
+    not_save_file: bool,
+) -> Result<()> {
     Config::verge().await.edit_draft(|d| d.patch_config(patch));
 
     let update_flags = determine_update_flags(patch);
     logging!(debug, Type::Setup, "Determined update flags: {:?}", update_flags);
-    let process_flag_result: std::result::Result<(), anyhow::Error> = {
-        process_terminated_flags(update_flags, patch).await?;
-        Ok(())
-    };
+    // Not `?`: that returned from `patch_verge` directly, so the discard below never ran and
+    // a failed patch left its edit staged for the next `apply` to commit by accident.
+    let process_flag_result = process_terminated_flags(permit, update_flags, patch).await;
 
     if let Err(err) = process_flag_result {
         Config::verge().await.discard();

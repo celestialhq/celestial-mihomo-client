@@ -7,14 +7,7 @@ use arc_swap::{ArcSwap, ArcSwapOption};
 use celestial_logger::AsyncLogger;
 use clash_verge_logging::{Type, logging};
 use once_cell::sync::Lazy;
-use std::{
-    fmt,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::Instant,
-};
+use std::{fmt, sync::Arc, time::Instant};
 use tauri_plugin_shell::process::CommandChild;
 
 use crate::{core::runstate::RUN_STATE, singleton};
@@ -40,6 +33,22 @@ impl fmt::Display for RunningMode {
     }
 }
 
+/// Exclusive ownership of the staged configuration, for as long as it is held.
+///
+/// Each configuration file has exactly one global draft slot, so "edit the draft, await
+/// something, then commit or discard it" is only correct while nothing else touches that
+/// slot. Two overlapping edits interleaved: the second one's `edit_draft` landed inside the
+/// first one's update, so the first committed a value it never validated while the Core ran
+/// the value the first had staged. Toggling TUN off and straight back on left the setting
+/// saved as enabled and the Core running without it — the interface said the tunnel was up
+/// while no traffic went through it.
+///
+/// Hold this from the first `edit_draft` to the final `apply`/`discard` and the draft has
+/// one owner throughout.
+pub(crate) struct ConfigUpdatePermit<'a> {
+    _guard: tokio::sync::MutexGuard<'a, ()>,
+}
+
 #[derive(Debug)]
 pub struct CoreManager {
     state: ArcSwap<State>,
@@ -47,9 +56,11 @@ pub struct CoreManager {
     // Windows Job Object，绑定 sidecar 生命周期到本进程（KILL_ON_JOB_CLOSE）。
     #[cfg(target_os = "windows")]
     job_handle: ArcSwapOption<OwnedHandle>,
-    // 串行化配置更新。非阻塞：抢不到就返回 Busy，所以与 lifecycle_lock
-    // 组合也不会死锁（锁序 config_update_in_progress -> lifecycle_lock）。
-    config_update_in_progress: AtomicBool,
+    // Serialises staging and applying a configuration change; see [`ConfigUpdatePermit`].
+    // Blocking, not try-and-drop: a caller that cannot have the permit now waits for it,
+    // because the alternative is discarding a change the user asked for. Lock order is
+    // config_update_lock -> lifecycle_lock, and nothing takes them the other way round.
+    config_update_lock: tokio::sync::Mutex<()>,
     // 串行化 start/stop/restart，避免生命周期操作互相穿插
     // （例如 restart 的 stop 与另一个 start 交错，留下无人管理的内核进程）。
     pub(crate) lifecycle_lock: tokio::sync::Mutex<()>,
@@ -67,7 +78,7 @@ impl Default for CoreManager {
             last_update: ArcSwapOption::new(None),
             #[cfg(target_os = "windows")]
             job_handle: ArcSwapOption::new(None),
-            config_update_in_progress: AtomicBool::new(false),
+            config_update_lock: tokio::sync::Mutex::new(()),
             lifecycle_lock: tokio::sync::Mutex::new(()),
         }
     }
@@ -130,12 +141,14 @@ impl CoreManager {
         self.last_update.store(Some(Arc::new(time)));
     }
 
-    pub(crate) fn try_start_config_update(&self) -> bool {
-        !self.config_update_in_progress.swap(true, Ordering::AcqRel)
-    }
-
-    pub(crate) fn finish_config_update(&self) {
-        self.config_update_in_progress.store(false, Ordering::Release);
+    /// Take exclusive ownership of the staged configuration, waiting if someone else holds it.
+    ///
+    /// See [`ConfigUpdatePermit`] for what the permit protects and why this waits rather
+    /// than reporting the configuration as busy.
+    pub(crate) async fn config_update_permit(&self) -> ConfigUpdatePermit<'_> {
+        ConfigUpdatePermit {
+            _guard: self.config_update_lock.lock().await,
+        }
     }
 
     /// Replaces the Windows Job Object handle owned by the core manager.
@@ -203,3 +216,33 @@ impl CoreManager {
 }
 
 singleton!(CoreManager, CORE_MANAGER);
+
+#[cfg(test)]
+mod tests {
+    use super::CoreManager;
+    use std::time::Duration;
+
+    /// The permit is what makes "edit the draft, await, commit" single-owner. It has to
+    /// wait rather than refuse: the previous non-blocking version reported the
+    /// configuration as busy, and the caller's staged change was simply lost.
+    #[tokio::test]
+    async fn a_second_config_update_waits_for_the_first() {
+        let manager = CoreManager::default();
+
+        let held = manager.config_update_permit().await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), manager.config_update_permit())
+                .await
+                .is_err(),
+            "a second permit must not be granted while the first is still held"
+        );
+
+        drop(held);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), manager.config_update_permit())
+                .await
+                .is_ok(),
+            "the permit must be granted once the previous holder releases it"
+        );
+    }
+}

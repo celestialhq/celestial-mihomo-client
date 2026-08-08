@@ -16,6 +16,9 @@ pub async fn save_webdav_config(url: String, username: String, password: String)
         webdav_password: Some(password),
         ..IVerge::default()
     };
+    // The verge draft is one global slot; committing it while another patch has staged a
+    // change would publish that change too. See `ConfigUpdatePermit`.
+    let _permit = core::CoreManager::global().config_update_permit().await;
     Config::verge().await.edit_draft(|e| e.patch_config(&patch));
     Config::verge().await.apply();
 
