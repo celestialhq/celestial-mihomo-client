@@ -228,12 +228,25 @@ async fn init_dns_config() -> Result<()> {
     Ok(())
 }
 
-/// 目录是否存在且非空
-async fn dir_has_entries(dir: &Path) -> bool {
-    match fs::read_dir(dir).await {
-        Ok(mut entries) => matches!(entries.next_entry().await, Ok(Some(_))),
-        Err(_) => false,
-    }
+/// Whether this directory holds a configuration the user has actually set up.
+///
+/// The test used to be "does the directory contain anything at all", and that is a different
+/// question. A start writes a window-geometry file and a log directory into the app directory
+/// before anything reads user data, so a single earlier start was enough to make every later
+/// one conclude the user had already moved across — and the migration below would return
+/// without ever looking at the old directory. One file of window geometry, and an upgrading
+/// user got an empty client with all their subscriptions still under the previous identifier.
+///
+/// A profile index naming a current profile is what actually distinguishes a directory
+/// somebody is using from one an interrupted start left behind.
+async fn dir_has_configured_profile(dir: &Path) -> bool {
+    let Ok(text) = fs::read_to_string(dir.join(dirs::PROFILE_YAML)).await else {
+        return false;
+    };
+    serde_yaml_ng::from_str::<IProfiles>(&text)
+        .ok()
+        .and_then(|profiles| profiles.current)
+        .is_some()
 }
 
 /// 递归复制目录（rename 失败时的兜底，例如旧目录跨卷或被占用）。
@@ -263,17 +276,17 @@ async fn copy_dir_all(src: &Path, dest: &Path) -> Result<()> {
 /// 备份留在旧目录里，升级上来的用户会看到一个空客户端。这里在任何东西读写新
 /// 目录之前跑一次，所以必须留在 [`init_config`] 的最前面。
 ///
-/// 只在新目录不存在或为空时迁移——新目录里已经有数据就说明用户已经在新版上用过了，
-/// 这时候覆盖会造成真正的数据丢失。
+/// 只在新目录还没有用户配置时迁移——新目录里已经有配置就说明用户已经在新版上用过了，
+/// 这时候覆盖会造成真正的数据丢失。见 [`dir_has_configured_profile`]。
 async fn migrate_legacy_app_home_dir() -> Result<()> {
     let new_dir = dirs::app_home_dir()?;
 
-    if dir_has_entries(&new_dir).await {
+    if dir_has_configured_profile(&new_dir).await {
         return Ok(());
     }
 
     for legacy_dir in dirs::legacy_app_home_dirs() {
-        if legacy_dir == new_dir || !dir_has_entries(&legacy_dir).await {
+        if legacy_dir == new_dir || !dir_has_configured_profile(&legacy_dir).await {
             continue;
         }
 
@@ -295,10 +308,15 @@ async fn migrate_legacy_app_home_dir() -> Result<()> {
                 logging!(info, Type::Setup, "app data migrated to {:?}", new_dir);
             }
             Err(err) => {
+                // The ordinary case, not an exception: the new directory usually holds a log
+                // directory and whatever defaults an earlier start wrote, which is enough to
+                // stop a rename. Copying overwrites those defaults, which is the point —
+                // nothing here is a configuration the user made, or the check above would
+                // have stopped this.
                 logging!(
-                    warn,
+                    info,
                     Type::Setup,
-                    "failed to rename legacy app dir ({err}), falling back to copy"
+                    "cannot rename the legacy app dir onto a non-empty one ({err}), copying instead"
                 );
                 copy_dir_all(&legacy_dir, &new_dir).await?;
                 // 故意保留旧目录：复制过程中出问题时用户还能手动找回数据
@@ -573,4 +591,59 @@ async fn handle_copy(src: &PathBuf, dest: &PathBuf, file: &str) {
             );
         }
     };
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used, reason = "tests assert by panicking")]
+mod tests {
+    use super::dir_has_configured_profile;
+
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("celestial-migrate-{}-{name}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("scratch dir");
+        dir
+    }
+
+    /// The regression. A start writes a window-geometry file and a log directory before
+    /// anything reads user data; the previous test treated that as "already migrated" and
+    /// left the user's subscriptions behind under the old identifier.
+    #[tokio::test]
+    async fn a_directory_a_start_touched_is_not_a_directory_in_use() {
+        let dir = scratch("touched");
+        std::fs::write(dir.join("window_state.json"), "{}").expect("window state");
+        std::fs::create_dir_all(dir.join("logs")).expect("logs");
+
+        assert!(
+            !dir_has_configured_profile(&dir).await,
+            "leftovers from a start must not pass for a configuration the user set up"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// What a freshly initialised directory looks like: the index exists, but nothing is
+    /// selected in it. Still not a reason to skip the migration.
+    #[tokio::test]
+    async fn an_index_with_nothing_selected_is_not_in_use() {
+        let dir = scratch("defaults");
+        std::fs::write(dir.join("profiles.yaml"), "current: null\nitems: []\n").expect("index");
+
+        assert!(!dir_has_configured_profile(&dir).await);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn an_index_naming_a_current_profile_is_in_use() {
+        let dir = scratch("configured");
+        std::fs::write(
+            dir.join("profiles.yaml"),
+            "current: Rf8Ye9Kz5nCx\nitems:\n  - uid: Rf8Ye9Kz5nCx\n    type: remote\n",
+        )
+        .expect("index");
+
+        assert!(
+            dir_has_configured_profile(&dir).await,
+            "a configuration the user set up must stop the migration overwriting it"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }
