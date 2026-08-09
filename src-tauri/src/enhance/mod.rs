@@ -280,7 +280,6 @@ async fn collect_profile_items(profiles: &IProfiles) -> Result<ProfileItems> {
         data: ChainType::Script(tmpl::ITEM_SCRIPT.into()),
     });
 
-
     Ok(ProfileItems {
         config: current,
         merge_item,

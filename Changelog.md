@@ -1,3 +1,40 @@
+## v3.0.0
+
+### New
+
+- **Android support.** The mihomo core is embedded and runs in-process through a cgo bridge, TUN is provided by `VpnService` with a real file-descriptor handoff, and CI builds and signs a universal APK for every release. Proxies, rules, connections and logs all work against the embedded core; desktop-only settings (autostart, lite mode, hotkeys) are hidden rather than shown as broken.
+- **Run State store.** Service health, running mode, pending privileged action and the privileged-operation lock now have a single owner instead of being re-derived in several places. The frontend receives a snapshot on every transition, so it no longer polls to notice that the core stopped or the service came back.
+- **Owner-authenticated service IPC.** The privileged helper now authenticates the owner of each request, keeps one runtime generation per owner, and the client detects and recovers from losing ownership of a running core.
+- **Node choices survive a core start.** The node picked in each proxy group is recorded in the profile and put back when a core starts, not only when a profile is switched. Previously this relied entirely on mihomo's own `cache.db`, which does not hold when `store-selected` is absent from a merge template or when the core starts in a directory nothing has run in.
+- Starting the core falls back to a free mixed port instead of refusing to start when the configured one is taken.
+
+### Improved
+
+- **A subscription update no longer replaces the core.** In service mode the core refuses to reload a configuration from outside its own directory, so every change fell through to a full restart — which tears down TUN and takes the device's network with it. The service now stages the configuration into the generation the core is already running in, and the core reloads in place. An automatic subscription refresh no longer drops connections.
+- Configuration validation reports a structured outcome rather than a bare boolean, so "valid", "invalid", "skipped" and "busy" are no longer indistinguishable to the caller or the frontend.
+- Core start, stop and restart are serialized, and on Windows the sidecar's lifetime is tied to the app through a Job Object so a crash cannot leave an orphaned core holding the proxy ports.
+- The privileged installer and uninstaller run under tighter constraints, and a panic during app setup degrades startup instead of aborting it.
+- Dependency and toolchain updates: Renovate batches, GitHub Actions v7, Go 1.26.5, and the reported npm advisories cleared.
+
+### Changed
+
+- Moved to the `celestialhq` organization. Application data is migrated from the previous identifier on first start.
+- Reconciling the profile's recorded node choices against the running core moved from the frontend into the backend; the frontend copy is gone, because two reconcilers writing the same record would race.
+- The vendored `tauri-plugin-mihomo` fork was dropped, `kode-bridge` now comes through the `celestialhq` fork, and the bundled privileged service is pinned to the version the client is built against instead of whatever was published last.
+
+### Fixed
+
+- Toggling TUN off and straight back on left the setting saved as enabled while the core ran without it: the interface said the tunnel was up and no traffic went through it. Each configuration file has one draft slot, and two overlapping changes were committing each other's values.
+- In service mode the client talked to the sidecar's socket rather than the endpoint the service actually opened, so traffic flowed while logs, connections, rules, proxy switching and delay tests were all silently dead.
+- Deleting a profile unlinked its files before writing the index that referenced them, and validated the result only afterwards. Both halves are now ordered so that nothing irreversible happens before the configuration without that profile is known to work.
+- The profile editors could destroy the file they had opened, and a chain file that did not exist yet was treated as broken rather than empty.
+- The subscription `x-hwid` is now built from characters Remnawave 3.0 accepts. A single character outside its set made the panel ignore the header entirely, so affected devices never registered at all.
+- Upgrading from 2.x could leave every subscription behind under the old identifier: the migration treated "the directory contains anything" as "the user already moved across", and a window-geometry file written by an earlier start satisfied that.
+- A helper too old to state which protocol it speaks is reported as needing reinstallation instead of failing as a JSON parse error, and installing over an incompatible helper reinstalls it.
+- macOS and Linux AppImage builds had no entry in the updater manifest at all, so neither platform could ever update itself.
+- A stalled signature download could hold the publish job — and the whole concurrency group — indefinitely; releases are now finalized before the updater manifest is published, and draft release IDs are resolved by listing rather than by tag.
+- A pending configuration draft is rebased onto data committed while it was open, instead of silently rolling that data back.
+
 ## v2.1.0
 
 ### New
