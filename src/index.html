@@ -7,7 +7,14 @@
       href="./assets/image/logo.ico"
       type="image/x-icon"
     />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- `viewport-fit=cover` is what makes `env(safe-area-inset-*)` resolve to anything
+         other than 0. Android 15+ draws every app edge-to-edge with no opt-out, so the
+         WebView extends under the status bar and the gesture bar; without this the insets
+         read as zero and the layout sits beneath the clock and battery icons. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <title>Celestial</title>
     <style>
       :root {

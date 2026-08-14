@@ -166,8 +166,17 @@ export const NoticeManager: React.FC<NoticeManagerProps> = ({ position }) => {
     <Box
       sx={{
         position: 'fixed',
-        top: anchorOrigin.vertical === 'top' ? '20px' : 'auto',
-        bottom: anchorOrigin.vertical === 'bottom' ? '20px' : 'auto',
+        // Fixed positioning is relative to the viewport, so the layout's safe-area
+        // padding does not apply here — a top-anchored notice would slide under the
+        // Android status bar. The insets are 0 on desktop.
+        top:
+          anchorOrigin.vertical === 'top'
+            ? 'calc(20px + env(safe-area-inset-top))'
+            : 'auto',
+        bottom:
+          anchorOrigin.vertical === 'bottom'
+            ? 'calc(20px + env(safe-area-inset-bottom))'
+            : 'auto',
         left: anchorOrigin.horizontal === 'left' ? '20px' : 'auto',
         right: anchorOrigin.horizontal === 'right' ? '20px' : 'auto',
         zIndex: 1500,

@@ -5,6 +5,18 @@
   flex-direction: column;
   overflow: hidden;
 
+  /* Android 15+ has no opt-out of edge-to-edge, so the window — and with it the
+     WebView — runs the full height of the screen and the status bar floats on top of
+     whatever we draw. Reserve its height at the top of the frame. `border-box` keeps
+     the inset inside the 100vh rather than adding to it, which would push the bottom
+     nav off-screen. Both values are 0 everywhere else, so desktop is untouched. */
+  &--mobile {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
   .layout-content {
     /* New container for the flex layout */
     display: flex;
