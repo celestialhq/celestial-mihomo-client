@@ -125,6 +125,7 @@ jobs:
                 "Celestial_${version}_amd64.deb"
                 "Celestial-${version}-1.x86_64.rpm"
                 "Celestial_${version}_universal.apk"
+                "Celestial_${version}_universal.aab"
               )
 
               # An artifact the updater manifest is built from is useless
@@ -519,8 +520,18 @@ jobs:
       - name: Initialize Android project
         run: pnpm exec tauri android init
 
-      - name: Build universal APK
-        run: pnpm exec tauri android build --apk
+      # Play only accepts an App Bundle for a new app, so build both: the APK stays the
+      # artifact people sideload from GitHub, the AAB is what gets uploaded to Play.
+      - name: Build universal APK and AAB
+        env:
+          # Ship the native libraries stripped. Unstripped the arm64 slice alone was
+          # 190 MB (libapp_lib.so 113 MB, libmihomo_wrapper.so 77 MB) and Play measures
+          # the per-device download against a hard ceiling; stripped they are 33 MB and
+          # 55 MB. Set per-job rather than in `[profile.release]` so desktop release
+          # builds keep the debug info their crash reports rely on.
+          CARGO_PROFILE_RELEASE_DEBUG: 'false'
+          CARGO_PROFILE_RELEASE_STRIP: symbols
+        run: pnpm exec tauri android build --apk --aab
 
       # `tauri android init` regenerates gen/android from Tauri's stock template
       # on every run (the dir is gitignored), so the local `signingConfigs`
@@ -562,13 +573,51 @@ jobs:
           rm -f "$keystore"
           echo "SIGNED_APK=$RUNNER_TEMP/celestial-universal-signed.apk" >> "$GITHUB_ENV"
 
-      - name: Collect APK
+      # apksigner cannot sign a bundle — an AAB carries a plain JAR signature, which Play
+      # verifies against the upload key before re-signing the APKs it generates. Hence
+      # jarsigner, and no zipalign (Play aligns what it generates).
+      - name: Sign universal AAB
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          aab=$(find src-tauri/gen/android/app/build/outputs -name '*.aab' -print -quit 2>/dev/null || true)
+          if [[ -z "$aab" ]]; then
+            echo "::error::Gradle produced no AAB"
+            find src-tauri/gen/android/app/build/outputs -maxdepth 3 -type d 2>/dev/null || true
+            exit 1
+          fi
+          echo "Built AAB: $aab"
+          if [[ -z "${ANDROID_KEYSTORE_BASE64:-}" ]]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 is unset — refusing to publish an unsigned AAB"
+            exit 1
+          fi
+          keystore="$RUNNER_TEMP/celestial-release.jks"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore"
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore "$keystore" \
+            -storepass:env ANDROID_KEYSTORE_PASSWORD \
+            -keypass:env ANDROID_KEY_PASSWORD \
+            -signedjar "$RUNNER_TEMP/celestial-universal-signed.aab" \
+            "$aab" "$ANDROID_KEY_ALIAS"
+          jarsigner -verify "$RUNNER_TEMP/celestial-universal-signed.aab"
+          rm -f "$keystore"
+          echo "SIGNED_AAB=$RUNNER_TEMP/celestial-universal-signed.aab" >> "$GITHUB_ENV"
+
+      - name: Collect APK and AAB
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release-assets
           cp "$SIGNED_APK" \
             "release-assets/Celestial_${{ needs.prepare.outputs.version }}_universal.apk"
+          cp "$SIGNED_AAB" \
+            "release-assets/Celestial_${{ needs.prepare.outputs.version }}_universal.aab"
+          ls -lh release-assets
 
       - name: Generate SHA-256 files
         run: node .github/scripts/checksum-assets.mjs release-assets

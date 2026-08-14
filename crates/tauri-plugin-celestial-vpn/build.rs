@@ -60,7 +60,11 @@ fn build_mihomo_wrapper() {
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| "unknown".to_string());
-    let ldflags = format!("-X github.com/metacubex/mihomo/constant.Version={version}");
+    // `-s -w` drop the symbol table and DWARF. The Go core is shipped, never debugged
+    // on-device, and unstripped it was 77 MB in the APK against ~50 MB stripped — which
+    // matters because Play measures the per-device download against a hard ceiling and
+    // the arm64 slice alone was 190 MB.
+    let ldflags = format!("-s -w -X github.com/metacubex/mihomo/constant.Version={version}");
 
     let status = std::process::Command::new("go")
         .current_dir(&wrapper_dir)
