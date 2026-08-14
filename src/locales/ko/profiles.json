@@ -22,7 +22,11 @@
     "importForm": {
       "placeholder": "프로필 URL",
       "actions": {
-        "paste": "붙여넣기"
+        "paste": "붙여넣기",
+        "scanQr": "Scan QR code"
+      },
+      "feedback": {
+        "cameraDenied": "Camera access is required to scan a QR code"
       }
     },
     "feedback": {

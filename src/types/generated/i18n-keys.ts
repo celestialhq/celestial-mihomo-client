@@ -123,6 +123,8 @@ export const translationKeys = [
   'profiles.page.batch.title',
   'profiles.page.importForm.placeholder',
   'profiles.page.importForm.actions.paste',
+  'profiles.page.importForm.actions.scanQr',
+  'profiles.page.importForm.feedback.cameraDenied',
   'profiles.page.feedback.errors.invalidUrl',
   'profiles.page.feedback.errors.onlyYaml',
   'profiles.page.feedback.notifications.importRetry',

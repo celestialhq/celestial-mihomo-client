@@ -22,7 +22,11 @@
     "importForm": {
       "placeholder": "Профиль URL-ы",
       "actions": {
-        "paste": "Кую"
+        "paste": "Кую",
+        "scanQr": "Scan QR code"
+      },
+      "feedback": {
+        "cameraDenied": "Camera access is required to scan a QR code"
       }
     },
     "feedback": {

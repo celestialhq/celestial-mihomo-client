@@ -381,6 +381,10 @@ export interface TranslationResources {
         importForm: {
           actions: {
             paste: string
+            scanQr: string
+          }
+          feedback: {
+            cameraDenied: string
           }
           placeholder: string
         }

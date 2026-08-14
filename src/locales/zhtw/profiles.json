@@ -22,7 +22,11 @@
     "importForm": {
       "placeholder": "訂閱檔網址",
       "actions": {
-        "paste": "貼上"
+        "paste": "貼上",
+        "scanQr": "Scan QR code"
+      },
+      "feedback": {
+        "cameraDenied": "Camera access is required to scan a QR code"
       }
     },
     "feedback": {

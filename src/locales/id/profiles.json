@@ -22,7 +22,11 @@
     "importForm": {
       "placeholder": "URL Profil",
       "actions": {
-        "paste": "Tempel"
+        "paste": "Tempel",
+        "scanQr": "Scan QR code"
+      },
+      "feedback": {
+        "cameraDenied": "Camera access is required to scan a QR code"
       }
     },
     "feedback": {

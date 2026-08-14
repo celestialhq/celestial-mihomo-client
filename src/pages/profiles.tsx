@@ -19,6 +19,7 @@ import {
   LocalFireDepartmentRounded,
   AddRounded,
   CloudDownloadRounded,
+  QrCodeScannerRounded,
   RefreshRounded,
   TextSnippetOutlined,
 } from '@mui/icons-material'
@@ -64,6 +65,10 @@ import { showNotice } from '@/services/notice-service'
 import { queryClient } from '@/services/query-client'
 import { useSetLoadingCache } from '@/services/states'
 import { debugLog } from '@/utils/debug'
+import getSystem from '@/utils/get-system'
+
+// The barcode scanner plugin exists for Android and iOS only.
+const IS_MOBILE_PLATFORM = getSystem() === 'android'
 
 // 记录profile切换状态
 const debugProfileSwitch = (action: string, profile: string, extra?: any) => {
@@ -611,6 +616,33 @@ const ProfilePage = () => {
     if (text) setUrl(text)
   }
 
+  // Typing a subscription URL on a phone keyboard is the worst way to enter one, and
+  // providers hand them out as QR codes anyway. Loaded on demand so the desktop bundle
+  // never pulls in a plugin that has no desktop implementation.
+  const onScanQr = useLockFn(async () => {
+    try {
+      const { scan, Format, checkPermissions, requestPermissions } =
+        await import('@tauri-apps/plugin-barcode-scanner')
+
+      if ((await checkPermissions()) !== 'granted') {
+        if ((await requestPermissions()) !== 'granted') {
+          showNotice.error('profiles.page.importForm.feedback.cameraDenied')
+          return
+        }
+      }
+
+      const result = await scan({ windowed: false, formats: [Format.QRCode] })
+      const scanned = result?.content?.trim()
+      if (!scanned) return
+      setUrl(scanned)
+    } catch (err: any) {
+      // A cancelled scan comes back as an error too; there is nothing to report.
+      const message = err?.message ?? String(err)
+      if (/cancel/i.test(message)) return
+      showNotice.error(message)
+    }
+  })
+
   // Batch selection functions
   const toggleBatchMode = () => {
     setBatchMode(!batchMode)
@@ -901,14 +933,26 @@ const ProfilePage = () => {
             input: {
               sx: { pr: 1 },
               endAdornment: !url ? (
-                <IconButton
-                  size="small"
-                  sx={{ p: 0.5 }}
-                  title={t('profiles.page.importForm.actions.paste')}
-                  onClick={onCopyLink}
-                >
-                  <ContentPasteRounded fontSize="inherit" />
-                </IconButton>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  {IS_MOBILE_PLATFORM && (
+                    <IconButton
+                      size="small"
+                      sx={{ p: 0.5 }}
+                      title={t('profiles.page.importForm.actions.scanQr')}
+                      onClick={onScanQr}
+                    >
+                      <QrCodeScannerRounded fontSize="inherit" />
+                    </IconButton>
+                  )}
+                  <IconButton
+                    size="small"
+                    sx={{ p: 0.5 }}
+                    title={t('profiles.page.importForm.actions.paste')}
+                    onClick={onCopyLink}
+                  >
+                    <ContentPasteRounded fontSize="inherit" />
+                  </IconButton>
+                </Box>
               ) : (
                 <IconButton
                   size="small"

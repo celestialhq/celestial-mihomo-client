@@ -22,7 +22,11 @@
     "importForm": {
       "placeholder": "订阅文件链接",
       "actions": {
-        "paste": "粘贴"
+        "paste": "粘贴",
+        "scanQr": "Scan QR code"
+      },
+      "feedback": {
+        "cameraDenied": "Camera access is required to scan a QR code"
       }
     },
     "feedback": {

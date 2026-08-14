@@ -22,7 +22,11 @@
     "importForm": {
       "placeholder": "URL профиля",
       "actions": {
-        "paste": "Вставить"
+        "paste": "Вставить",
+        "scanQr": "Сканировать QR-код"
+      },
+      "feedback": {
+        "cameraDenied": "Для сканирования QR-кода нужен доступ к камере"
       }
     },
     "feedback": {

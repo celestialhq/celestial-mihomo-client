@@ -72,10 +72,13 @@ mod app_init {
                 .plugin(tauri_plugin_global_shortcut::Builder::new().build());
         }
 
-        // VpnService access — Android only, no equivalent (or need) on desktop.
+        // VpnService access and the QR scanner for importing a subscription — Android
+        // only, neither has an equivalent (or a need) on desktop.
         #[cfg(target_os = "android")]
         {
-            builder = builder.plugin(tauri_plugin_celestial_vpn::init());
+            builder = builder
+                .plugin(tauri_plugin_celestial_vpn::init())
+                .plugin(tauri_plugin_barcode_scanner::init());
         }
 
         // Devtools plugin only in debug mode with feature tauri-dev

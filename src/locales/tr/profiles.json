@@ -22,7 +22,11 @@
     "importForm": {
       "placeholder": "Profil URL'si",
       "actions": {
-        "paste": "Yapıştır"
+        "paste": "Yapıştır",
+        "scanQr": "Scan QR code"
+      },
+      "feedback": {
+        "cameraDenied": "Camera access is required to scan a QR code"
       }
     },
     "feedback": {
