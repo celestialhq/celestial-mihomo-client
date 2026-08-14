@@ -1,0 +1,34 @@
+diff --git a/listener/sing_tun/server_notwindows.go b/listener/sing_tun/server_notwindows.go
+index eda79dc0..080317b3 100644
+--- a/listener/sing_tun/server_notwindows.go
++++ b/listener/sing_tun/server_notwindows.go
+@@ -4,8 +4,29 @@ package sing_tun
+ 
+ import (
+ 	tun "github.com/metacubex/sing-tun"
++	E "github.com/metacubex/sing/common/exceptions"
++	"golang.org/x/sys/unix"
+ )
+ 
+ func tunNew(options tun.Options) (tun.Tun, error) {
++	// sing-tun wraps whatever descriptor it is handed in an os.File and closes it when the
++	// listener goes away — and the listener is rebuilt on every config reload, not just on
++	// shutdown. On Android that descriptor belongs to the Java ParcelFileDescriptor returned
++	// by VpnService.Builder.establish(), which keeps owning it, so closing it there did two
++	// things: it left the number tagged as owned in bionic's fdsan table, and it handed the
++	// number back to the process. Whichever thread claimed it next — WebView's GPU or render
++	// thread, in practice — aborted the whole app on the mismatch ("fd 322 is owned by
++	// ParcelFileDescriptor, was expected to be unowned"). The reload that caused it then had
++	// nothing left to reopen either, so the tunnel stayed down until the process restarted.
++	//
++	// Take our own copy, so the descriptor sing-tun closes is one nobody else owns and the
++	// original outlives every core generation.
++	if options.FileDescriptor > 0 {
++		dupFd, err := unix.Dup(options.FileDescriptor)
++		if err != nil {
++			return nil, E.Cause(err, "duplicate tun file descriptor")
++		}
++		options.FileDescriptor = dupFd
++	}
+ 	return tun.New(options)
+ }
