@@ -220,6 +220,11 @@ pub async fn delete_profile(index: String) -> CmdResult {
     }
     if should_update {
         handle::Handle::refresh_clash();
+        // The index itself changed — a different profile is current now. `profile-changed`
+        // below only tells the frontend to refetch rules; without this the profiles list
+        // keeps showing the previous entry as active until the page happens to remount,
+        // because the switch defers its own refetch to exactly this event.
+        handle::Handle::refresh_profiles();
         if let Some(current) = current.as_ref() {
             logging!(info, Type::Cmd, "[删除订阅] 发送配置变更通知: {}", current);
             handle::Handle::notify_profile_changed(current);
