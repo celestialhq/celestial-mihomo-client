@@ -1,6 +1,7 @@
 use crate::{
     cmd::{CmdResult, StringifyErr as _},
     utils::dirs::{self, PathBufExec as _},
+    utils::network::{NetworkManager, ProxyType},
 };
 use clash_verge_logging::{Type, logging};
 use smartstring::alias::String;
@@ -94,7 +95,16 @@ pub async fn download_icon_cache(url: String, name: String) -> CmdResult<String>
     let temp_name = format!("{icon_name}.downloading");
     let temp_path = ensure_icon_cache_target(&icon_cache_dir, temp_name.as_str())?;
 
-    let response = reqwest::get(url.as_str()).await.stringify_err()?;
+    // Not `reqwest::get`: its default client resolves roots through
+    // `rustls-platform-verifier`, which on Android panics rather than erroring unless a JNI
+    // TrustManager was registered at startup — so every icon fetch aborted its task there.
+    // `NetworkManager` already picks the static webpki roots on mobile (see
+    // `default_tls_root_mode`).
+    let client = NetworkManager::new()
+        .create_request(ProxyType::System, Some(20), None, false)
+        .await
+        .stringify_err()?;
+    let response = client.get(url.as_str()).send().await.stringify_err()?;
     let response = response.error_for_status().stringify_err()?;
     let content = response.bytes().await.stringify_err()?;
 

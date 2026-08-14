@@ -77,7 +77,11 @@ impl IClashTemp {
             "external-controller".into(),
             network::DEFAULT_EXTERNAL_CONTROLLER.into(),
         );
-        #[cfg(unix)]
+        // Not on mobile: nothing there talks to the core over a socket (the embedded core is
+        // reached over HTTP, see `lib.rs`'s `mihomo_plugin`), and the path this resolves to
+        // is `/tmp/celestial/...` — a directory a sandboxed Android app may not create, so
+        // the core only ever logged "External controller unix listen error: permission denied".
+        #[cfg(all(unix, not(any(target_os = "android", target_os = "ios"))))]
         map.insert(
             "external-controller-unix".into(),
             Self::guard_external_controller_ipc().into(),
@@ -118,7 +122,7 @@ impl IClashTemp {
         let socks_port = Self::guard_socks_port(&config);
         let port = Self::guard_port(&config);
         let ctrl = Self::guard_external_controller(&config);
-        #[cfg(unix)]
+        #[cfg(all(unix, not(any(target_os = "android", target_os = "ios"))))]
         let external_controller_unix = Self::guard_external_controller_ipc();
         #[cfg(windows)]
         let external_controller_pipe = Self::guard_external_controller_ipc();
@@ -132,7 +136,7 @@ impl IClashTemp {
         config.insert("port".into(), port.into());
         config.insert("external-controller".into(), ctrl.into());
 
-        #[cfg(unix)]
+        #[cfg(all(unix, not(any(target_os = "android", target_os = "ios"))))]
         config.insert("external-controller-unix".into(), external_controller_unix.into());
         #[cfg(windows)]
         config.insert("external-controller-pipe".into(), external_controller_pipe.into());
