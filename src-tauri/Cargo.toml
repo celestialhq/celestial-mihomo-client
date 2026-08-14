@@ -151,6 +151,15 @@ sysproxy = { git = "https://github.com/clash-verge-rev/sysproxy-rs", branch = "0
 
 [target.'cfg(target_os = "android")'.dependencies]
 tauri-plugin-celestial-vpn = { path = "../crates/tauri-plugin-celestial-vpn" }
+# Boa packs pointers into the payload of a NaN by default, which needs the top 16 bits of
+# every heap pointer to be zero. Android's arm64 allocator hands back tagged pointers
+# (PR_TAGGED_ADDR_ENABLE — 0xb400007928c2d160, tag in the top byte), so boa's own
+# compatibility assertion fires on the first object it allocates and panics. That killed
+# every script chain on-device: each config generation logged "builtin script error" and
+# fell back to the unprocessed config. The enum representation keeps the tag beside the
+# value instead of inside the pointer, at the cost of a wider `JsValue` — desktop, where
+# the pointers are untagged, keeps the packed one.
+boa_engine = { version = "0.21.0", features = ["jsvalue-enum"] }
 
 [dev-dependencies]
 criterion = { workspace = true }
