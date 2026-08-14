@@ -102,6 +102,57 @@ export const ProfileItem = (props: Props) => {
   const loadingCache = useLoadingCache()
   const setLoadingCache = useSetLoadingCache()
 
+  // Touch has no right-click, and Android's WebView does not reliably raise `contextmenu`
+  // on a long press, so on a phone there was no way to reach rename/edit/delete at all.
+  // Recognise the press ourselves. This cannot fight the drag sensor: it activates on
+  // distance (8px), not on a delay, so a press that stays put is unambiguously ours.
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  )
+  const longPressOriginRef = useRef<{ x: number; y: number } | null>(null)
+  // Lifting the finger after a long press still produces a click; without this the menu
+  // would open and the profile would switch underneath it.
+  const longPressFiredRef = useRef(false)
+
+  const cancelLongPress = useCallback(() => {
+    clearTimeout(longPressRef.current)
+    longPressRef.current = undefined
+    longPressOriginRef.current = null
+  }, [])
+
+  const onLongPressStart = useCallback(
+    (event: React.PointerEvent<HTMLElement>) => {
+      if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return
+      const { clientX, clientY, currentTarget } = event
+      longPressOriginRef.current = { x: clientX, y: clientY }
+      clearTimeout(longPressRef.current)
+      longPressRef.current = setTimeout(() => {
+        longPressOriginRef.current = null
+        longPressFiredRef.current = true
+        setPosition({ top: clientY, left: clientX })
+        setAnchorEl(currentTarget)
+      }, 500)
+    },
+    [],
+  )
+
+  // Any real movement is a scroll or a drag, not a press.
+  const onLongPressMove = useCallback(
+    (event: React.PointerEvent<HTMLElement>) => {
+      const origin = longPressOriginRef.current
+      if (!origin) return
+      if (
+        Math.abs(event.clientX - origin.x) > 8 ||
+        Math.abs(event.clientY - origin.y) > 8
+      ) {
+        cancelLongPress()
+      }
+    },
+    [cancelLongPress],
+  )
+
+  useEffect(() => () => clearTimeout(longPressRef.current), [])
+
   // 新增状态：是否显示下次更新时间
   const [showNextUpdate, setShowNextUpdate] = useState(false)
   const showNextUpdateRef = useRef(false)
@@ -699,6 +750,12 @@ export const ProfileItem = (props: Props) => {
             e.stopPropagation()
             return
           }
+          if (longPressFiredRef.current) {
+            longPressFiredRef.current = false
+            e.preventDefault()
+            e.stopPropagation()
+            return
+          }
           onSelect(false)
         }}
         onContextMenu={(event) => {
@@ -707,6 +764,11 @@ export const ProfileItem = (props: Props) => {
           setAnchorEl(event.currentTarget as HTMLElement)
           event.preventDefault()
         }}
+        onPointerDown={onLongPressStart}
+        onPointerMove={onLongPressMove}
+        onPointerUp={cancelLongPress}
+        onPointerCancel={cancelLongPress}
+        onPointerLeave={cancelLongPress}
       >
         {activating && (
           <Box
