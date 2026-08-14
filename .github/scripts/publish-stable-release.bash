@@ -123,13 +123,32 @@ publish_stable_updater() {
       --repo "$REPO" \
       --target main \
       --title "Auto-update Stable Channel" \
-      --notes "Stable updater metadata for Celestial."
+      --notes "Stable updater metadata for Celestial." \
+      --latest=false
   fi
 
   gh release upload updater \
     update.json update.json.sha256 \
     update-proxy.json update-proxy.json.sha256 \
     --repo "$REPO" --clobber
+
+  # This release holds nothing but `update.json`, yet it is published after the real one
+  # and GitHub hands "latest" to whichever was published last. That left
+  # /releases/latest — and every `gh release download` and install script that follows
+  # it — pointing at a release with no installers in it. Pin it back to the version tag.
+  gh api \
+    --method PATCH \
+    "repos/$REPO/releases/$(gh api "repos/$REPO/releases/tags/updater" --jq .id)" \
+    -F draft=false \
+    -F prerelease=false \
+    -f make_latest=false >/dev/null
+
+  if [[ "$IS_PRERELEASE" != "true" ]]; then
+    gh api \
+      --method PATCH \
+      "repos/$REPO/releases/$(release_id_for_tag)" \
+      -f make_latest=true >/dev/null
+  fi
 }
 
 ensure_draft_release
