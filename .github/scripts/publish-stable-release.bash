@@ -151,6 +151,57 @@ publish_stable_updater() {
   fi
 }
 
+# A second copy of each downloadable artefact under a name with the version taken out.
+#
+# GitHub resolves /releases/latest/download/<name> against an exact asset name, and ours
+# carry the version, so no link to "the current build" could exist. With these,
+# .../releases/latest/download/Celestial_arm64-setup.exe always lands on the newest
+# release.
+#
+# Two things make this safe. The updater ignores them: generate-tauri-latest-json.mjs
+# skips every asset whose name does not contain the version. And they must be uploaded
+# last, because clean_release_assets deletes precisely the assets that lack the version —
+# which is how a stale alias from an earlier run gets cleared before this rewrites it.
+stable_alias_for() {
+  local name="$1"
+  case "$name" in
+    # Signatures and checksums belong to the versioned files; the updater payloads
+    # (.app.tar.gz) and the Play bundle (.aab) are not things anyone downloads by hand.
+    *.sig | *.sha256 | *.app.tar.gz | *.aab) return 1 ;;
+    # rpm names are name-version-release.arch.rpm, so Celestial-3.0.0-1.x86_64.rpm has a
+    # release number after the version too. Drop both, leaving Celestial-x86_64.rpm.
+    Celestial-"$VERSION"-*)
+      local rest="${name#Celestial-"$VERSION"-}"
+      printf 'Celestial-%s' "${rest#*.}"
+      ;;
+    Celestial_"$VERSION"_*) printf 'Celestial_%s' "${name#Celestial_"$VERSION"_}" ;;
+    *) return 1 ;;
+  esac
+}
+
+upload_stable_aliases() {
+  local alias_dir="${ASSETS_DIR}-stable-names"
+  rm -rf "$alias_dir"
+  mkdir -p "$alias_dir"
+
+  local file name alias
+  shopt -s nullglob
+  for file in "$ASSETS_DIR"/*; do
+    [[ -f "$file" ]] || continue
+    name="$(basename "$file")"
+    alias="$(stable_alias_for "$name")" || continue
+    cp "$file" "$alias_dir/$alias"
+    # Regenerate rather than copy the checksum: the original names the versioned file
+    # inside it, so `sha256sum -c` on the alias would fail on a name mismatch.
+    (cd "$alias_dir" && sha256sum "$alias" > "$alias.sha256")
+  done
+  local aliases=("$alias_dir"/*)
+  shopt -u nullglob
+
+  ((${#aliases[@]} > 0)) || return 0
+  gh release upload "$TAG_NAME" "${aliases[@]}" --repo "$REPO" --clobber
+}
+
 ensure_draft_release
 clean_release_assets
 upload_release_assets
@@ -161,4 +212,7 @@ finalize_release
 # 404s.
 if [[ "$IS_PRERELEASE" != "true" ]]; then
   publish_stable_updater
+  # Only the stable channel gets them: a prerelease is never "latest", so a stable
+  # link pointing into one would be wrong.
+  upload_stable_aliases
 fi
