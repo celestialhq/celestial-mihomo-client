@@ -121,6 +121,9 @@
         "keyError": "上書きファイルのキーエラーがあります。変更は取り消されました。",
         "generalError": "上書きファイルにエラーがあります。変更は取り消されました。"
       }
+    },
+    "xrayRelay": {
+      "fallbackToNative": "The xray relay could not be started; traffic is going out natively. Reason: "
     }
   },
   "filters": {

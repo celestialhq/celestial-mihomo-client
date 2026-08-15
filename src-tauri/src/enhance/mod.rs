@@ -1,6 +1,7 @@
 mod chain;
 pub mod field;
 mod merge;
+mod relay;
 mod script;
 pub mod seq;
 mod tun;
@@ -23,6 +24,7 @@ use crate::{
     constants,
 };
 use anyhow::{Context as _, Result};
+use celestial_xray_relay::RelayPlan;
 use clash_verge_logging::{Type, logging};
 use serde_yaml_ng::{Mapping, Value};
 use smartstring::alias::String;
@@ -30,6 +32,21 @@ use std::collections::{HashMap, HashSet};
 use tokio::fs;
 
 type ResultLog = Vec<(String, String)>;
+
+/// Everything one pass of the pipeline produced.
+///
+/// The relay plan comes out of the same pass as the config it belongs to, because it can
+/// only be built from the finished `proxies` — and it has to travel with that config from
+/// here on, or a rollback could leave the two describing different sets of nodes.
+#[derive(Debug)]
+pub struct Enhanced {
+    pub config: Mapping,
+    pub exists_keys: HashSet<String>,
+    pub chain_logs: HashMap<String, ResultLog>,
+    /// `None` when the run is native: the mode is off, or nothing could be relayed.
+    pub relay: Option<RelayPlan>,
+}
+
 #[derive(Debug)]
 struct ConfigValues {
     clash_config: Mapping,
@@ -39,6 +56,7 @@ struct ConfigValues {
     socks_enabled: bool,
     http_enabled: bool,
     enable_dns_settings: bool,
+    enable_xray_relay: bool,
     #[cfg(not(target_os = "windows"))]
     redir_enabled: bool,
     #[cfg(target_os = "linux")]
@@ -56,6 +74,11 @@ struct ProfileItems {
     global_merge: ChainItem,
     global_script: ChainItem,
     profile_name: String,
+    /// The xray template this profile's subscription served, when it served one. Read with
+    /// the rest of the profile so a template and the nodes it describes come from one place.
+    xray_template: Option<std::string::String>,
+    /// Per-node relay decisions the user made by hand.
+    relay_overrides: Vec<(std::string::String, celestial_xray_relay::Override)>,
 }
 
 impl Default for ProfileItems {
@@ -91,6 +114,8 @@ impl Default for ProfileItems {
                 uid: "Script".into(),
                 data: ChainType::Script(tmpl::ITEM_SCRIPT.into()),
             },
+            xray_template: None,
+            relay_overrides: Vec::new(),
         }
     }
 }
@@ -123,6 +148,11 @@ async fn get_config_values() -> ConfigValues {
         enable_dns_settings.unwrap_or(false),
     );
 
+    // The session flag outranks both the setting and the build feature: it is set only after
+    // the relay has already failed to come up, and regenerating with it still on would put
+    // the user straight back on stand-ins nothing is listening on.
+    let enable_xray_relay = verge_arc.xray_relay_enabled() && !Config::relay_suppressed_for_session();
+
     #[cfg(not(target_os = "windows"))]
     let redir_enabled = verge_arc.verge_redir_enabled.unwrap_or(false);
 
@@ -140,6 +170,7 @@ async fn get_config_values() -> ConfigValues {
         socks_enabled,
         http_enabled,
         enable_dns_settings,
+        enable_xray_relay,
         #[cfg(not(target_os = "windows"))]
         redir_enabled,
         #[cfg(target_os = "linux")]
@@ -188,6 +219,28 @@ async fn collect_profile_items(profiles: &IProfiles) -> Result<ProfileItems> {
         .unwrap_or_else(|| "Groups".into());
 
     let name = current_item.name.clone().unwrap_or_default();
+    let xray_template = current_item.read_xray_template().await.map(Into::into);
+    let relay_overrides = current_item
+        .option
+        .as_ref()
+        .and_then(|option| option.relay_overrides.as_ref())
+        .map(|overrides| {
+            overrides
+                .iter()
+                .filter_map(|it| {
+                    let mode = match it.mode.as_str() {
+                        "relay" => celestial_xray_relay::Override::ForceRelay,
+                        "native" => celestial_xray_relay::Override::ForceNative,
+                        // Anything else means the record was written by a version that knew
+                        // a mode this one does not; letting the node be judged on its merits
+                        // is the safe reading.
+                        _ => return None,
+                    };
+                    Some((it.name.to_string(), mode))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
     let merge_item = {
         let item = profiles.get_item(&merge_uid).ok().cloned();
@@ -290,6 +343,8 @@ async fn collect_profile_items(profiles: &IProfiles) -> Result<ProfileItems> {
         global_merge,
         global_script,
         profile_name: name,
+        xray_template,
+        relay_overrides,
     })
 }
 
@@ -581,8 +636,8 @@ async fn apply_dns_settings(mut config: Mapping, enable_dns_settings: bool) -> M
 }
 
 /// Enhance mode
-/// 返回最终订阅、该订阅包含的键、和script执行的结果
-pub async fn enhance(profiles: &IProfiles) -> Result<(Mapping, HashSet<String>, HashMap<String, ResultLog>)> {
+/// 返回最终订阅、该订阅包含的键、script执行的结果，以及 xray 中继计划
+pub async fn enhance(profiles: &IProfiles) -> Result<Enhanced> {
     // gather config values
     let cfg_vals = get_config_values().await;
     let ConfigValues {
@@ -593,6 +648,7 @@ pub async fn enhance(profiles: &IProfiles) -> Result<(Mapping, HashSet<String>, 
         socks_enabled,
         http_enabled,
         enable_dns_settings,
+        enable_xray_relay,
         #[cfg(not(target_os = "windows"))]
         redir_enabled,
         #[cfg(target_os = "linux")]
@@ -610,6 +666,8 @@ pub async fn enhance(profiles: &IProfiles) -> Result<(Mapping, HashSet<String>, 
     let global_merge = profile.global_merge;
     let global_script = profile.global_script;
     let profile_name = profile.profile_name;
+    let xray_template = profile.xray_template;
+    let relay_overrides = profile.relay_overrides;
 
     // process globals
     let (config, exists_keys, result_map) =
@@ -653,10 +711,24 @@ pub async fn enhance(profiles: &IProfiles) -> Result<(Mapping, HashSet<String>, 
     // dns settings
     config = apply_dns_settings(config, enable_dns_settings).await;
 
+    // Last of everything. A merge profile, a script or a visual editor can each add a node,
+    // and a node added after the substitution would dial out past the relay; running earlier
+    // would also let those stages overwrite the stand-ins that were already put in.
+    let relay = if enable_xray_relay {
+        relay::use_relay(&mut config, xray_template.as_deref(), &relay_overrides)
+    } else {
+        None
+    };
+
     let mut exists_keys_set = HashSet::new();
     exists_keys_set.extend(exists_keys);
 
-    Ok((config, exists_keys_set, result_map))
+    Ok(Enhanced {
+        config,
+        exists_keys: exists_keys_set,
+        chain_logs: result_map,
+        relay,
+    })
 }
 
 #[allow(clippy::expect_used)]

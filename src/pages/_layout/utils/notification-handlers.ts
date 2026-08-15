@@ -85,6 +85,10 @@ export const handleNoticeMessage = (
         'settings.feedback.notifications.clash.changeFailed',
         msg,
       ),
+    // The relay already gave up and the configuration was regenerated without it
+    // by the time this arrives; it reports a mode change, not a failure to act on.
+    'xray_relay::fallback': () =>
+      showNotice.info('shared.feedback.xrayRelay.fallbackToNative', msg),
     // The backend turns TUN off once it is certain the run state cannot support
     // it; this only reports what already happened.
     'tun_mode::auto_disabled': () =>

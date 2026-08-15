@@ -121,6 +121,9 @@
         "keyError": "Birleştirme dosyası anahtar hatası, değişiklikler geri alındı",
         "generalError": "Birleştirme dosyası hatası, değişiklikler geri alındı"
       }
+    },
+    "xrayRelay": {
+      "fallbackToNative": "The xray relay could not be started; traffic is going out natively. Reason: "
     }
   },
   "filters": {

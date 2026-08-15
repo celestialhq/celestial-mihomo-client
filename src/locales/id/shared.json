@@ -121,6 +121,9 @@
         "keyError": "Merge file key error, changes reverted",
         "generalError": "Merge file error, changes reverted"
       }
+    },
+    "xrayRelay": {
+      "fallbackToNative": "The xray relay could not be started; traffic is going out natively. Reason: "
     }
   },
   "filters": {

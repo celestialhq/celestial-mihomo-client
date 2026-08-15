@@ -206,7 +206,9 @@ impl IProfiles {
     /// if the file_data is some
     /// then should save the data to file
     pub async fn append_item(&mut self, item: &mut PrfItem) -> Result<()> {
-        let uid = &item.uid;
+        // Cloned rather than borrowed: writing the files below needs `item` mutably, to move
+        // the data out of it rather than copy it.
+        let uid = item.uid.clone();
         if uid.is_none() {
             bail!("the uid should not be null");
         }
@@ -229,8 +231,10 @@ impl IProfiles {
                 .with_context(|| format!("failed to write to file \"{file}\""))?;
         }
 
+        write_xray_template(item).await?;
+
         if self.current.is_none() && (item.itype == Some("remote".into()) || item.itype == Some("local".into())) {
-            self.current = uid.to_owned();
+            self.current = uid;
         }
 
         if self.items.is_none() {
@@ -270,6 +274,20 @@ impl IProfiles {
     }
 
     /// update the item value
+    /// [`Self::get_item`] for a caller holding the draft and editing one item in place.
+    pub fn get_item_mut(&mut self, uid: impl AsRef<str>) -> Result<&mut PrfItem> {
+        let uid_str = uid.as_ref();
+        let items = self
+            .items
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("failed to find the profile item \"uid:{uid_str}\""))?;
+
+        items
+            .iter_mut()
+            .find(|each| each.uid.as_deref() == Some(uid_str))
+            .ok_or_else(|| anyhow::anyhow!("failed to find the profile item \"uid:{uid_str}\""))
+    }
+
     pub async fn patch_item(&mut self, uid: &String, item: &PrfItem) -> Result<()> {
         let mut items = self.items.take().unwrap_or_default();
 
@@ -313,6 +331,18 @@ impl IProfiles {
                     each.updated = item.updated;
                     each.home = item.home.to_owned();
                     each.option = PrfOption::merge(each.option.as_ref(), item.option.as_ref());
+
+                    // The template belongs to the profile body that arrived with it. A refresh
+                    // that came back without one has to clear the old file too, or the relay
+                    // would pair the new nodes against the previous update's outbounds —
+                    // pairing is by name, so stale entries line up silently.
+                    if item.xray_file.is_some() {
+                        item.xray_file.clone_into(&mut each.xray_file);
+                        write_xray_template(item).await?;
+                    } else if let Some(stale) = each.xray_file.take() {
+                        let path = dirs::app_profiles_dir()?.join(stale.as_str());
+                        let _ = fs::remove_file(&path).await;
+                    }
                     // save the file data
                     // move the field value after save
                     if let Some(file_data) = item.file_data.take() {
@@ -691,6 +721,25 @@ struct SelectedNodesPlan {
     selected: Vec<PrfSelected>,
     activations: Vec<(String, String)>,
     repaired_count: usize,
+}
+
+/// Writes the xray template that arrived with `item`, if one did.
+///
+/// Kept beside the profile it belongs to rather than in the generated-config directory: it is
+/// source material, so it is what backups and WebDAV sync should carry — unlike `xray.json`,
+/// which is rebuilt from it.
+async fn write_xray_template(item: &mut PrfItem) -> Result<()> {
+    let Some(data) = item.xray_data.take() else {
+        return Ok(());
+    };
+    let Some(file) = item.xray_file.clone() else {
+        bail!("the xray template has no file name");
+    };
+
+    let path = dirs::app_profiles_dir()?.join(file.as_str());
+    fs::write(&path, data.as_bytes())
+        .await
+        .with_context(|| format!("failed to write to file \"{file}\""))
 }
 
 fn node_is_available(available_nodes: &[std::string::String], node: &str) -> bool {

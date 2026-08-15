@@ -59,6 +59,17 @@ impl CoreManager {
             return Ok(());
         }
 
+        // The chain comes up from the far end. mihomo's socks stand-ins are useless until
+        // something is listening on them, so xray goes first and readiness is waited for.
+        //
+        // A relay that will not come up does not stop mihomo: the user is put back on a
+        // native configuration by the recovery below, and until it lands they still have a
+        // routing frontend and a TUN interface rather than no network at all.
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        if let Err(error) = self.start_xray_if_planned().await {
+            self.recover_from_relay_failure(&format!("{error:#}"));
+        }
+
         let result = match intended {
             RunningMode::Service => {
                 if let Err(err) = self.start_core_by_service().await {
@@ -94,14 +105,21 @@ impl CoreManager {
     async fn stop_core_inner(&self) -> Result<()> {
         CLASH_LOGGER.clear_logs().await;
 
-        match *self.get_running_mode() {
+        let stopped = match *self.get_running_mode() {
             RunningMode::Service => self.stop_core_by_service().await,
             RunningMode::Sidecar => {
                 self.stop_core_by_sidecar();
                 Ok(())
             }
             RunningMode::NotRunning => Ok(()),
-        }
+        };
+
+        // Reverse of the start order, and after mihomo either way: pulling the relay out
+        // from under a core still routing into it is the one ordering that loses traffic.
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        self.stop_xray();
+
+        stopped
     }
 
     pub async fn restart_core(&self) -> Result<()> {

@@ -114,7 +114,8 @@
         "useSystemProxy": "システムプロキシを使用して更新",
         "useClashProxy": "クラッシュプロキシを使用して更新",
         "acceptInvalidCerts": "Allows Invalid Certificates (Danger)",
-        "allowAutoUpdate": "Allow Auto Update"
+        "allowAutoUpdate": "Allow Auto Update",
+        "xrayUserAgent": "Xray template User Agent"
       },
       "feedback": {
         "notifications": {

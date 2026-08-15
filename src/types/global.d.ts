@@ -326,10 +326,37 @@ interface IProfileItem {
   }
   option?: IProfileOption
   home?: string
+  /** Set when the subscription served an xray template alongside the mihomo one. */
+  xray_file?: string
+}
+
+interface IXrayRelayNode {
+  name: string
+  relayed: boolean
+  port?: number
+  /** Why the node is not relayed. Written to be shown as-is. */
+  reason?: string
+  /** Set when the user pinned this node by hand: 'relay' or 'native'. */
+  override_mode?: string
+}
+
+interface IXrayRelayStatus {
+  enabled: boolean
+  /** The build pins the mode on; the switch must not be operable. */
+  forced: boolean
+  /** The relay failed in this session and was dropped, without touching the setting. */
+  suppressed: boolean
+  /** A plan is in force, so traffic is going through xray. */
+  active: boolean
+  /** The subscription served an xray template, so outbounds come from the panel verbatim. */
+  has_template: boolean
+  nodes: IXrayRelayNode[]
 }
 
 interface IProfileOption {
   user_agent?: string
+  xray_user_agent?: string
+  relay_overrides?: { name: string; mode: string }[]
   with_proxy?: boolean
   self_proxy?: boolean
   update_interval?: number
@@ -965,6 +992,7 @@ interface IVergeConfig {
   enable_system_proxy?: boolean
   enable_global_hotkey?: boolean
   enable_dns_settings?: boolean
+  enable_xray_relay?: boolean
   proxy_auto_config?: boolean
   pac_file_content?: string
   proxy_host?: string

@@ -114,7 +114,8 @@
         "useSystemProxy": "Системалы проксины кулланып яңарту",
         "useClashProxy": "Clash прокси кулланып яңарту",
         "acceptInvalidCerts": "Дөрес булмаган сертификатларны кабул итү (Куркыныч)",
-        "allowAutoUpdate": "Allow Auto Update"
+        "allowAutoUpdate": "Allow Auto Update",
+        "xrayUserAgent": "Xray template User Agent"
       },
       "feedback": {
         "notifications": {

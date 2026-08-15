@@ -128,13 +128,15 @@
               "add": "إضافة",
               "addNew": "إضافة نفق جديد"
             }
-          }
+          },
+          "xrayRelay": "Xray relay"
         },
         "tooltips": {
           "networkInterface": "واجهة الشبكة",
           "unifiedDelay": "عند تفعيل التأخير الموحد، سيتم إجراء اختبارين للتأخير لتقليل الفروقات الناتجة عن مفاوضات الاتصال",
           "logLevel": "This parameter is valid only for kernel log files in the log directory Service folder",
-          "openUwpTool": "منذ نظام ويندوز 8، يتم تقييد تطبيقات UWP من الوصول المباشر إلى المضيف المحلي. هذه الأداة تتيح تجاوز هذا التقييد"
+          "openUwpTool": "منذ نظام ويندوز 8، يتم تقييد تطبيقات UWP من الوصول المباشر إلى المضيف المحلي. هذه الأداة تتيح تجاوز هذا التقييد",
+          "xrayRelay": "Send node traffic out through the bundled xray core. Mihomo keeps routing; the TLS fingerprint and the REALITY/Vision/XHTTP implementations come from xray."
         },
         "options": {
           "logLevel": {
@@ -619,6 +621,33 @@
       "fields": {
         "ipAddress": "عنوان IP",
         "macAddress": "عنوان MAC"
+      }
+    },
+    "xrayRelay": {
+      "title": "Xray relay",
+      "description": "Nodes xray cannot carry stay on mihomo and keep working. The reason is shown next to each one.",
+      "status": {
+        "active": "Relaying {{relayed}} of {{total}} nodes",
+        "native": "Not relaying — going out natively",
+        "forced": "Pinned on by this build",
+        "suppressed": "Dropped after a failure this session",
+        "fromTemplate": "Outbounds from the subscription's xray template",
+        "fromConverter": "Outbounds built by the converter"
+      },
+      "node": {
+        "viaPort": "Relayed on port {{port}}",
+        "native": "Native",
+        "none": "No nodes have been planned yet."
+      },
+      "override": {
+        "auto": "Automatic",
+        "relay": "Relay",
+        "native": "Native"
+      },
+      "export": {
+        "xray": "Export xray.json",
+        "runtime": "Export config.yaml",
+        "masked": "Credentials are replaced with <redacted>."
       }
     }
   },

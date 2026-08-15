@@ -22,6 +22,10 @@ tauri-dev = []
 tokio-trace = ["console-subscriber"]
 clippy = ["tauri/test"]
 tracing = []
+# Pins the xray relay on and locks the UI switch. Enabled for builds cut from a
+# v4.0.0+ tag; it does not promise every node is relayed, and never overrides the
+# fallback to native when xray is unavailable.
+force-xray-relay = []
 
 [package.metadata.bundle]
 identifier = "io.github.celestialhq.celestial-mihomo-client"
@@ -35,6 +39,7 @@ clash-verge-logging = { workspace = true }
 clash-verge-signal = { workspace = true }
 clash-verge-i18n = { workspace = true }
 clash-verge-limiter = { workspace = true }
+celestial-xray-relay = { workspace = true }
 tauri-plugin-clash-verge-sysinfo = { workspace = true }
 tauri-plugin-clipboard-manager = { workspace = true }
 tauri = { workspace = true, features = [

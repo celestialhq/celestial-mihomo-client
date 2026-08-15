@@ -305,7 +305,7 @@ impl CoreManager {
 /// Creates a Job Object with `KILL_ON_JOB_CLOSE` and assigns `child_pid` to it.
 /// Dropping the returned handle terminates the assigned process.
 #[cfg(target_os = "windows")]
-fn create_and_assign_sidecar_job(child_pid: u32) -> Result<OwnedHandle> {
+pub(super) fn create_and_assign_sidecar_job(child_pid: u32) -> Result<OwnedHandle> {
     unsafe {
         let raw_job: HANDLE = CreateJobObjectW(std::ptr::null(), std::ptr::null());
         if raw_job.is_null() {

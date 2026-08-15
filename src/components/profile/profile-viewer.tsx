@@ -109,6 +109,9 @@ export function ProfileViewer({ onChange, ref }: ProfileViewerProps) {
         if (option?.user_agent === '') {
           option.user_agent = undefined
         }
+        if (option?.xray_user_agent === '') {
+          option.xray_user_agent = undefined
+        }
 
         const name = form.name || `${form.type} file`
         const item = { ...form, name, option }
@@ -300,6 +303,22 @@ export function ProfileViewer({ onChange, ref }: ProfileViewerProps) {
                 {...field}
                 placeholder={`celestial/v${version}`}
                 label="User Agent"
+              />
+            )}
+          />
+
+          {/* The panel tells the two requests apart by this string alone, so it decides
+              whether the xray template — and with it the highest-fidelity mode — is
+              available for this subscription at all. */}
+          <Controller
+            name="option.xray_user_agent"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...text}
+                {...field}
+                placeholder={`celestial/xray/${version}`}
+                label={t('profiles.modals.profileForm.fields.xrayUserAgent')}
               />
             )}
           />

@@ -128,13 +128,15 @@
               "add": "添加",
               "addNew": "添加新隧道"
             }
-          }
+          },
+          "xrayRelay": "Xray relay"
         },
         "tooltips": {
           "networkInterface": "网络接口",
           "unifiedDelay": "开启统一延迟时，会进行两次延迟测试，以消除连接握手等带来的不同类型节点的延迟差异",
           "logLevel": "仅对日志目录 Service 文件夹下的内核日志文件生效",
-          "openUwpTool": "Windows 8 开始限制 UWP 应用（如微软商店）直接访问本地主机的网络服务，使用此工具可绕过该限制"
+          "openUwpTool": "Windows 8 开始限制 UWP 应用（如微软商店）直接访问本地主机的网络服务，使用此工具可绕过该限制",
+          "xrayRelay": "Send node traffic out through the bundled xray core. Mihomo keeps routing; the TLS fingerprint and the REALITY/Vision/XHTTP implementations come from xray."
         },
         "options": {
           "logLevel": {
@@ -619,6 +621,33 @@
       "fields": {
         "ipAddress": "IP 地址",
         "macAddress": "MAC 地址"
+      }
+    },
+    "xrayRelay": {
+      "title": "Xray relay",
+      "description": "Nodes xray cannot carry stay on mihomo and keep working. The reason is shown next to each one.",
+      "status": {
+        "active": "Relaying {{relayed}} of {{total}} nodes",
+        "native": "Not relaying — going out natively",
+        "forced": "Pinned on by this build",
+        "suppressed": "Dropped after a failure this session",
+        "fromTemplate": "Outbounds from the subscription's xray template",
+        "fromConverter": "Outbounds built by the converter"
+      },
+      "node": {
+        "viaPort": "Relayed on port {{port}}",
+        "native": "Native",
+        "none": "No nodes have been planned yet."
+      },
+      "override": {
+        "auto": "Automatic",
+        "relay": "Relay",
+        "native": "Native"
+      },
+      "export": {
+        "xray": "Export xray.json",
+        "runtime": "Export config.yaml",
+        "masked": "Credentials are replaced with <redacted>."
       }
     }
   },

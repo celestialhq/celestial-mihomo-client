@@ -2,7 +2,7 @@ import { LanRounded, SettingsRounded } from '@mui/icons-material'
 import { MenuItem, Select, TextField, Typography } from '@mui/material'
 import { invoke } from '@tauri-apps/api/core'
 import { useLockFn } from 'ahooks'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { updateGeo } from 'tauri-plugin-mihomo-api'
 
@@ -10,7 +10,11 @@ import { DialogRef, Switch, TooltipIcon } from '@/components/base'
 import { useClash } from '@/hooks/use-clash'
 import { useClashLog } from '@/hooks/use-clash-log'
 import { useVerge } from '@/hooks/use-verge'
-import { invoke_uwp_tool } from '@/services/cmds'
+import {
+  getXrayRelayStatus,
+  invoke_uwp_tool,
+  setXrayRelayEnabled,
+} from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 import getSystem from '@/utils/get-system'
 
@@ -24,6 +28,7 @@ import { NetworkInterfaceViewer } from './mods/network-interface-viewer'
 import { SettingItem, SettingList } from './mods/setting-comp'
 import { TunnelsViewer } from './mods/tunnels-viewer'
 import { WebUIViewer } from './mods/web-ui-viewer'
+import { XrayRelayViewer } from './mods/xray-relay-viewer'
 
 const isWIN = getSystem() === 'windows'
 
@@ -52,6 +57,28 @@ const SettingClash = ({ onError }: Props) => {
     return verge?.enable_dns_settings ?? false
   })
 
+  // Read from the backend rather than from the verge setting: the build feature can pin the
+  // mode on, and a failure this session can drop it while the setting still says "on".
+  const [relay, setRelay] = useState<IXrayRelayStatus | null>(null)
+  const refreshRelay = () => {
+    getXrayRelayStatus()
+      .then(setRelay)
+      .catch(() => {})
+  }
+  useEffect(refreshRelay, [])
+
+  const handleRelayToggle = useLockFn(async (enable: boolean) => {
+    const previous = relay
+    setRelay((old) => (old ? { ...old, enabled: enable } : old))
+    try {
+      await setXrayRelayEnabled(enable)
+      refreshRelay()
+    } catch (err: any) {
+      setRelay(previous)
+      showNotice.error(err)
+    }
+  })
+
   const webRef = useRef<DialogRef>(null)
   const portRef = useRef<DialogRef>(null)
   const ctrlRef = useRef<DialogRef>(null)
@@ -60,6 +87,7 @@ const SettingClash = ({ onError }: Props) => {
   const dnsRef = useRef<DialogRef>(null)
   const corsRef = useRef<DialogRef>(null)
   const tunnelRef = useRef<DialogRef>(null)
+  const relayRef = useRef<DialogRef>(null)
 
   const onSwitchFormat = (_e: any, value: boolean) => value
   const onChangeData = (patch: Partial<IConfigData>) => {
@@ -101,6 +129,7 @@ const SettingClash = ({ onError }: Props) => {
       <DnsViewer ref={dnsRef} />
       <HeaderConfiguration ref={corsRef} />
       <TunnelsViewer ref={tunnelRef} />
+      <XrayRelayViewer ref={relayRef} />
       <SettingItem
         label={t('settings.sections.clash.form.fields.allowLan')}
         extra={
@@ -139,6 +168,29 @@ const SettingClash = ({ onError }: Props) => {
           edge="end"
           checked={dnsSettingsEnabled}
           onChange={(_, checked) => handleDnsToggle(checked)}
+        />
+      </SettingItem>
+
+      <SettingItem
+        label={t('settings.sections.clash.form.fields.xrayRelay')}
+        extra={
+          <>
+            <TooltipIcon
+              title={t('settings.sections.clash.form.tooltips.xrayRelay')}
+              sx={{ opacity: '0.7' }}
+            />
+            <TooltipIcon
+              icon={SettingsRounded}
+              onClick={() => relayRef.current?.open()}
+            />
+          </>
+        }
+      >
+        <Switch
+          edge="end"
+          checked={relay?.enabled ?? false}
+          disabled={relay?.forced ?? false}
+          onChange={(_, checked) => handleRelayToggle(checked)}
         />
       </SettingItem>
 

@@ -114,7 +114,8 @@
         "useSystemProxy": "使用系统代理更新",
         "useClashProxy": "使用内核代理更新",
         "acceptInvalidCerts": "允许无效证书（危险）",
-        "allowAutoUpdate": "允许自动更新"
+        "allowAutoUpdate": "允许自动更新",
+        "xrayUserAgent": "Xray template User Agent"
       },
       "feedback": {
         "notifications": {

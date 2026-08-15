@@ -428,8 +428,67 @@ impl CoreConfigValidator {
         logging!(info, Type::Validate, "生成临时配置文件用于验证");
 
         let config_path = Config::generate_file(ConfigType::Check).await?;
+
+        // xray first. mihomo accepts a config full of socks stand-ins whatever the relay
+        // behind them looks like, so checking mihomo alone would pass a configuration that
+        // cannot carry a single connection.
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        if Config::active_relay_plan().await.is_some() {
+            let xray_path = dirs::app_home_dir()?.join(crate::constants::files::XRAY_CHECK_CONFIG);
+            let outcome = Self::validate_xray_config(&xray_path).await?;
+            if !outcome.is_valid() {
+                logging!(error, Type::Validate, "xray 拒绝了中继配置: {}", outcome);
+                return Ok(outcome);
+            }
+        }
+
         let config_path = dirs::path_to_str(&config_path)?;
         Self::validate_config_internal_outcome(config_path).await
+    }
+
+    /// Runs `xray run -test -config` against `path`.
+    ///
+    /// Worth knowing where this does *not* help: xray accepts `flow` on transports XTLS
+    /// cannot apply to, so the one conversion mistake that silently kills a connection is
+    /// also the one this cannot catch. The converter refuses that combination itself.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    pub(crate) async fn validate_xray_config(path: &std::path::PathBuf) -> Result<ValidationOutcome> {
+        if !path.exists() {
+            let message: String = format!("File not found: {}", path.display()).into();
+            return Ok(ValidationOutcome::invalid_from_message(message));
+        }
+
+        let app_handle = handle::Handle::app_handle();
+        let output = app_handle
+            .shell()
+            .sidecar("celestial-xray")?
+            .args(["run", "-test", "-config", dirs::path_to_str(path)?])
+            .output()
+            .await?;
+
+        if output.status.success() {
+            return Ok(ValidationOutcome::Valid);
+        }
+
+        // xray reports the reason it refused a config on stdout and exits non-zero; stderr
+        // is the fallback for the cases where it dies before getting that far.
+        let message: String = if !output.stdout.is_empty() {
+            str::from_utf8(&output.stdout).unwrap_or_default().into()
+        } else if !output.stderr.is_empty() {
+            str::from_utf8(&output.stderr).unwrap_or_default().into()
+        } else {
+            match output.status.code() {
+                Some(code) => format!("xray exited with code {code}").into(),
+                None => "xray was terminated while checking the relay config".into(),
+            }
+        };
+
+        let outcome = if output.status.code().is_none() {
+            ValidationOutcome::invalid(ValidationErrorKind::ProcessTerminated, message)
+        } else {
+            ValidationOutcome::invalid(ValidationErrorKind::CoreRejected, message)
+        };
+        Ok(outcome)
     }
 }
 

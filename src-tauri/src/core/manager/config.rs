@@ -18,6 +18,18 @@ use smartstring::alias::String;
 use std::{collections::HashSet, path::PathBuf, time::Instant};
 use tauri_plugin_mihomo::Error as MihomoError;
 
+/// How a reload has to treat the relay, relative to what is already running.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RelayChange {
+    /// The plan is unchanged; the running xray already serves it.
+    None,
+    /// A new or different plan: xray has to be replaced before mihomo is reloaded.
+    BringUp,
+    /// The new configuration is native; xray goes once mihomo no longer refers to it.
+    TakeDown,
+}
+
 impl CoreManager {
     pub async fn use_default_config(&self, error_key: &str, error_msg: &str) -> Result<()> {
         use crate::constants::files::RUNTIME_CONFIG;
@@ -30,10 +42,16 @@ impl CoreManager {
                 config: Some(clash_config.to_owned()),
                 exists_keys: HashSet::new(),
                 chain_logs: Default::default(),
+                // The default config carries no profile nodes, so there is nothing to relay.
+                relay: None,
             }
         });
 
         help::save_yaml(&runtime_path, &clash_config, Some("# Celestial Runtime")).await?;
+        // This path writes the runtime file itself instead of going through `generate_file`,
+        // so the previous relay's `xray.json` would otherwise be left on disk describing
+        // nodes this config no longer has.
+        Config::clear_xray_config().await?;
         handle::Handle::notice_message(error_key, error_msg);
         Ok(())
     }
@@ -307,7 +325,44 @@ impl CoreManager {
     }
 
     /// Reload the core from `path`, replacing it if it will not take the configuration.
+    ///
+    /// The relay is brought in line first when the new configuration adds or changes one, and
+    /// last when it drops one — the same "xray up first, down last" order a full restart
+    /// follows. Reloading mihomo onto stand-ins pointing at ports the running xray was never
+    /// told to open is exactly what this ordering exists to prevent, and a plain reload is
+    /// where it would otherwise happen unnoticed: mihomo accepts the config either way.
     async fn reload_or_restart(&self, path: &str) -> Result<()> {
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        let relay_change = self.relay_change_for_reload().await;
+
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        if matches!(relay_change, RelayChange::BringUp)
+            && let Err(error) = self.start_xray_if_planned().await
+        {
+            // Deliberately not fatal: mihomo still gets the configuration, and the recovery
+            // regenerates it without the relay.
+            self.recover_from_relay_failure(&format!("{error:#}"));
+        }
+
+        let outcome = self.reload_or_restart_mihomo(path).await;
+
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        if matches!(relay_change, RelayChange::TakeDown) {
+            self.stop_xray();
+        }
+
+        outcome
+    }
+
+    /// What the freshly generated configuration asks of the running relay.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    async fn relay_change_for_reload(&self) -> RelayChange {
+        let planned = Config::active_relay_plan().await;
+        let running = self.running_relay();
+        relay_change(planned.as_ref(), running.as_deref())
+    }
+
+    async fn reload_or_restart_mihomo(&self, path: &str) -> Result<()> {
         match self.reload_config(path).await {
             Ok(_) => {
                 Config::runtime().await.apply();
@@ -342,5 +397,77 @@ impl CoreManager {
 
     async fn reload_config(&self, path: &str) -> Result<(), MihomoError> {
         handle::Handle::mihomo().await.reload_config(true, path).await
+    }
+}
+
+/// Compares the plan a configuration was generated with against the one xray is serving.
+///
+/// Equality is the whole point: an unchanged plan means the ports mihomo's stand-ins name are
+/// the ports xray already has open, and replacing the process would drop every connection
+/// through it to change nothing.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn relay_change(
+    planned: Option<&celestial_xray_relay::RelayPlan>,
+    running: Option<&celestial_xray_relay::RelayPlan>,
+) -> RelayChange {
+    if planned == running {
+        RelayChange::None
+    } else if planned.is_some() {
+        RelayChange::BringUp
+    } else {
+        RelayChange::TakeDown
+    }
+}
+
+#[allow(clippy::unwrap_used, reason = "a failed assertion is a failed test")]
+#[cfg(all(test, not(any(target_os = "android", target_os = "ios"))))]
+mod tests {
+    use super::{RelayChange, relay_change};
+    use celestial_xray_relay::{
+        PlanOptions, PortProbe, RelayPlan,
+        node::{Node, NodeSet, Protocol},
+        plan,
+    };
+
+    struct FixedPorts(u16);
+    impl PortProbe for FixedPorts {
+        fn is_free(&self, port: u16) -> bool {
+            port >= self.0
+        }
+    }
+
+    fn plan_from(first_port: u16) -> RelayPlan {
+        let mut node = Node::new("a", Protocol::Vless, "a.example", 443);
+        node.creds.uuid = Some("uuid".to_owned());
+        node.set_param("security", "reality");
+        node.set_param("pbk", "key");
+        let mut set = NodeSet::new();
+        set.push(node);
+        plan(&set, &FixedPorts(first_port), &PlanOptions::default(), &[]).unwrap()
+    }
+
+    #[test]
+    fn an_unchanged_plan_leaves_the_running_relay_alone() {
+        let running = plan_from(30000);
+        let planned = plan_from(30000);
+        assert_eq!(relay_change(Some(&planned), Some(&running)), RelayChange::None);
+    }
+
+    /// The case a plain mihomo reload would otherwise miss: same node, different port, and
+    /// mihomo happily accepting stand-ins that point nowhere.
+    #[test]
+    fn reassigned_ports_require_the_relay_to_be_replaced() {
+        let running = plan_from(30000);
+        let planned = plan_from(31000);
+        assert_ne!(planned, running, "the fixture must actually differ");
+        assert_eq!(relay_change(Some(&planned), Some(&running)), RelayChange::BringUp);
+    }
+
+    #[test]
+    fn dropping_the_relay_takes_xray_down_and_starting_one_brings_it_up() {
+        let plan = plan_from(30000);
+        assert_eq!(relay_change(None, Some(&plan)), RelayChange::TakeDown);
+        assert_eq!(relay_change(Some(&plan), None), RelayChange::BringUp);
+        assert_eq!(relay_change(None, None), RelayChange::None);
     }
 }

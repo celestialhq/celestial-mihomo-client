@@ -114,7 +114,8 @@
         "useSystemProxy": "Systemproxy zur Aktualisierung verwenden",
         "useClashProxy": "Kernel-Proxy zur Aktualisierung verwenden",
         "acceptInvalidCerts": "Allows Invalid Certificates (Danger)",
-        "allowAutoUpdate": "Allow Auto Update"
+        "allowAutoUpdate": "Allow Auto Update",
+        "xrayUserAgent": "Xray template User Agent"
       },
       "feedback": {
         "notifications": {

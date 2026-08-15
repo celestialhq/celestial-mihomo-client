@@ -121,6 +121,9 @@
         "keyError": "병합 파일 키 오류",
         "generalError": "병합 파일 오류"
       }
+    },
+    "xrayRelay": {
+      "fallbackToNative": "The xray relay could not be started; traffic is going out natively. Reason: "
     }
   },
   "filters": {

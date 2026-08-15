@@ -121,6 +121,9 @@
         "keyError": "Schlüsselfehler in der Überdeckungsdatei. Die Änderungen wurden rückgängig gemacht.",
         "generalError": "Fehler in der Überdeckungsdatei. Die Änderungen wurden rückgängig gemacht."
       }
+    },
+    "xrayRelay": {
+      "fallbackToNative": "The xray relay could not be started; traffic is going out natively. Reason: "
     }
   },
   "filters": {

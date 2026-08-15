@@ -114,7 +114,8 @@
         "useSystemProxy": "Gunakan Proksi Sistem",
         "useClashProxy": "Gunakan Proksi Clash",
         "acceptInvalidCerts": "Terima Sertifikat Tidak Valid (Bahaya)",
-        "allowAutoUpdate": "Allow Auto Update"
+        "allowAutoUpdate": "Allow Auto Update",
+        "xrayUserAgent": "Xray template User Agent"
       },
       "feedback": {
         "notifications": {

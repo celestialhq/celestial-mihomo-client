@@ -128,13 +128,15 @@
               "add": "Tambah",
               "addNew": "Tambah Tunnel Baru"
             }
-          }
+          },
+          "xrayRelay": "Xray relay"
         },
         "tooltips": {
           "networkInterface": "Antarmuka Jaringan",
           "unifiedDelay": "Saat keterlambatan terpadu diaktifkan, dua tes keterlambatan akan dilakukan untuk menghilangkan perbedaan keterlambatan antara berbagai jenis node yang disebabkan oleh jabat tangan koneksi, dll.",
           "logLevel": "Ini hanya berlaku untuk file log kernel di folder layanan di direktori log.",
-          "openUwpTool": "Sejak Windows 8, aplikasi UWP (seperti Microsoft Store) dibatasi dari mengakses layanan jaringan host lokal secara langsung, dan alat ini dapat digunakan untuk melewati pembatasan ini"
+          "openUwpTool": "Sejak Windows 8, aplikasi UWP (seperti Microsoft Store) dibatasi dari mengakses layanan jaringan host lokal secara langsung, dan alat ini dapat digunakan untuk melewati pembatasan ini",
+          "xrayRelay": "Send node traffic out through the bundled xray core. Mihomo keeps routing; the TLS fingerprint and the REALITY/Vision/XHTTP implementations come from xray."
         },
         "options": {
           "logLevel": {
@@ -619,6 +621,33 @@
       "fields": {
         "ipAddress": "Alamat IP",
         "macAddress": "Alamat MAC"
+      }
+    },
+    "xrayRelay": {
+      "title": "Xray relay",
+      "description": "Nodes xray cannot carry stay on mihomo and keep working. The reason is shown next to each one.",
+      "status": {
+        "active": "Relaying {{relayed}} of {{total}} nodes",
+        "native": "Not relaying — going out natively",
+        "forced": "Pinned on by this build",
+        "suppressed": "Dropped after a failure this session",
+        "fromTemplate": "Outbounds from the subscription's xray template",
+        "fromConverter": "Outbounds built by the converter"
+      },
+      "node": {
+        "viaPort": "Relayed on port {{port}}",
+        "native": "Native",
+        "none": "No nodes have been planned yet."
+      },
+      "override": {
+        "auto": "Automatic",
+        "relay": "Relay",
+        "native": "Native"
+      },
+      "export": {
+        "xray": "Export xray.json",
+        "runtime": "Export config.yaml",
+        "masked": "Credentials are replaced with <redacted>."
       }
     }
   },

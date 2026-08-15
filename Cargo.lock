@@ -1142,6 +1142,7 @@ dependencies = [
  "bitflags 2.13.0",
  "boa_engine",
  "bytes",
+ "celestial-xray-relay",
  "celestial_logger",
  "celestial_service_ipc",
  "chrono",

@@ -32,34 +32,68 @@ pub struct Substitution {
 pub fn apply_relay(config: &mut Mapping, plan: &RelayPlan) -> Substitution {
     let mut result = Substitution::default();
 
+    // Which provider payloads may be rewritten is decided before the config is borrowed
+    // mutably, and by the same rule that decided which ones contributed nodes — the two must
+    // not disagree, or a provider would supply a node to the plan and keep the original.
+    let relayable_providers: Vec<String> = crate::parse::inline_provider_payloads(&Value::Mapping(config.clone()))
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
+
     if let Some(Value::Sequence(proxies)) = config.get_mut("proxies") {
-        for proxy in proxies.iter_mut() {
-            let Some(name) = proxy.get("name").and_then(Value::as_str).map(ToOwned::to_owned) else {
-                continue;
-            };
-            if proxy.get("type").and_then(Value::as_str) == Some("dns") {
+        substitute_list(proxies, plan, &mut result);
+    }
+
+    if let Some(Value::Mapping(providers)) = config.get_mut("proxy-providers") {
+        for (name, provider) in providers.iter_mut() {
+            let Some(name) = name.as_str() else { continue };
+            if !relayable_providers.iter().any(|it| it == name) {
                 continue;
             }
-            let Some(planned) = plan.nodes.iter().find(|it| it.name == name) else {
-                // Not in the plan at all: a node that appeared after planning, or one the
-                // parser could not read. Leaving it as it is keeps it working natively.
-                result.untouched.push((name, "not part of the relay plan".to_owned()));
-                continue;
-            };
-            match &planned.disposition {
-                crate::plan::Disposition::Relay { port } => {
-                    *proxy = Value::Mapping(stand_in(&name, *port));
-                    result.replaced.push(name);
-                }
-                crate::plan::Disposition::Native { reason } => {
-                    result.untouched.push((name, reason.clone()));
-                }
+            if let Some(Value::Sequence(payload)) = provider.get_mut("payload") {
+                substitute_list(payload, plan, &mut result);
             }
         }
     }
 
     result.rule_inserted = ensure_loopback_rule(config);
     result
+}
+
+/// Replaces the relayed nodes of one `proxies`-shaped list in place.
+fn substitute_list(proxies: &mut [Value], plan: &RelayPlan, result: &mut Substitution) {
+    for proxy in proxies.iter_mut() {
+        let Some(name) = proxy.get("name").and_then(Value::as_str).map(ToOwned::to_owned) else {
+            continue;
+        };
+        if proxy.get("type").and_then(Value::as_str) == Some("dns") {
+            continue;
+        }
+        // A node told to dial through another proxy cannot become a stand-in: mihomo would
+        // reach `127.0.0.1` through that proxy, which lands on the remote server's loopback
+        // rather than on our inbound.
+        if proxy.get("dialer-proxy").is_some() {
+            result
+                .untouched
+                .push((name, "the node dials through another proxy".to_owned()));
+            continue;
+        }
+        let Some(planned) = plan.nodes.iter().find(|it| it.name == name) else {
+            // Not in the plan at all: a node that appeared after planning, or one the
+            // parser could not read. Leaving it as it is keeps it working natively.
+            result.untouched.push((name, "not part of the relay plan".to_owned()));
+            continue;
+        };
+        match &planned.disposition {
+            crate::plan::Disposition::Relay { port } => {
+                *proxy = Value::Mapping(stand_in(&name, *port));
+                result.replaced.push(name);
+            }
+            crate::plan::Disposition::Native { reason } => {
+                result.untouched.push((name, reason.clone()));
+            }
+        }
+    }
 }
 
 /// The socks5 entry that takes a relayed node's place.
@@ -128,6 +162,118 @@ rules:
     fn planned(config: &serde_yaml_ng::Mapping) -> crate::plan::RelayPlan {
         let set = crate::parse_mihomo_proxies(&serde_yaml_ng::Value::Mapping(config.clone()));
         plan(&set, &AllFree, &PlanOptions::default(), &[]).unwrap()
+    }
+
+    /// The shape the panel produces when a template asks for `include-proxies`: the whole
+    /// node list is inlined into providers, and the groups source their nodes from *those*
+    /// rather than from `proxies`.
+    fn config_with_providers() -> serde_yaml_ng::Mapping {
+        let yaml = r#"
+proxies:
+  - &node {name: "🇫🇮 finland", type: vless, server: a.example, port: 443, uuid: u, tls: true, servername: a.example}
+  - &hy {name: "🇫🇮 hy2", type: hysteria2, server: a.example, port: 22443, password: p}
+proxy-providers:
+  main-provider:
+    type: inline
+    payload: [*node, *hy]
+  bridge-dialer:
+    type: inline
+    override:
+      dialer-proxy: Российские
+      additional-prefix: 🇷🇺➡️
+    payload: [*node, *hy]
+  remote-provider:
+    type: http
+    url: https://example.test/sub
+proxy-groups:
+  - name: "💭 CELESTIAL VPN"
+    type: fallback
+    use: [main-provider, bridge-dialer]
+    proxies: []
+rules:
+  - MATCH,💭 CELESTIAL VPN
+"#;
+        serde_yaml_ng::from_str(yaml).unwrap()
+    }
+
+    /// The hole this closes: every group here reaches its nodes through a provider, so a
+    /// substitution confined to `proxies` produces a relay that is generated, started, and
+    /// carries nothing at all — while looking like it works.
+    #[test]
+    fn nodes_inlined_into_a_provider_are_relayed_too() {
+        let mut config = config_with_providers();
+        let plan = planned(&config);
+        apply_relay(&mut config, &plan);
+
+        let payload = config["proxy-providers"]["main-provider"]["payload"]
+            .as_sequence()
+            .unwrap();
+        assert_eq!(payload[0]["type"], "socks5", "the provider's copy must be relayed too");
+        assert_eq!(
+            payload[0]["name"], "🇫🇮 finland",
+            "the name is what the group filters on"
+        );
+        assert_eq!(payload[1]["type"], "hysteria2", "and an unrelayable one still is not");
+    }
+
+    /// One node, however many places it is listed in.
+    #[test]
+    fn a_node_repeated_across_providers_gets_one_port_and_one_inbound() {
+        let mut config = config_with_providers();
+        let plan = planned(&config);
+
+        assert_eq!(plan.ports.entries().len(), 1, "three listings of one node, one port");
+        let port = plan.ports.get("🇫🇮 finland").unwrap();
+
+        apply_relay(&mut config, &plan);
+        assert_eq!(config["proxies"][0]["port"].as_u64(), Some(u64::from(port)));
+        assert_eq!(
+            config["proxy-providers"]["main-provider"]["payload"][0]["port"].as_u64(),
+            Some(u64::from(port)),
+            "both copies dial the same inbound"
+        );
+    }
+
+    /// `dialer-proxy` means "reach this node through that proxy". A stand-in on `127.0.0.1`
+    /// reached through a remote server resolves to *that server's* loopback, so these have to
+    /// stay native however relayable the node itself is.
+    #[test]
+    fn a_provider_that_dials_through_another_proxy_is_left_alone() {
+        let mut config = config_with_providers();
+        let plan = planned(&config);
+        apply_relay(&mut config, &plan);
+
+        let payload = config["proxy-providers"]["bridge-dialer"]["payload"]
+            .as_sequence()
+            .unwrap();
+        assert_eq!(payload[0]["type"], "vless", "the bridge keeps dialling out itself");
+        assert_eq!(payload[0]["server"], "a.example");
+    }
+
+    /// An http provider's payload is fetched by mihomo from a URL, so there is nothing here
+    /// to rewrite and nothing to be confused by.
+    #[test]
+    fn a_remote_provider_is_not_mistaken_for_something_rewritable() {
+        let mut config = config_with_providers();
+        let before = config["proxy-providers"]["remote-provider"].clone();
+        let plan = planned(&config);
+        apply_relay(&mut config, &plan);
+        assert_eq!(config["proxy-providers"]["remote-provider"], before);
+    }
+
+    #[test]
+    fn a_node_that_dials_through_another_proxy_stays_native() {
+        let yaml = r"
+proxies:
+  - {name: chained, type: vless, server: a.example, port: 443, uuid: u, tls: true, servername: a.example, dialer-proxy: entry}
+";
+        let mut config: serde_yaml_ng::Mapping = serde_yaml_ng::from_str(yaml).unwrap();
+        let plan = planned(&config);
+        let result = apply_relay(&mut config, &plan);
+
+        assert!(result.replaced.is_empty());
+        assert_eq!(config["proxies"][0]["type"], "vless");
+        assert!(result.untouched.iter().any(|(name, _)| name == "chained"));
     }
 
     #[test]

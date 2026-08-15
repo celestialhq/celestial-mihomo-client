@@ -431,12 +431,17 @@ proxies:
     /// The panel builds the mihomo profile by converting its own xray config, so the
     /// converter's job here is to land back on exactly what the panel started from.
     ///
-    /// The `sessionID*` names come from the panel generator's own `XHTTP_FIELD_MAP`, which
-    /// maps `sessionIDKey → session-key`. Note that the panel's UI writes `sessionKey` into
-    /// the xray `extra` block instead, so that generator never matches it and those three
-    /// fields are dropped from the mihomo subscription entirely — which is why the profile
-    /// this test is modelled on carries `seq-*` but no `session-*`. We invert the map the
-    /// generator actually declares.
+    /// `expected` below is a real `extra` block from the panel, byte for byte — the thing
+    /// the server was configured against and the thing a v2rayN user is handed. Landing
+    /// anywhere else means mode C disagrees with mode A about the same node.
+    ///
+    /// The two `sessionID*` entries are the pre-release channel's spelling of the same
+    /// fields, written alongside rather than instead; see `add_session_aliases`. The panel
+    /// does not emit them and neither core minds the one it does not recognise.
+    ///
+    /// This is the one place where nothing downstream would catch a mistake: xray ignores
+    /// keys it does not know inside `extra`, so a wrong name here validates, starts, and
+    /// silently drops the masking. See the note on `xhttp_extra`.
     #[test]
     fn the_full_masking_set_round_trips_back_to_the_panels_own_extra() {
         let opts = concat!(
@@ -464,14 +469,51 @@ proxies:
                 "hMaxReusableSecs": "1800-3600"
             },
             "seqKey": "seq",
-            "sessionIDKey": "sid",
+            "sessionKey": "sid",
             "noGRPCHeader": true,
             "seqPlacement": "path",
-            "sessionIDTable": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            "sessionTable": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
             "xPaddingBytes": "100-1000",
+            "sessionPlacement": "path",
+            "sessionIDKey": "sid",
             "sessionIDPlacement": "path"
         });
         assert_eq!(produced, &expected);
+    }
+
+    /// The one session field that must *not* be aliased on its own.
+    ///
+    /// The pre-release core validates `sessionIDTable` against `sessionIDLength` and refuses
+    /// the whole outbound when the pair does not add up — verified against 26.7.28:
+    /// "sessionIDTable or sessionIDLength is too small". Writing the alias without a length
+    /// would turn a field both cores currently ignore into a core that will not start.
+    #[test]
+    fn a_session_table_without_a_length_is_not_given_the_alias_that_would_be_validated() {
+        let opts = "      session-table: abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\n";
+        let set = crate::parse_mihomo_proxies(&real_xhttp_yaml(opts));
+        let outbound = to_outbound(&set.nodes()[0]).unwrap();
+        let extra = &outbound["streamSettings"]["xhttpSettings"]["extra"];
+
+        assert!(extra.get("sessionTable").is_some(), "the panel's own spelling is kept");
+        assert!(
+            extra.get("sessionIDTable").is_none(),
+            "aliasing it without a length is what makes the pre-release refuse the outbound"
+        );
+    }
+
+    /// With a length there is nothing to refuse, so the pre-release gets a table it can use.
+    #[test]
+    fn a_session_table_with_a_length_is_aliased_as_a_pair() {
+        let opts = concat!(
+            "      session-table: abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\n",
+            "      session-length: 8-12\n",
+        );
+        let set = crate::parse_mihomo_proxies(&real_xhttp_yaml(opts));
+        let outbound = to_outbound(&set.nodes()[0]).unwrap();
+        let extra = &outbound["streamSettings"]["xhttpSettings"]["extra"];
+
+        assert_eq!(extra["sessionIDTable"], extra["sessionTable"]);
+        assert_eq!(extra["sessionIDLength"], extra["sessionLength"]);
     }
 
     /// XTLS is valid on raw+TLS/REALITY, and on any transport once VLESS Encryption is in

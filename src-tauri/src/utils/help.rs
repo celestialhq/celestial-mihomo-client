@@ -105,6 +105,36 @@ pub async fn save_yaml_atomic<T: Serialize + Sync>(path: &PathBuf, data: &T, pre
     Ok(())
 }
 
+/// Save JSON atomically, keeping the previous content as `<name>.bak`.
+///
+/// Same staging-and-rename as [`save_yaml_atomic`], for the generated files that are JSON.
+/// The backup is copied rather than renamed so the target never stops existing: something
+/// reading it while this runs sees the old file or the new one.
+pub async fn save_json_atomic<T: Serialize + Sync>(path: &PathBuf, data: &T) -> Result<()> {
+    let json_str = serde_json::to_string_pretty(data)?;
+    let path_str = path.as_os_str().to_string_lossy().to_string();
+
+    if tokio::fs::try_exists(path).await.unwrap_or(false) {
+        let backup = path.with_extension("json.bak");
+        if let Err(error) = tokio::fs::copy(path, &backup).await {
+            // A missing backup is worth knowing about but not worth refusing the write for.
+            logging!(warn, Type::Config, "failed to back up \"{}\": {}", path_str, error);
+        }
+    }
+
+    let temp_path = path.with_extension("json.tmp");
+    tokio::fs::write(&temp_path, json_str.as_bytes())
+        .await
+        .with_context(|| format!("failed to stage file \"{path_str}\""))?;
+
+    if let Err(error) = tokio::fs::rename(&temp_path, path).await {
+        let _ = tokio::fs::remove_file(&temp_path).await;
+        return Err(error).with_context(|| format!("failed to save file \"{path_str}\""));
+    }
+
+    Ok(())
+}
+
 const ALPHABET: [char; 62] = [
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
     'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',

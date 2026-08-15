@@ -114,7 +114,8 @@
         "useSystemProxy": "استخدام وكيل النظام",
         "useClashProxy": "استخدام وكيل Clash",
         "acceptInvalidCerts": "قبول الشهادات غير الصالحة (خطر)",
-        "allowAutoUpdate": "Allow Auto Update"
+        "allowAutoUpdate": "Allow Auto Update",
+        "xrayUserAgent": "Xray template User Agent"
       },
       "feedback": {
         "notifications": {

@@ -103,6 +103,11 @@ pub struct IVerge {
     /// enable dns settings - this controls whether dns_config.yaml is applied
     pub enable_dns_settings: Option<bool>,
 
+    /// send outbound traffic through the bundled xray core instead of letting mihomo dial
+    /// the nodes itself — read through `xray_relay_enabled`, never directly, so the build
+    /// feature that forces the mode on is not bypassed
+    pub enable_xray_relay: Option<bool>,
+
     /// always use default bypass
     pub use_default_bypass: Option<bool>,
 
@@ -346,6 +351,20 @@ impl IVerge {
         config_draft.apply();
 
         Ok(())
+    }
+
+    /// Whether nodes should leave through the xray relay.
+    ///
+    /// Opt-in by default; builds carrying `force-xray-relay` have it on regardless of what
+    /// is stored, which is what lets the setting stay in the file untouched while the UI
+    /// shows the switch locked.
+    ///
+    /// Never on mobile, feature or not. The core runs in-process there through cgo and no
+    /// second process can be spawned, so planning a relay would only replace every node with
+    /// a stand-in pointing at an inbound that will never exist.
+    pub fn xray_relay_enabled(&self) -> bool {
+        cfg!(not(any(target_os = "android", target_os = "ios")))
+            && (cfg!(feature = "force-xray-relay") || self.enable_xray_relay.unwrap_or(false))
     }
 
     pub fn get_valid_clash_core(&self) -> String {

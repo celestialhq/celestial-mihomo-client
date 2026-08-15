@@ -1,5 +1,5 @@
 use crate::{
-    config::profiles,
+    config::{Config, profiles},
     utils::{
         dirs, help,
         network::{NetworkManager, ProxyType},
@@ -7,6 +7,7 @@ use crate::{
     },
 };
 use anyhow::{Context as _, Result, bail};
+use clash_verge_logging::{Type, logging};
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Mapping;
 use smartstring::alias::String;
@@ -61,6 +62,19 @@ pub struct PrfItem {
     /// the file data
     #[serde(skip)]
     pub file_data: Option<String>,
+
+    /// The xray template this subscription served, stored beside the profile.
+    ///
+    /// The same URL answers differently depending on the User-Agent, so this is the second
+    /// answer rather than a second subscription: it describes the same nodes in the same
+    /// order, as xray outbounds. Absent when the panel does not serve one, when it served
+    /// the same bytes twice, or when the relay was off at update time.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub xray_file: Option<String>,
+
+    /// the xray template data
+    #[serde(skip)]
+    pub xray_data: Option<String>,
 }
 
 /// Comparable because reconciling selections against the running core has to answer
@@ -79,12 +93,38 @@ pub struct PrfExtra {
     pub expire: u64,
 }
 
+/// One node the user pinned to a side of the relay.
+///
+/// An override outranks the name-exclusion list, but it cannot make a node relayable that has
+/// no outbound — the eligibility check still has to pass. That asymmetry is deliberate: the
+/// list is a guess about names, whereas "xray has nothing to dial this with" is a fact.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PrfRelayOverride {
+    pub name: String,
+    /// `relay` or `native`.
+    pub mode: String,
+}
+
 #[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PrfOption {
     /// for `remote` profile's http request
     /// see issue #13
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_agent: Option<String>,
+
+    /// The User-Agent the xray template is asked for, when it differs from the default
+    /// `celestial/xray/<ver>`. A panel tells the two requests apart by this and nothing else,
+    /// so it is the one knob that decides whether mode A is available at all.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub xray_user_agent: Option<String>,
+
+    /// Per-node decisions the user made by hand, by node name.
+    ///
+    /// Kept with the profile because that is what they are about, and because they have to
+    /// survive a subscription refresh: a node the user moved off the relay for a reason must
+    /// not quietly go back on it the next time the list is fetched.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relay_overrides: Option<Vec<PrfRelayOverride>>,
 
     /// for `remote` profile
     /// use system proxy
@@ -132,6 +172,8 @@ impl PrfOption {
             (Some(a_ref), Some(b_ref)) => {
                 let mut result = a_ref.clone();
                 result.user_agent = b_ref.user_agent.clone().or(result.user_agent);
+                result.xray_user_agent = b_ref.xray_user_agent.clone().or(result.xray_user_agent);
+                result.relay_overrides = b_ref.relay_overrides.clone().or(result.relay_overrides);
                 result.with_proxy = b_ref.with_proxy.or(result.with_proxy);
                 result.self_proxy = b_ref.self_proxy.or(result.self_proxy);
                 result.danger_accept_invalid_certs =
@@ -250,6 +292,10 @@ impl PrfItem {
             home: None,
             updated: Some(chrono::Local::now().timestamp() as usize),
             file_data: Some(file_data.unwrap_or_else(|| tmpl::ITEM_LOCAL.into())),
+            // A local profile has no subscription to ask for a template; its nodes go
+            // through the converter.
+            xray_file: None,
+            xray_data: None,
         })
     }
 
@@ -402,6 +448,14 @@ impl PrfItem {
             bail!("profile does not contain `proxies` or `proxy-providers`");
         }
 
+        // The second answer to the same URL. Deliberately inside this one update flow rather
+        // than on a schedule of its own: a template fetched at a different moment describes a
+        // different set of nodes, and since pairing is by name it would line up anyway — and
+        // be wrong. Only reached once the profile itself is known good.
+        let xray_data =
+            fetch_xray_template(url.as_str(), option, proxy_type, timeout, accept_invalid_certs, data).await;
+        let xray_file: Option<String> = xray_data.as_ref().map(|_| format!("{uid}.xray.json").into());
+
         if merge.is_none() {
             let merge_item = &mut Self::from_merge(None)?;
             profiles::profiles_append_item_safe(merge_item).await?;
@@ -450,7 +504,16 @@ impl PrfItem {
             home,
             updated: Some(chrono::Local::now().timestamp() as usize),
             file_data: Some(data.into()),
+            xray_file,
+            xray_data,
         })
+    }
+
+    /// The template stored beside this profile, if the subscription served one.
+    pub async fn read_xray_template(&self) -> Option<String> {
+        let file = self.xray_file.as_ref()?;
+        let path = dirs::app_profiles_dir().ok()?.join(file.as_str());
+        fs::read_to_string(&path).await.ok().map(Into::into)
     }
 
     /// ## Merge type (enhance)
@@ -628,6 +691,82 @@ fn header_is_true(headers: &reqwest::header::HeaderMap, name: &str) -> bool {
         .get(name)
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+}
+
+/// What the subscription is asked to serve xray with, when nothing overrides it.
+///
+/// The panel decides which of the two answers to give from this string alone.
+pub fn default_xray_user_agent() -> String {
+    format!("celestial/xray/{}", env!("CARGO_PKG_VERSION")).into()
+}
+
+/// Asks the same URL for its xray template, and keeps it only if it is one.
+///
+/// Never fails the profile update. A panel that serves no template, serves the same bytes to
+/// both User-Agents, or is simply unreachable on the second request is not a broken
+/// subscription — it is a subscription that will be relayed through the converter instead, or
+/// natively. The mode exists to improve fidelity, not to become a new way to have no config.
+async fn fetch_xray_template(
+    url: &str,
+    option: Option<&PrfOption>,
+    proxy_type: ProxyType,
+    timeout: u64,
+    accept_invalid_certs: bool,
+    primary: &str,
+) -> Option<String> {
+    if !Config::verge().await.latest_arc().xray_relay_enabled() {
+        return None;
+    }
+
+    let user_agent = option
+        .and_then(|o| o.xray_user_agent.clone())
+        .unwrap_or_else(default_xray_user_agent);
+
+    let resp = NetworkManager::new()
+        .get_with_interrupt(url, proxy_type, Some(timeout), Some(user_agent), accept_invalid_certs)
+        .await
+        .inspect_err(|error| {
+            logging!(warn, Type::Config, "no xray template for this subscription: {error}");
+        })
+        .ok()?;
+
+    if !resp.status().is_success() {
+        logging!(
+            warn,
+            Type::Config,
+            "the subscription answered {} for the xray template",
+            resp.status()
+        );
+        return None;
+    }
+
+    let body = resp.text_with_charset().ok()?;
+    let body = body.trim_start_matches('\u{feff}').trim();
+
+    // The panel ignored the User-Agent and served the profile again. Mode B: there is nothing
+    // to pair, and parsing the same bytes twice would only produce the same nodes.
+    if body == primary.trim() {
+        logging!(
+            info,
+            Type::Config,
+            "the subscription served the same body to both User-Agents; converting instead of pairing"
+        );
+        return None;
+    }
+
+    match celestial_xray_relay::detect(body) {
+        Ok(celestial_xray_relay::Payload::XrayTemplate(_)) => Some(body.into()),
+        Ok(_) | Err(_) => {
+            // Something arrived, but not outbounds we can pair by tag. The converter still
+            // has the mihomo side to work from.
+            logging!(
+                info,
+                Type::Config,
+                "the second response is not an xray template; converting instead of pairing"
+            );
+            None
+        }
+    }
 }
 
 #[cfg(test)]

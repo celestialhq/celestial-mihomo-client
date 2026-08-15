@@ -318,6 +318,7 @@ export interface TranslationResources {
             updateInterval: string
             useClashProxy: string
             useSystemProxy: string
+            xrayUserAgent: string
           }
           title: {
             create: string
@@ -1060,6 +1061,33 @@ export interface TranslationResources {
           }
           title: string
         }
+        xrayRelay: {
+          description: string
+          export: {
+            masked: string
+            runtime: string
+            xray: string
+          }
+          node: {
+            native: string
+            none: string
+            viaPort: string
+          }
+          override: {
+            auto: string
+            native: string
+            relay: string
+          }
+          status: {
+            active: string
+            forced: string
+            fromConverter: string
+            fromTemplate: string
+            native: string
+            suppressed: string
+          }
+          title: string
+        }
       }
       page: {
         actions: {
@@ -1113,6 +1141,7 @@ export interface TranslationResources {
               unifiedDelay: string
               updateGeoData: string
               webUI: string
+              xrayRelay: string
             }
             options: {
               logLevel: {
@@ -1128,6 +1157,7 @@ export interface TranslationResources {
               networkInterface: string
               openUwpTool: string
               unifiedDelay: string
+              xrayRelay: string
             }
           }
           title: string
@@ -1301,6 +1331,9 @@ export interface TranslationResources {
             readError: string
             syntaxError: string
           }
+        }
+        xrayRelay: {
+          fallbackToNative: string
         }
       }
       filters: {

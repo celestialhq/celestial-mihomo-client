@@ -114,7 +114,8 @@
         "useSystemProxy": "Использовать системный прокси для обновления",
         "useClashProxy": "Использовать Clash proxy для обновления",
         "acceptInvalidCerts": "Принимать недействительные сертификаты (ОПАСНО)",
-        "allowAutoUpdate": "Разрешить автообновление"
+        "allowAutoUpdate": "Разрешить автообновление",
+        "xrayUserAgent": "User Agent для xray-шаблона"
       },
       "feedback": {
         "notifications": {

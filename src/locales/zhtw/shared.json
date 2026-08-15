@@ -121,6 +121,9 @@
         "keyError": "覆寫檔案鍵錯誤，變更已撤銷",
         "generalError": "覆寫檔案錯誤，變更已撤銷"
       }
+    },
+    "xrayRelay": {
+      "fallbackToNative": "The xray relay could not be started; traffic is going out natively. Reason: "
     }
   },
   "filters": {

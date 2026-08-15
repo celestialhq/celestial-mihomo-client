@@ -128,13 +128,15 @@
               "add": "Östäw",
               "addNew": "Yaña Tunnel Östäw"
             }
-          }
+          },
+          "xrayRelay": "Xray relay"
         },
         "tooltips": {
           "networkInterface": "Челтәр интерфейсы",
           "unifiedDelay": "Бердәм задержка актив булганда, төрле типтагы узеллар өчен икеләтә тест башкарыла, TCP установканы раслау аермаларын тигезләү максатында",
           "logLevel": "Бу фәкать сервис режимында эшләгән вакытта системалы журнал файлларына кагыла",
-          "openUwpTool": "Windows 8'дән башлап UWP кушымталары (Microsoft Store кебек) локаль хосттагы челтәр хезмәтләренә турыдан-туры тоташа алмый. Бу инструмент әлеге чикләүне әйләнеп узарга ярдәм итә"
+          "openUwpTool": "Windows 8'дән башлап UWP кушымталары (Microsoft Store кебек) локаль хосттагы челтәр хезмәтләренә турыдан-туры тоташа алмый. Бу инструмент әлеге чикләүне әйләнеп узарга ярдәм итә",
+          "xrayRelay": "Send node traffic out through the bundled xray core. Mihomo keeps routing; the TLS fingerprint and the REALITY/Vision/XHTTP implementations come from xray."
         },
         "options": {
           "logLevel": {
@@ -619,6 +621,33 @@
       "fields": {
         "ipAddress": "IP адресы",
         "macAddress": "MAC адресы"
+      }
+    },
+    "xrayRelay": {
+      "title": "Xray relay",
+      "description": "Nodes xray cannot carry stay on mihomo and keep working. The reason is shown next to each one.",
+      "status": {
+        "active": "Relaying {{relayed}} of {{total}} nodes",
+        "native": "Not relaying — going out natively",
+        "forced": "Pinned on by this build",
+        "suppressed": "Dropped after a failure this session",
+        "fromTemplate": "Outbounds from the subscription's xray template",
+        "fromConverter": "Outbounds built by the converter"
+      },
+      "node": {
+        "viaPort": "Relayed on port {{port}}",
+        "native": "Native",
+        "none": "No nodes have been planned yet."
+      },
+      "override": {
+        "auto": "Automatic",
+        "relay": "Relay",
+        "native": "Native"
+      },
+      "export": {
+        "xray": "Export xray.json",
+        "runtime": "Export config.yaml",
+        "masked": "Credentials are replaced with <redacted>."
       }
     }
   },

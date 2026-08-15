@@ -104,6 +104,30 @@ export async function getRuntimeLogs() {
   return invoke<Record<string, [string, string][]>>('get_runtime_logs')
 }
 
+// Whether traffic is leaving through xray, and what became of each node.
+export async function getXrayRelayStatus() {
+  return invoke<IXrayRelayStatus>('get_xray_relay_status')
+}
+
+export async function setXrayRelayEnabled(enabled: boolean) {
+  return invoke<void>('set_xray_relay_enabled', { enabled })
+}
+
+// mode: 'relay' | 'native' | 'auto', where 'auto' drops the override.
+export async function setRelayNodeOverride(name: string, mode: string) {
+  return invoke<void>('set_relay_node_override', { name, mode })
+}
+
+// Both exports mask credentials unless `unmasked` is set, which the caller is expected to
+// make a deliberate choice rather than a default.
+export async function exportXrayConfig(unmasked = false) {
+  return invoke<string>('export_xray_config', { unmasked })
+}
+
+export async function exportRuntimeConfig(unmasked = false) {
+  return invoke<string>('export_runtime_config', { unmasked })
+}
+
 export async function getRuntimeProxyChainConfig(proxyChainExitNode: string) {
   return invoke<string>('get_runtime_proxy_chain_config', {
     proxyChainExitNode,

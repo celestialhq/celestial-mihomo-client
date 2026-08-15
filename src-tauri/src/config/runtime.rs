@@ -1,3 +1,4 @@
+use celestial_xray_relay::RelayPlan;
 use serde_yaml_ng::{Mapping, Value};
 use smartstring::alias::String;
 use std::collections::{HashMap, HashSet};
@@ -14,6 +15,14 @@ pub struct IRuntime {
     pub exists_keys: HashSet<String>,
     // TODO 或许可以用 FixMap 来存储以提升效率
     pub chain_logs: HashMap<String, Vec<(String, String)>>,
+    /// How the nodes in `config` are relayed through xray, or `None` when they are dialled
+    /// natively.
+    ///
+    /// It lives here rather than in a slot of its own so it commits and rolls back with the
+    /// config it was built from. Kept apart, a rolled-back config would leave the previous
+    /// plan behind — and a plan describing nodes that are no longer in the config points
+    /// mihomo's stand-ins at inbounds xray was never told to open.
+    pub relay: Option<RelayPlan>,
 }
 
 impl IRuntime {

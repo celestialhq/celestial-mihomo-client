@@ -313,6 +313,54 @@ function xrayCore() {
   }
 }
 
+/// Fails the build if the downloaded xray renames the XHTTP masking fields.
+///
+/// `crates/celestial-xray-relay` converts mihomo's `xhttp-opts` onto these names, and xray
+/// parses `extra` into a struct that **ignores keys it does not know** — a renamed field
+/// produces a config that validates, starts, and quietly drops the obfuscation it was
+/// written for. Nothing downstream can catch that, so it is caught here, where the binary
+/// changes.
+///
+/// The session family exists under two spellings, and which one a build gets depends on the
+/// channel: release 26.3.27 declares `sessionKey` / `sessionPlacement`, while the pre-release
+/// channel (26.7.28) renamed them to `sessionIDKey` / `sessionIDPlacement`. The converter
+/// writes both, so either core finds the one it reads — this only has to confirm that at
+/// least one of them is still there, and that the rest of the family has not moved too.
+async function checkXrayXhttpFieldNames() {
+  const target = path.join(SIDECAR_DIR, xrayCore().targetFile)
+  const binary = await fsp.readFile(target)
+  const text = binary.toString('latin1')
+
+  const required = [
+    'json:"xPaddingObfsMode"',
+    'json:"uplinkHTTPMethod"',
+    'json:"noGRPCHeader"',
+    'json:"seqPlacement"',
+    'json:"seqKey"',
+  ]
+  const missing = required.filter((tag) => !text.includes(tag))
+
+  const sessionSpellings = ['json:"sessionKey"', 'json:"sessionIDKey"'].filter(
+    (tag) => text.includes(tag),
+  )
+  if (sessionSpellings.length === 0) {
+    missing.push('json:"sessionKey" or json:"sessionIDKey"')
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `xray ${XRAY_VERSION} does not declare ${missing.join(', ')}. ` +
+        'The XHTTP masking field names moved again; the relay converter would emit names ' +
+        'this core silently ignores, and no config test can object because xray drops ' +
+        'unknown keys in "extra". Update IRREGULAR and add_session_aliases in ' +
+        'crates/celestial-xray-relay/src/parse.rs, and the round-trip test beside them.',
+    )
+  }
+  log_success(
+    `"celestial-xray" XHTTP field names match the relay converter (${sessionSpellings.join(', ')})`,
+  )
+}
+
 // =======================
 // Fetch latest versions
 // =======================
@@ -856,7 +904,10 @@ const tasks = [
   },
   {
     name: 'celestial-xray',
-    func: () => getLatestXrayVersion().then(() => resolveSidecar(xrayCore())),
+    func: () =>
+      getLatestXrayVersion()
+        .then(() => resolveSidecar(xrayCore()))
+        .then(() => checkXrayXhttpFieldNames()),
     retry: 5,
   },
   { name: 'plugin', func: resolvePlugin, retry: 5, winOnly: true },

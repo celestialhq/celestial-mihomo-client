@@ -54,6 +54,13 @@ pub mod files {
     pub const CHECK_CONFIG: &str = "celestial-check.yaml";
     pub const DNS_CONFIG: &str = "dns_config.yaml";
     pub const WINDOW_STATE: &str = "window_state.json";
+
+    /// The xray relay's config, generated alongside `RUNTIME_CONFIG` from the same pass so
+    /// the two always describe the same set of nodes.
+    pub const XRAY_CONFIG: &str = "celestial-xray.json";
+    /// The copy `xray -test -config` is pointed at, so validation never overwrites the file
+    /// a running core was started from.
+    pub const XRAY_CHECK_CONFIG: &str = "celestial-xray-check.json";
 }
 
 pub mod tun {

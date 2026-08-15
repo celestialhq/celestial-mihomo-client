@@ -121,6 +121,9 @@
         "keyError": "Ошибка ключа в Merge File, откат изменений",
         "generalError": "Ошибка Merge File, откат изменений"
       }
+    },
+    "xrayRelay": {
+      "fallbackToNative": "Не удалось запустить xray-релей — трафик идёт напрямую, без релея. Причина: "
     }
   },
   "filters": {

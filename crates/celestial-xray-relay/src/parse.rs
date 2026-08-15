@@ -266,25 +266,93 @@ fn non_empty(value: String) -> Option<String> {
     (!value.is_empty()).then_some(value)
 }
 
-/// Reads the `proxies` list of a mihomo config into nodes (modes C and D).
+/// Reads every node a mihomo config defines (modes C and D).
+///
+/// That is `proxies` *and* the payload of every inline `proxy-providers` entry. The panel
+/// puts the whole generated node list inside such a provider whenever the template asks it
+/// to (`remnawave: {include-proxies: true}`), and groups then source their nodes from the
+/// provider rather than from `proxies` — so a relay built from `proxies` alone would be
+/// perfectly generated, perfectly started, and carry no traffic whatever.
+///
+/// Names are the identity, because that is what mihomo addresses nodes by: the same node
+/// listed in `proxies` and in three providers is one node and gets one port.
 pub fn parse_mihomo_proxies(config: &serde_yaml_ng::Value) -> NodeSet {
     let mut set = NodeSet::new();
-    let Some(proxies) = config.get("proxies").and_then(|it| it.as_sequence()) else {
-        return set;
+    let mut seen: Vec<(String, (String, u16))> = Vec::new();
+
+    let collect = |source: &serde_yaml_ng::Value, set: &mut NodeSet, seen: &mut Vec<_>| {
+        let Some(proxies) = source.as_sequence() else {
+            return;
+        };
+        for (index, proxy) in proxies.iter().enumerate() {
+            // `type: dns` is mihomo's built-in DNS outbound, not a server. It has no address
+            // to relay and the config generator emits one into every profile, so treating it
+            // as a broken node would put a warning in front of the user on every single
+            // subscription.
+            if proxy.get("type").and_then(|it| it.as_str()) == Some("dns") {
+                continue;
+            }
+            match node_from_mihomo_proxy(proxy) {
+                Ok(node) => {
+                    let identity = (node.server.clone(), node.port);
+                    if let Some((_, first)) = seen.iter().find(|(name, _)| *name == node.name) {
+                        // Already planned. Worth saying when the repeat is a *different*
+                        // server under the same name, because then one of the two is about to
+                        // be relayed through the other's outbound.
+                        if *first != identity {
+                            set.warn(Warning::new(format!(
+                                "`{}` is defined more than once with different addresses; \
+                                 the first definition is the one relayed",
+                                node.name
+                            )));
+                        }
+                        continue;
+                    }
+                    seen.push((node.name.clone(), identity));
+                    set.push(node);
+                }
+                Err(reason) => set.warn(Warning::at_line(index + 1, reason)),
+            }
+        }
     };
-    for (index, proxy) in proxies.iter().enumerate() {
-        // `type: dns` is mihomo's built-in DNS outbound, not a server. It has no address to
-        // relay and the config generator emits one into every profile, so treating it as a
-        // broken node would put a warning in front of the user on every single subscription.
-        if proxy.get("type").and_then(|it| it.as_str()) == Some("dns") {
-            continue;
-        }
-        match node_from_mihomo_proxy(proxy) {
-            Ok(node) => set.push(node),
-            Err(reason) => set.warn(Warning::at_line(index + 1, reason)),
-        }
+
+    if let Some(proxies) = config.get("proxies") {
+        collect(proxies, &mut set, &mut seen);
     }
+
+    for (_, provider) in inline_provider_payloads(config) {
+        collect(provider, &mut set, &mut seen);
+    }
+
     set
+}
+
+/// The payloads of inline providers whose nodes can stand in for themselves.
+///
+/// A provider that rewrites its nodes with `override.dialer-proxy` is skipped: that tells
+/// mihomo to reach each node *through* another proxy, and a stand-in on `127.0.0.1` reached
+/// through a remote server resolves to that server's own loopback. Those entries stay native,
+/// which still works — the proxy they dial through may itself be relayed.
+pub(crate) fn inline_provider_payloads(config: &serde_yaml_ng::Value) -> Vec<(String, &serde_yaml_ng::Value)> {
+    let Some(providers) = config.get("proxy-providers").and_then(|it| it.as_mapping()) else {
+        return Vec::new();
+    };
+
+    providers
+        .iter()
+        .filter_map(|(name, provider)| {
+            if provider.get("type").and_then(|it| it.as_str()) != Some("inline") {
+                // An http provider's payload is fetched by mihomo from a URL we never see;
+                // there is nothing here to rewrite.
+                return None;
+            }
+            if provider.get("override").and_then(|it| it.get("dialer-proxy")).is_some() {
+                return None;
+            }
+            let payload = provider.get("payload")?;
+            Some((name.as_str()?.to_owned(), payload))
+        })
+        .collect()
 }
 
 /// Normalises one mihomo proxy onto the same vocabulary the URI parser produces.
@@ -416,23 +484,40 @@ pub fn node_from_mihomo_proxy(proxy: &serde_yaml_ng::Value) -> Result<Node, Stri
 /// mechanically and keep a table only for the names where the mechanical rule gets the
 /// casing wrong or the name changes outright.
 ///
-/// A field xray does not recognise is caught by `xray -test -config` before either core
-/// starts, which is a better place to fail than a hand-maintained list here.
+/// **`xray -test -config` is no safety net for this block.** xray parses `extra` into a
+/// struct that ignores keys it does not know, so a wrong name here produces a config that
+/// validates, starts, and quietly drops the masking it was written for. Verified against
+/// `celestial-xray` 26.3.27: an outbound carrying `totallyBogusFieldName` reports
+/// "Configuration OK". The names below are therefore checked against the core itself, not
+/// against a validator that cannot object.
 fn xhttp_extra(xhttp: &serde_yaml_ng::Value) -> (serde_json::Map<String, serde_json::Value>, Vec<String>) {
-    /// The exact inverse of the panel's own `XHTTP_FIELD_MAP`
-    /// (`mihomo.generator.service.ts`). Most of it the mechanical rule reproduces, but the
-    /// acronyms and the `sessionID*` family do not survive a round trip through kebab-case:
-    /// `session-key` came from `sessionIDKey`, and camel-casing it back yields `sessionKey`,
-    /// a field xray does not have. Anything absent here still falls through to the
-    /// mechanical rule, so an option the panel adds later is carried rather than refused.
+    /// Only the names the mechanical kebab→camel rule cannot produce: acronyms, and
+    /// `reuse-settings`, which xray calls something else entirely. Anything absent here
+    /// falls through to the mechanical rule, so an option the panel adds later is carried
+    /// rather than refused.
+    ///
+    /// The `session*` family deliberately is *not* here, and the reason is version drift
+    /// rather than anyone's mistake. xray's `SplitHTTPConfig` used to declare
+    /// `sessionIDPlacement` / `sessionIDKey` / `sessionIDTable` / `sessionIDLength`, which
+    /// is what the panel's `XHTTP_FIELD_MAP` still maps to. The core we pin renamed the
+    /// first two and dropped the other two: in `celestial-xray` 26.3.27 the only session
+    /// fields that exist are `sessionKey` and `sessionPlacement` — the names the panel's UI
+    /// also writes. Everything else in that struct (`serverMaxHeaderBytes`,
+    /// `scMaxBufferedPosts`, `noSSEHeader`, the whole `xmux` block) is identical across
+    /// both, so this one family is the entire difference.
+    ///
+    /// So the mechanical rule is not merely adequate here, it is what lands on the names
+    /// **our** core reads. `session-table` and `session-length` become `sessionTable` and
+    /// `sessionLength`, which 26.3.27 ignores — exactly as it ignores the panel's own
+    /// `sessionTable`, so a template taken verbatim in mode A behaves the same way.
+    ///
+    /// This is pinned to the sidecar version. When it is bumped, re-check with:
+    /// `grep -a -o 'json:"session[A-Za-z]*"' celestial-xray-<target>` — and note that a
+    /// wrong name here cannot fail any test but this crate's own.
     const IRREGULAR: &[(&str, &str)] = &[
         ("no-grpc-header", "noGRPCHeader"),
         ("no-sse-header", "noSSEHeader"),
         ("uplink-http-method", "uplinkHTTPMethod"),
-        ("session-placement", "sessionIDPlacement"),
-        ("session-key", "sessionIDKey"),
-        ("session-table", "sessionIDTable"),
-        ("session-length", "sessionIDLength"),
         ("reuse-settings", "xmux"),
     ];
     /// Handled on `xhttpSettings` itself rather than inside `extra`.
@@ -473,7 +558,40 @@ fn xhttp_extra(xhttp: &serde_yaml_ng::Value) -> (serde_json::Map<String, serde_j
         }
     }
 
+    add_session_aliases(&mut extra);
     (extra, unmappable)
+}
+
+/// Writes the session fields under both spellings xray has used, so one output serves either
+/// sidecar channel.
+///
+/// The release we ship (26.3.27) reads `sessionKey` / `sessionPlacement`; the pre-release
+/// channel — which this repo can build today, via `--xray-prerelease` — renamed them to
+/// `sessionIDKey` / `sessionIDPlacement` and added a table and a length. Since xray ignores
+/// keys it does not know, writing both is how one converter serves both without a build-time
+/// switch, and without the wrong channel silently losing its masking. Verified against
+/// 26.7.28: an `extra` carrying both spellings reports "Configuration OK".
+///
+/// The table is the exception, and the reason is not symmetry but consequence. On the
+/// pre-release, `sessionIDTable` is *validated*: set without a companion `sessionIDLength` it
+/// fails the whole outbound with "sessionIDTable or sessionIDLength is too small" — verified.
+/// So the aliased table is written only when a length came with it. Unaliased, the table stays
+/// a field both cores ignore, exactly as the panel's own `sessionTable` already is; aliased
+/// without its length, it would turn a harmless no-op into a core that refuses to start.
+fn add_session_aliases(extra: &mut serde_json::Map<String, serde_json::Value>) {
+    for (written, alias) in [
+        ("sessionKey", "sessionIDKey"),
+        ("sessionPlacement", "sessionIDPlacement"),
+    ] {
+        if let Some(value) = extra.get(written).cloned() {
+            extra.insert(alias.to_owned(), value);
+        }
+    }
+
+    if let (Some(table), Some(length)) = (extra.get("sessionTable").cloned(), extra.get("sessionLength").cloned()) {
+        extra.insert("sessionIDTable".to_owned(), table);
+        extra.insert("sessionIDLength".to_owned(), length);
+    }
 }
 
 /// `x-padding-bytes` becomes `xPaddingBytes`.

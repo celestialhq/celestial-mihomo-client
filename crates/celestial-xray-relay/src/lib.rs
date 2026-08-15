@@ -15,6 +15,7 @@
 //! Starting the processes and rewriting mihomo's config live in the app.
 
 pub mod convert;
+pub mod mask;
 pub mod node;
 pub mod parse;
 pub mod plan;
@@ -22,6 +23,7 @@ pub mod substitute;
 pub mod template;
 
 pub use convert::{ConversionRefused, to_outbound};
+pub use mask::{REDACTED, redact_json, redact_yaml};
 pub use node::{Credentials, Node, NodeSet, Protocol, Warning};
 pub use parse::{Payload, decode_base64, detect, parse_mihomo_proxies, parse_uri, parse_uri_list};
 pub use plan::{

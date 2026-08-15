@@ -21,6 +21,7 @@ pub mod verge;
 #[cfg(target_os = "android")]
 pub mod vpn;
 pub mod webdav;
+pub mod xray;
 
 // Re-export all command functions for backwards compatibility
 pub use app::*;
@@ -40,6 +41,7 @@ pub use verge::*;
 #[cfg(target_os = "android")]
 pub use vpn::*;
 pub use webdav::*;
+pub use xray::*;
 
 pub trait StringifyErr<T> {
     fn stringify_err(self) -> CmdResult<T>;

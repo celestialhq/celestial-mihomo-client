@@ -1,12 +1,18 @@
 mod config;
 mod lifecycle;
 mod state;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod xray;
 
 use anyhow::Result;
 use arc_swap::{ArcSwap, ArcSwapOption};
 use celestial_logger::AsyncLogger;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use celestial_xray_relay::RelayPlan;
 use clash_verge_logging::{Type, logging};
 use once_cell::sync::Lazy;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use std::sync::atomic::{AtomicU32, AtomicU64};
 use std::{fmt, sync::Arc, time::Instant};
 use tauri_plugin_shell::process::CommandChild;
 
@@ -67,6 +73,21 @@ pub struct CoreManager {
     // Windows Job Object，绑定 sidecar 生命周期到本进程（KILL_ON_JOB_CLOSE）。
     #[cfg(target_os = "windows")]
     job_handle: ArcSwapOption<OwnedHandle>,
+    // xray gets its own, so the two cores can be stopped in order rather than together.
+    #[cfg(target_os = "windows")]
+    xray_job_handle: ArcSwapOption<OwnedHandle>,
+    // The plan the running xray was started from. Compared against a freshly generated one
+    // to decide whether a config change needs the relay replaced or can be reloaded into
+    // mihomo alone.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    running_relay: ArcSwapOption<RelayPlan>,
+    // Bumped every time an xray is started or stopped, so the task watching a process that
+    // is already being replaced cannot report its death as the relay being lost.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    xray_generation: AtomicU64,
+    // Relay start failures since the last success; see `MAX_RELAY_ATTEMPTS`.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    relay_attempts: AtomicU32,
     // Serialises staging and applying a configuration change; see [`ConfigUpdatePermit`].
     // Blocking, not try-and-drop: a caller that cannot have the permit now waits for it,
     // because the alternative is discarding a change the user asked for. Lock order is
@@ -80,6 +101,8 @@ pub struct CoreManager {
 #[derive(Debug, Default)]
 struct State {
     child_sidecar: ArcSwapOption<CommandChild>,
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    child_xray: ArcSwapOption<CommandChild>,
 }
 
 impl Default for CoreManager {
@@ -89,6 +112,14 @@ impl Default for CoreManager {
             last_update: ArcSwapOption::new(None),
             #[cfg(target_os = "windows")]
             job_handle: ArcSwapOption::new(None),
+            #[cfg(target_os = "windows")]
+            xray_job_handle: ArcSwapOption::new(None),
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            running_relay: ArcSwapOption::new(None),
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            xray_generation: AtomicU64::new(0),
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            relay_attempts: AtomicU32::new(0),
             config_update_lock: tokio::sync::Mutex::new(()),
             lifecycle_lock: tokio::sync::Mutex::new(()),
         }
@@ -146,6 +177,26 @@ impl CoreManager {
     pub fn set_running_child_sidecar(&self, child: CommandChild) {
         let state = self.state.load();
         state.child_sidecar.store(Some(Arc::new(child)));
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    fn set_child_xray(&self, child: CommandChild) {
+        self.state.load().child_xray.store(Some(Arc::new(child)));
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    fn take_child_xray(&self) -> Option<CommandChild> {
+        self.state
+            .load()
+            .child_xray
+            .swap(None)
+            .and_then(|arc| Arc::try_unwrap(arc).ok())
+    }
+
+    /// Replaces the Job Object handle owning the xray process; see [`Self::set_job_handle`].
+    #[cfg(target_os = "windows")]
+    fn set_xray_job_handle(&self, handle: Option<OwnedHandle>) {
+        self.xray_job_handle.store(handle.map(Arc::new));
     }
 
     pub fn set_last_update(&self, time: Instant) {
