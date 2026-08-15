@@ -273,6 +273,12 @@ pub fn parse_mihomo_proxies(config: &serde_yaml_ng::Value) -> NodeSet {
         return set;
     };
     for (index, proxy) in proxies.iter().enumerate() {
+        // `type: dns` is mihomo's built-in DNS outbound, not a server. It has no address to
+        // relay and the config generator emits one into every profile, so treating it as a
+        // broken node would put a warning in front of the user on every single subscription.
+        if proxy.get("type").and_then(|it| it.as_str()) == Some("dns") {
+            continue;
+        }
         match node_from_mihomo_proxy(proxy) {
             Ok(node) => set.push(node),
             Err(reason) => set.warn(Warning::at_line(index + 1, reason)),
@@ -318,6 +324,12 @@ pub fn node_from_mihomo_proxy(proxy: &serde_yaml_ng::Value) -> Result<Node, Stri
     }
     if let Some(value) = get_str("flow") {
         node.set_param("flow", value);
+    }
+    // VLESS post-quantum encryption arrives as one long opaque `mlkem768x25519plus...`
+    // string. It is the handshake itself, not a hint, so losing it does not degrade the
+    // node — it stops it connecting.
+    if let Some(value) = get_str("encryption") {
+        node.set_param("encryption", value);
     }
     if let Some(value) = proxy.get("udp-over-tcp").and_then(serde_yaml_ng::Value::as_bool) {
         node.set_param("uot", value.to_string());
