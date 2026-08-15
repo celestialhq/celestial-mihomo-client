@@ -15,7 +15,8 @@
     "publisher": "Celestial",
     "externalBin": [
       "sidecar/celestial-mihomo",
-      "sidecar/celestial-mihomo-alpha"
+      "sidecar/celestial-mihomo-alpha",
+      "sidecar/xray"
     ],
     "copyright": "GNU General Public License v3.0",
     "category": "DeveloperTool",

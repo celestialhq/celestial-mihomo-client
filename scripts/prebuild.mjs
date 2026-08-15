@@ -209,6 +209,106 @@ const META_MAP = {
 }
 
 // =======================
+// Xray maps (release & pre-release)
+// =======================
+// One sidecar, not two. mihomo ships stable and alpha side by side and switches at
+// runtime, but the anti-loop rule matches the process by name — `^xray(\.exe)?$` — and
+// Tauri strips the target triple when bundling, so the running process is whatever the
+// file is called before the suffix. A second binary called `xray-pre` would run under a
+// name the rule does not match and its traffic would be routed back into the tunnel. So
+// the channel is chosen here instead, and the name stays `xray` either way.
+const XRAY_REPO = 'https://api.github.com/repos/XTLS/Xray-core'
+const XRAY_URL_PREFIX = 'https://github.com/XTLS/Xray-core/releases/download'
+const XRAY_PRERELEASE =
+  process.argv.includes('--xray-prerelease') ||
+  process.env.XRAY_CHANNEL === 'prerelease'
+let XRAY_VERSION
+
+const XRAY_MAP = {
+  'win32-x64': 'Xray-windows-64',
+  'win32-ia32': 'Xray-windows-32',
+  'win32-arm64': 'Xray-windows-arm64-v8a',
+  'darwin-x64': 'Xray-macos-64',
+  'darwin-arm64': 'Xray-macos-arm64-v8a',
+  'linux-x64': 'Xray-linux-64',
+  'linux-ia32': 'Xray-linux-32',
+  'linux-arm64': 'Xray-linux-arm64-v8a',
+  'linux-arm': 'Xray-linux-arm32-v7a',
+  'linux-riscv64': 'Xray-linux-riscv64',
+  'linux-loong64': 'Xray-linux-loong64',
+}
+
+/// Resolves the tag to download.
+///
+/// Xray publishes no `version.txt` the way mihomo does, so the tag comes from the API.
+/// The stable channel uses `releases/latest`, which GitHub already defines as the newest
+/// non-prerelease; the pre-release channel walks the list and takes the first entry marked
+/// as one, falling back to the newest release of any kind rather than failing when there is
+/// no open pre-release.
+async function getLatestXrayVersion() {
+  const cacheKey = XRAY_PRERELEASE ? 'XRAY_PRERELEASE_VERSION' : 'XRAY_VERSION'
+  if (!FORCE) {
+    const cached = await getCachedVersion(cacheKey)
+    if (cached) {
+      XRAY_VERSION = cached
+      return
+    }
+  }
+
+  const options = {}
+  const httpProxy =
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy ||
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy
+  if (httpProxy) options.agent = new HttpsProxyAgent(httpProxy)
+
+  const headers = { Accept: 'application/vnd.github+json' }
+  // Unauthenticated API calls are rate limited to 60/hour per IP, which a busy CI runner
+  // can exhaust. Use the token when one is around.
+  if (process.env.GITHUB_TOKEN) {
+    headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`
+  }
+
+  const url = XRAY_PRERELEASE
+    ? `${XRAY_REPO}/releases?per_page=20`
+    : `${XRAY_REPO}/releases/latest`
+
+  try {
+    const response = await fetch(url, { ...options, method: 'GET', headers })
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${url}: ${response.status}`)
+    }
+    const body = await response.json()
+    const tag = XRAY_PRERELEASE
+      ? (body.find((it) => it.prerelease) ?? body[0])?.tag_name
+      : body.tag_name
+    if (!tag) throw new Error('no xray release tag in the response')
+
+    XRAY_VERSION = tag
+    log_info(
+      `Latest xray ${XRAY_PRERELEASE ? 'pre-release' : 'release'} version: ${XRAY_VERSION}`,
+    )
+    await setCachedVersion(cacheKey, XRAY_VERSION)
+  } catch (err) {
+    log_error('Error fetching latest xray version:', err.message)
+    throw err
+  }
+}
+
+function xrayCore() {
+  const name = XRAY_MAP[`${platform}-${arch}`]
+  const isWin = platform === 'win32'
+  return {
+    name: 'xray',
+    targetFile: `xray-${SIDECAR_HOST}${isWin ? '.exe' : ''}`,
+    exeFile: `xray${isWin ? '.exe' : ''}`,
+    zipFile: `${name}-${XRAY_VERSION}.zip`,
+    downloadURL: `${XRAY_URL_PREFIX}/${XRAY_VERSION}/${name}.zip`,
+  }
+}
+
+// =======================
 // Fetch latest versions
 // =======================
 async function getLatestAlphaVersion() {
@@ -285,6 +385,9 @@ if (!META_MAP[`${platform}-${arch}`]) {
 }
 if (!META_ALPHA_MAP[`${platform}-${arch}`]) {
   throw new Error(`clash meta alpha unsupported platform "${platform}-${arch}"`)
+}
+if (!XRAY_MAP[`${platform}-${arch}`]) {
+  throw new Error(`xray unsupported platform "${platform}-${arch}"`)
 }
 
 // =======================
@@ -744,6 +847,11 @@ const tasks = [
     name: 'celestial-mihomo',
     func: () =>
       getLatestReleaseVersion().then(() => resolveSidecar(clashMeta())),
+    retry: 5,
+  },
+  {
+    name: 'xray',
+    func: () => getLatestXrayVersion().then(() => resolveSidecar(xrayCore())),
     retry: 5,
   },
   { name: 'plugin', func: resolvePlugin, retry: 5, winOnly: true },

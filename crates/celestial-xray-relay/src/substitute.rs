@@ -43,9 +43,7 @@ pub fn apply_relay(config: &mut Mapping, plan: &RelayPlan) -> Substitution {
             let Some(planned) = plan.nodes.iter().find(|it| it.name == name) else {
                 // Not in the plan at all: a node that appeared after planning, or one the
                 // parser could not read. Leaving it as it is keeps it working natively.
-                result
-                    .untouched
-                    .push((name, "not part of the relay plan".to_owned()));
+                result.untouched.push((name, "not part of the relay plan".to_owned()));
                 continue;
             };
             match &planned.disposition {
@@ -182,7 +180,10 @@ rules:
         assert!(first.rule_inserted);
         assert_eq!(config["rules"].as_sequence().unwrap()[0].as_str(), Some(LOOPBACK_RULE));
 
-        assert!(!ensure_loopback_rule(&mut config), "a second pass must not duplicate it");
+        assert!(
+            !ensure_loopback_rule(&mut config),
+            "a second pass must not duplicate it"
+        );
         let matches = config["rules"]
             .as_sequence()
             .unwrap()
