@@ -67,7 +67,17 @@ fn vless_settings(node: &Node) -> Result<Value, ConversionRefused> {
         "id": uuid,
         "encryption": node.param("encryption").unwrap_or("none"),
     });
-    if let Some(flow) = node.param("flow")
+    // `flow` only belongs on the raw transport. The panel writes `xtls-rprx-vision` onto
+    // every vless node regardless of transport and mihomo ignores it where it does not
+    // apply, but xray honours it — and the server has no flow configured for an xhttp or ws
+    // inbound, so carrying it across kills the connection outright.
+    //
+    // Nothing downstream catches this: `xray -test -config` accepts the combination happily,
+    // so the first sign of trouble would be a node that silently fails to connect. Drop it
+    // here instead.
+    let raw_transport = matches!(node.param("type").unwrap_or("tcp"), "tcp" | "raw" | "" | "tcp-http-header");
+    if raw_transport
+        && let Some(flow) = node.param("flow")
         && let Some(map) = user.as_object_mut()
     {
         map.insert("flow".to_owned(), Value::String(flow.to_owned()));
@@ -453,6 +463,27 @@ proxies:
             "sessionIDPlacement": "path"
         });
         assert_eq!(produced, &expected);
+    }
+
+    #[test]
+    fn flow_is_dropped_on_every_transport_but_raw() {
+        let mut raw = Node::new("raw", Protocol::Vless, "a.example", 443);
+        raw.creds.uuid = Some("u".to_owned());
+        raw.set_param("flow", "xtls-rprx-vision");
+        let outbound = to_outbound(&raw).unwrap();
+        assert_eq!(outbound["settings"]["vnext"][0]["users"][0]["flow"], "xtls-rprx-vision");
+
+        for transport in ["xhttp", "ws", "grpc", "httpupgrade"] {
+            let mut node = Node::new(transport, Protocol::Vless, "a.example", 443);
+            node.creds.uuid = Some("u".to_owned());
+            node.set_param("flow", "xtls-rprx-vision");
+            node.set_param("type", transport);
+            let outbound = to_outbound(&node).unwrap();
+            assert!(
+                outbound["settings"]["vnext"][0]["users"][0].get("flow").is_none(),
+                "`flow` on {transport} would be honoured by xray against a server that has                  none configured, and `xray -test` does not object"
+            );
+        }
     }
 
     #[test]
