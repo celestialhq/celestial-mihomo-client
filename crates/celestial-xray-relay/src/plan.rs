@@ -12,11 +12,20 @@ use crate::node::{Node, NodeSet};
 /// The first port tried. Not a fixed base: ports are searched upward from here.
 pub const PORT_SEARCH_START: u16 = 20000;
 
-/// The rule that keeps xray's own outbound traffic from being routed back into the tunnel.
+/// The rule that keeps our xray's own outbound traffic from being routed back into the
+/// tunnel.
+///
+/// Matches `celestial-xray` rather than plain `xray` so it identifies *our* core. A bare
+/// `^xray$` would also match an xray belonging to some other client the user happens to be
+/// running, and quietly divert its traffic to DIRECT — deciding the routing of a program
+/// that is none of our business.
+///
+/// The match is on the process name, not a path, so the same rule covers both release
+/// channels however they are laid out on disk.
 ///
 /// Written as a raw string on purpose. In an ordinary literal the `\.` collapses to `.`,
 /// which turns the escaped dot into "any character" and widens the rule past what was meant.
-pub const LOOPBACK_RULE: &str = r"PROCESS-NAME-REGEX,(?i)^xray(?:\.exe)?$,DIRECT";
+pub const LOOPBACK_RULE: &str = r"PROCESS-NAME-REGEX,(?i)^celestial-xray(?:\.exe)?$,DIRECT";
 
 /// Decides whether a port can be taken.
 ///
@@ -402,6 +411,10 @@ mod tests {
         assert!(
             super::LOOPBACK_RULE.contains(r"\."),
             "the escape must survive into the emitted rule, or it matches any character"
+        );
+        assert!(
+            super::LOOPBACK_RULE.contains("celestial-xray"),
+            "a bare `xray` would also match another client's core and divert its traffic"
         );
     }
 }

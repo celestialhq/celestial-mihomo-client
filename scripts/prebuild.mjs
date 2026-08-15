@@ -211,12 +211,16 @@ const META_MAP = {
 // =======================
 // Xray maps (release & pre-release)
 // =======================
-// One sidecar, not two. mihomo ships stable and alpha side by side and switches at
-// runtime, but the anti-loop rule matches the process by name — `^xray(\.exe)?$` — and
-// Tauri strips the target triple when bundling, so the running process is whatever the
-// file is called before the suffix. A second binary called `xray-pre` would run under a
-// name the rule does not match and its traffic would be routed back into the tunnel. So
-// the channel is chosen here instead, and the name stays `xray` either way.
+// The binary is renamed to `celestial-xray`. That is what the anti-loop rule matches, and
+// naming it after ourselves means the rule cannot catch an xray belonging to some other
+// client the user is running and divert its traffic.
+//
+// The channel is chosen here rather than shipped as two binaries, because the rule matches
+// on process name and both channels would have to answer to the same one. Laying the
+// pre-release build out under its own directory would keep the name and allow switching at
+// runtime — the rule looks at the name, not the path — but that needs Tauri to preserve the
+// subdirectory for an `externalBin` entry rather than flattening it next to the app binary,
+// which is unverified. Until then: one binary, chosen at build time.
 const XRAY_REPO = 'https://api.github.com/repos/XTLS/Xray-core'
 const XRAY_URL_PREFIX = 'https://github.com/XTLS/Xray-core/releases/download'
 const XRAY_PRERELEASE =
@@ -300,8 +304,9 @@ function xrayCore() {
   const name = XRAY_MAP[`${platform}-${arch}`]
   const isWin = platform === 'win32'
   return {
-    name: 'xray',
-    targetFile: `xray-${SIDECAR_HOST}${isWin ? '.exe' : ''}`,
+    name: 'celestial-xray',
+    targetFile: `celestial-xray-${SIDECAR_HOST}${isWin ? '.exe' : ''}`,
+    // The name inside the archive is still xray's own.
     exeFile: `xray${isWin ? '.exe' : ''}`,
     zipFile: `${name}-${XRAY_VERSION}.zip`,
     downloadURL: `${XRAY_URL_PREFIX}/${XRAY_VERSION}/${name}.zip`,
@@ -850,7 +855,7 @@ const tasks = [
     retry: 5,
   },
   {
-    name: 'xray',
+    name: 'celestial-xray',
     func: () => getLatestXrayVersion().then(() => resolveSidecar(xrayCore())),
     retry: 5,
   },
