@@ -307,7 +307,10 @@ pub fn node_from_mihomo_proxy(proxy: &serde_yaml_ng::Value) -> Result<Node, Stri
     if proxy.get("tls").and_then(serde_yaml_ng::Value::as_bool) == Some(true) {
         node.set_param("security", "tls");
     }
-    if let Some(value) = get_str("servername") {
+    // The panel writes the same TLS SNI under two different keys: `sni` for trojan and
+    // hysteria2, `servername` for everything else. Reading only one of them silently lost
+    // the server name on every trojan node.
+    if let Some(value) = get_str("servername").or_else(|| get_str("sni")) {
         node.set_param("sni", value);
     }
     if let Some(value) = get_str("client-fingerprint") {
@@ -320,7 +323,21 @@ pub fn node_from_mihomo_proxy(proxy: &serde_yaml_ng::Value) -> Result<Node, Stri
         let joined: Vec<&str> = alpn.iter().filter_map(|it| it.as_str()).collect();
         node.set_param("alpn", joined.join(","));
     }
-    node.set_param("type", get_str("network").unwrap_or_else(|| "tcp".to_owned()));
+    // Two of mihomo's network names do not mean in xray what they say. `http` is TCP with an
+    // HTTP header disguise, not HTTP/2; and httpupgrade has no name of its own, arriving as
+    // `ws` with a marker inside `ws-opts`. Translate both back before the converter sees them.
+    let network = get_str("network").unwrap_or_else(|| "tcp".to_owned());
+    let is_http_upgrade = proxy
+        .get("ws-opts")
+        .and_then(|it| it.get("v2ray-http-upgrade"))
+        .and_then(serde_yaml_ng::Value::as_bool)
+        == Some(true);
+    let network = match network.as_str() {
+        "http" => "tcp-http-header".to_owned(),
+        "ws" if is_http_upgrade => "httpupgrade".to_owned(),
+        _ => network,
+    };
+    node.set_param("type", network);
 
     if let Some(reality) = proxy.get("reality-opts") {
         node.set_param("security", "reality");
@@ -384,15 +401,29 @@ pub fn node_from_mihomo_proxy(proxy: &serde_yaml_ng::Value) -> Result<Node, Stri
 /// A field xray does not recognise is caught by `xray -test -config` before either core
 /// starts, which is a better place to fail than a hand-maintained list here.
 fn xhttp_extra(xhttp: &serde_yaml_ng::Value) -> (serde_json::Map<String, serde_json::Value>, Vec<String>) {
-    /// Names the mechanical rule cannot produce: acronyms it would mis-case, and
-    /// `reuse-settings`, which xray calls `xmux`.
+    /// The exact inverse of the panel's own `XHTTP_FIELD_MAP`
+    /// (`mihomo.generator.service.ts`). Most of it the mechanical rule reproduces, but the
+    /// acronyms and the `sessionID*` family do not survive a round trip through kebab-case:
+    /// `session-key` came from `sessionIDKey`, and camel-casing it back yields `sessionKey`,
+    /// a field xray does not have. Anything absent here still falls through to the
+    /// mechanical rule, so an option the panel adds later is carried rather than refused.
     const IRREGULAR: &[(&str, &str)] = &[
         ("no-grpc-header", "noGRPCHeader"),
         ("no-sse-header", "noSSEHeader"),
+        ("uplink-http-method", "uplinkHTTPMethod"),
+        ("session-placement", "sessionIDPlacement"),
+        ("session-key", "sessionIDKey"),
+        ("session-table", "sessionIDTable"),
+        ("session-length", "sessionIDLength"),
         ("reuse-settings", "xmux"),
     ];
     /// Handled on `xhttpSettings` itself rather than inside `extra`.
-    const HANDLED_ELSEWHERE: &[&str] = &["path", "mode", "host", "extra"];
+    const HANDLED_ELSEWHERE: &[&str] = &["path", "mode", "host", "extra", "headers"];
+    /// XHTTP can split upload and download across two servers, and the download side carries
+    /// its own TLS/reality block written in mihomo's vocabulary (`server`, `servername`,
+    /// `reality-opts`) rather than kebab-cased xray. The mechanical rule would turn that into
+    /// a plausible-looking object xray reads differently, so refuse instead.
+    const NEEDS_ITS_OWN_CONVERTER: &[&str] = &["download-settings"];
 
     let mut extra = serde_json::Map::new();
     let mut unmappable = Vec::new();
@@ -405,6 +436,10 @@ fn xhttp_extra(xhttp: &serde_yaml_ng::Value) -> (serde_json::Map<String, serde_j
             continue;
         };
         if HANDLED_ELSEWHERE.contains(&key) {
+            continue;
+        }
+        if NEEDS_ITS_OWN_CONVERTER.contains(&key) {
+            unmappable.push(key.to_owned());
             continue;
         }
         let xray_key = IRREGULAR
@@ -450,13 +485,16 @@ fn yaml_to_json(value: &serde_yaml_ng::Value) -> Option<serde_json::Value> {
     match value {
         serde_yaml_ng::Value::Bool(it) => Some(serde_json::Value::Bool(*it)),
         serde_yaml_ng::Value::String(it) => Some(serde_json::Value::String(it.clone())),
-        serde_yaml_ng::Value::Number(it) => it
-            .as_i64()
-            .map(serde_json::Value::from)
-            .or_else(|| it.as_f64().and_then(serde_json::Number::from_f64).map(serde_json::Value::Number)),
-        serde_yaml_ng::Value::Sequence(items) => {
-            items.iter().map(yaml_to_json).collect::<Option<Vec<_>>>().map(serde_json::Value::Array)
-        }
+        serde_yaml_ng::Value::Number(it) => it.as_i64().map(serde_json::Value::from).or_else(|| {
+            it.as_f64()
+                .and_then(serde_json::Number::from_f64)
+                .map(serde_json::Value::Number)
+        }),
+        serde_yaml_ng::Value::Sequence(items) => items
+            .iter()
+            .map(yaml_to_json)
+            .collect::<Option<Vec<_>>>()
+            .map(serde_json::Value::Array),
         serde_yaml_ng::Value::Mapping(nested) => {
             let (translated, unmappable) = xhttp_extra(&serde_yaml_ng::Value::Mapping(nested.clone()));
             unmappable.is_empty().then_some(serde_json::Value::Object(translated))

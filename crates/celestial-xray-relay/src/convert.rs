@@ -140,7 +140,27 @@ fn stream_settings(node: &Node) -> Result<Value, ConversionRefused> {
                 json!({ "serviceName": node.param("serviceName").unwrap_or_default() }),
             );
         }
-        "h2" | "http" => {
+        "httpupgrade" => {
+            let mut hu = json!({ "path": node.param("path").unwrap_or("/") });
+            if let Some(host) = node.param("host")
+                && let Some(map) = hu.as_object_mut()
+            {
+                map.insert("host".to_owned(), Value::String(host.to_owned()));
+            }
+            stream.insert("httpupgradeSettings".to_owned(), hu);
+        }
+        // mihomo's `network: http` is TCP wearing an HTTP header, which in xray is the raw
+        // transport with a header disguise rather than the HTTP/2 transport.
+        "tcp-http-header" => {
+            let mut header = json!({ "type": "http" });
+            if let Some(host) = node.param("host")
+                && let Some(map) = header.as_object_mut()
+            {
+                map.insert("request".to_owned(), json!({ "headers": { "Host": [host] } }));
+            }
+            stream.insert("rawSettings".to_owned(), json!({ "header": header }));
+        }
+        "h2" => {
             let mut http = json!({ "path": node.param("path").unwrap_or("/") });
             if let Some(host) = node.param("host")
                 && let Some(map) = http.as_object_mut()
@@ -238,7 +258,8 @@ fn tls_settings(node: &Node) -> Value {
 /// mihomo and xray disagree on what plain TCP is called.
 const fn normalise_network(network: &str) -> &str {
     match network.as_bytes() {
-        b"" | b"tcp" => "raw",
+        // `tcp-http-header` is mihomo's `network: http`, which is the raw transport in xray.
+        b"" | b"tcp" | b"tcp-http-header" => "raw",
         b"h2" => "http",
         _ => network,
     }
@@ -365,6 +386,13 @@ proxies:
 
     /// The panel builds the mihomo profile by converting its own xray config, so the
     /// converter's job here is to land back on exactly what the panel started from.
+    ///
+    /// The `sessionID*` names come from the panel generator's own `XHTTP_FIELD_MAP`, which
+    /// maps `sessionIDKey → session-key`. Note that the panel's UI writes `sessionKey` into
+    /// the xray `extra` block instead, so that generator never matches it and those three
+    /// fields are dropped from the mihomo subscription entirely — which is why the profile
+    /// this test is modelled on carries `seq-*` but no `session-*`. We invert the map the
+    /// generator actually declares.
     #[test]
     fn the_full_masking_set_round_trips_back_to_the_panels_own_extra() {
         let opts = concat!(
@@ -392,12 +420,12 @@ proxies:
                 "hMaxReusableSecs": "1800-3600"
             },
             "seqKey": "seq",
-            "sessionKey": "sid",
+            "sessionIDKey": "sid",
             "noGRPCHeader": true,
             "seqPlacement": "path",
-            "sessionTable": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            "sessionIDTable": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
             "xPaddingBytes": "100-1000",
-            "sessionPlacement": "path"
+            "sessionIDPlacement": "path"
         });
         assert_eq!(produced, &expected);
     }
