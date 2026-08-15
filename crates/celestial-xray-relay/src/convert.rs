@@ -491,9 +491,7 @@ proxies:
                 node.set_param("encryption", encryption);
             }
             let outbound = to_outbound(&node).unwrap();
-            outbound["settings"]["vnext"][0]["users"][0]
-                .get("flow")
-                .is_some()
+            outbound["settings"]["vnext"][0]["users"][0].get("flow").is_some()
         };
 
         assert!(flowed("tcp", "reality", None), "raw + REALITY is the classic XTLS case");

@@ -18,6 +18,7 @@ pub mod convert;
 pub mod node;
 pub mod parse;
 pub mod plan;
+pub mod substitute;
 pub mod template;
 
 pub use convert::{ConversionRefused, to_outbound};
@@ -27,6 +28,7 @@ pub use plan::{
     Disposition, LOOPBACK_RULE, Override, PORT_SEARCH_START, PlanError, PlanOptions, PlannedNode, PortMap, PortProbe,
     RelayPlan, assign_ports, plan,
 };
+pub use substitute::{Substitution, apply_relay};
 pub use template::{Mismatch, nodes_from_template, pair_with_template};
 
 /// Builds a [`NodeSet`] from a response body, whatever shape it turned out to have.
