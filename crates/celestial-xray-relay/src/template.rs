@@ -74,7 +74,10 @@ fn endpoint_from_settings(settings: &Value) -> Option<(String, u16)> {
         .or_else(|| settings.get("servers").and_then(Value::as_array))?
         .first()?;
     let address = entry.get("address").and_then(Value::as_str)?.to_owned();
-    let port = entry.get("port").and_then(Value::as_u64).and_then(|it| u16::try_from(it).ok())?;
+    let port = entry
+        .get("port")
+        .and_then(Value::as_u64)
+        .and_then(|it| u16::try_from(it).ok())?;
     Some((address, port))
 }
 
@@ -170,7 +173,11 @@ mod tests {
 
         let (paired, mismatches) = pair_with_template(&mihomo, &nodes_from_template(&template()));
         assert_eq!(mismatches.len(), 1);
-        assert!(mismatches[0].detail.contains("a.example:443"), "{}", mismatches[0].detail);
+        assert!(
+            mismatches[0].detail.contains("a.example:443"),
+            "{}",
+            mismatches[0].detail
+        );
         assert!(paired.find("🇫🇮 finland [tls]").unwrap().template_outbound.is_some());
     }
 }

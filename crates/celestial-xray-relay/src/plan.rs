@@ -129,7 +129,9 @@ pub struct PlanOptions {
 
 impl Default for PlanOptions {
     fn default() -> Self {
-        Self { name_exclusions: vec!["hysteria".to_owned()] }
+        Self {
+            name_exclusions: vec!["hysteria".to_owned()],
+        }
     }
 }
 
@@ -149,10 +151,7 @@ pub fn plan<P: PortProbe>(
     let mut decided: Vec<(String, Option<String>)> = Vec::new();
 
     for node in nodes.nodes() {
-        let forced = overrides
-            .iter()
-            .find(|(name, _)| *name == node.name)
-            .map(|(_, it)| *it);
+        let forced = overrides.iter().find(|(name, _)| *name == node.name).map(|(_, it)| *it);
 
         if forced == Some(Override::ForceNative) {
             decided.push((node.name.clone(), Some("kept native by hand".to_owned())));
@@ -176,7 +175,10 @@ pub fn plan<P: PortProbe>(
                 .iter()
                 .find(|it| lowered.contains(&it.to_lowercase()))
             {
-                decided.push((node.name.clone(), Some(format!("the name matches the exclusion `{hit}`"))));
+                decided.push((
+                    node.name.clone(),
+                    Some(format!("the name matches the exclusion `{hit}`")),
+                ));
                 continue;
             }
         }
@@ -201,7 +203,9 @@ pub fn plan<P: PortProbe>(
                 None => match ports.get(&name) {
                     Some(port) => Disposition::Relay { port },
                     // Unreachable in practice; treated as native rather than panicking.
-                    None => Disposition::Native { reason: "no port could be assigned".to_owned() },
+                    None => Disposition::Native {
+                        reason: "no port could be assigned".to_owned(),
+                    },
                 },
             };
             PlannedNode { name, disposition }
@@ -209,7 +213,11 @@ pub fn plan<P: PortProbe>(
         .collect();
 
     let xray_config = build_xray_config(&eligible, &ports);
-    Ok(RelayPlan { nodes: planned, xray_config, ports })
+    Ok(RelayPlan {
+        nodes: planned,
+        xray_config,
+        ports,
+    })
 }
 
 /// Assembles the `xray.json`: one socks inbound per relayed node, the matching outbound, and
@@ -329,7 +337,10 @@ mod tests {
             config["inbounds"][0]["sniffing"]["enabled"], false,
             "mihomo already sniffed; doing it again here is wasted work"
         );
-        assert!(config.get("dns").is_some(), "xray resolves node addresses itself to avoid a loop");
+        assert!(
+            config.get("dns").is_some(),
+            "xray resolves node addresses itself to avoid a loop"
+        );
 
         let inbound_tag = config["inbounds"][0]["tag"].as_str().unwrap();
         assert_eq!(config["routing"]["rules"][0]["inboundTag"][0], inbound_tag);
@@ -350,7 +361,10 @@ mod tests {
 
     #[test]
     fn the_name_exclusion_list_keeps_a_node_native() {
-        let nodes = set_of(vec![vless("🇫🇮 Hysteria fast", "a.example"), vless("plain", "b.example")]);
+        let nodes = set_of(vec![
+            vless("🇫🇮 Hysteria fast", "a.example"),
+            vless("plain", "b.example"),
+        ]);
         let plan = plan(&nodes, &AllFree, &PlanOptions::default(), &[]).unwrap();
         assert!(matches!(plan.nodes[0].disposition, Disposition::Native { .. }));
         assert!(plan.nodes[1].is_relayed());

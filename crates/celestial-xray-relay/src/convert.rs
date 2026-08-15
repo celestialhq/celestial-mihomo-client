@@ -118,7 +118,10 @@ fn shadowsocks_settings(node: &Node) -> Result<Value, ConversionRefused> {
 fn stream_settings(node: &Node) -> Result<Value, ConversionRefused> {
     let network = node.param("type").unwrap_or("tcp");
     let mut stream = Map::new();
-    stream.insert("network".to_owned(), Value::String(normalise_network(network).to_owned()));
+    stream.insert(
+        "network".to_owned(),
+        Value::String(normalise_network(network).to_owned()),
+    );
 
     match network {
         "tcp" | "raw" | "" => {}
@@ -147,16 +150,29 @@ fn stream_settings(node: &Node) -> Result<Value, ConversionRefused> {
             stream.insert("httpSettings".to_owned(), http);
         }
         "xhttp" => {
-            let mut xhttp = json!({ "path": node.param("path").unwrap_or("/") });
-            if let Some(mode) = node.param("mode")
-                && let Some(map) = xhttp.as_object_mut()
-            {
-                map.insert("mode".to_owned(), Value::String(mode.to_owned()));
+            let mut xhttp = Map::new();
+            xhttp.insert(
+                "path".to_owned(),
+                Value::String(node.param("path").unwrap_or("/").to_owned()),
+            );
+            if let Some(mode) = node.param("mode") {
+                xhttp.insert("mode".to_owned(), Value::String(mode.to_owned()));
             }
-            stream.insert("xhttpSettings".to_owned(), xhttp);
+            if let Some(host) = node.param("host") {
+                xhttp.insert("host".to_owned(), Value::String(host.to_owned()));
+            }
+            // The padding, header and connection-reuse knobs are the masking this mode
+            // exists to preserve, so they are carried rather than dropped. Anything the
+            // parser could not name refused the node long before this point.
+            if let Some(extra) = &node.extra {
+                xhttp.insert("extra".to_owned(), extra.clone());
+            }
+            stream.insert("xhttpSettings".to_owned(), Value::Object(xhttp));
         }
         other => {
-            return Err(ConversionRefused::new(format!("transport `{other}` has no xray equivalent")));
+            return Err(ConversionRefused::new(format!(
+                "transport `{other}` has no xray equivalent"
+            )));
         }
     }
 
@@ -188,7 +204,9 @@ fn stream_settings(node: &Node) -> Result<Value, ConversionRefused> {
             stream.insert("realitySettings".to_owned(), Value::Object(reality));
         }
         other => {
-            return Err(ConversionRefused::new(format!("`security={other}` has no xray equivalent")));
+            return Err(ConversionRefused::new(format!(
+                "`security={other}` has no xray equivalent"
+            )));
         }
     }
 
@@ -265,7 +283,10 @@ mod tests {
         }));
         let outbound = to_outbound(&node).unwrap();
         assert_eq!(outbound["tag"], "named", "the tag is renamed to the node");
-        assert_eq!(outbound["settings"]["exotic"], true, "everything else survives untouched");
+        assert_eq!(
+            outbound["settings"]["exotic"], true,
+            "everything else survives untouched"
+        );
     }
 
     #[test]
@@ -281,6 +302,104 @@ mod tests {
         let mut node = reality_node();
         node.set_param("type", "quic-obfs");
         assert!(to_outbound(&node).is_err());
+    }
+
+    /// A real production node: reality + xhttp with the full masking set.
+    fn real_xhttp_yaml(extra_opts: &str) -> serde_yaml_ng::Value {
+        let yaml = format!(
+            r#"
+proxies:
+  - name: "finland [xhttp]"
+    type: vless
+    server: masked.api.celestialhq.net
+    port: 443
+    network: xhttp
+    udp: true
+    uuid: 00000000-0000-0000-0000-000000000000
+    packet-encoding: xudp
+    tls: true
+    servername: masked.api.celestialhq.net
+    reality-opts:
+      public-key: PUBKEY
+      short-id: c3d4e5f60708192a
+    xhttp-opts:
+      path: /api/v1/events/
+      mode: stream-one
+      no-grpc-header: true
+      x-padding-bytes: 100-1000
+{extra_opts}      reuse-settings:
+        max-connections: '6'
+        c-max-reuse-times: 128-256
+        h-max-request-times: 600-900
+        h-max-reusable-secs: 1800-3600
+        h-keep-alive-period: 45
+    client-fingerprint: qq
+"#
+        );
+        serde_yaml_ng::from_str(&yaml).unwrap()
+    }
+
+    #[test]
+    fn the_xhttp_masking_options_are_carried_into_extra_and_xmux() {
+        let set = crate::parse_mihomo_proxies(&real_xhttp_yaml(""));
+        let outbound = to_outbound(&set.nodes()[0]).unwrap();
+
+        let stream = &outbound["streamSettings"];
+        assert_eq!(stream["network"], "xhttp");
+        assert_eq!(stream["security"], "reality");
+        assert_eq!(stream["realitySettings"]["fingerprint"], "qq");
+
+        let xhttp = &stream["xhttpSettings"];
+        assert_eq!(xhttp["path"], "/api/v1/events/");
+        assert_eq!(xhttp["mode"], "stream-one");
+        assert_eq!(xhttp["extra"]["noGRPCHeader"], true);
+        assert_eq!(xhttp["extra"]["xPaddingBytes"], "100-1000");
+
+        let xmux = &xhttp["extra"]["xmux"];
+        assert_eq!(xmux["maxConnections"], "6");
+        assert_eq!(xmux["cMaxReuseTimes"], "128-256");
+        assert_eq!(xmux["hMaxRequestTimes"], "600-900");
+        assert_eq!(xmux["hMaxReusableSecs"], "1800-3600");
+        assert_eq!(xmux["hKeepAlivePeriod"], 45);
+    }
+
+    /// The panel builds the mihomo profile by converting its own xray config, so the
+    /// converter's job here is to land back on exactly what the panel started from.
+    #[test]
+    fn the_full_masking_set_round_trips_back_to_the_panels_own_extra() {
+        let opts = concat!(
+            "      seq-placement: path
+",
+            "      seq-key: seq
+",
+            "      session-placement: path
+",
+            "      session-key: sid
+",
+            "      session-table: abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
+",
+        );
+        let set = crate::parse_mihomo_proxies(&real_xhttp_yaml(opts));
+        let outbound = to_outbound(&set.nodes()[0]).unwrap();
+        let produced = &outbound["streamSettings"]["xhttpSettings"]["extra"];
+
+        let expected = serde_json::json!({
+            "xmux": {
+                "cMaxReuseTimes": "128-256",
+                "maxConnections": "6",
+                "hKeepAlivePeriod": 45,
+                "hMaxRequestTimes": "600-900",
+                "hMaxReusableSecs": "1800-3600"
+            },
+            "seqKey": "seq",
+            "sessionKey": "sid",
+            "noGRPCHeader": true,
+            "seqPlacement": "path",
+            "sessionTable": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            "xPaddingBytes": "100-1000",
+            "sessionPlacement": "path"
+        });
+        assert_eq!(produced, &expected);
     }
 
     #[test]
@@ -300,7 +419,10 @@ mod tests {
         node.set_param("security", "tls");
         let outbound = to_outbound(&node).unwrap();
         assert_eq!(outbound["streamSettings"]["wsSettings"]["path"], "/tunnel");
-        assert_eq!(outbound["streamSettings"]["wsSettings"]["headers"]["Host"], "cdn.example");
+        assert_eq!(
+            outbound["streamSettings"]["wsSettings"]["headers"]["Host"],
+            "cdn.example"
+        );
         assert_eq!(outbound["streamSettings"]["security"], "tls");
     }
 }

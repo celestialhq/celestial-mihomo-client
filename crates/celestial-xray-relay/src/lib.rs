@@ -24,8 +24,8 @@ pub use convert::{ConversionRefused, to_outbound};
 pub use node::{Credentials, Node, NodeSet, Protocol, Warning};
 pub use parse::{Payload, decode_base64, detect, parse_mihomo_proxies, parse_uri, parse_uri_list};
 pub use plan::{
-    Disposition, LOOPBACK_RULE, Override, PORT_SEARCH_START, PlanError, PlanOptions, PlannedNode, PortMap,
-    PortProbe, RelayPlan, assign_ports, plan,
+    Disposition, LOOPBACK_RULE, Override, PORT_SEARCH_START, PlanError, PlanOptions, PlannedNode, PortMap, PortProbe,
+    RelayPlan, assign_ports, plan,
 };
 pub use template::{Mismatch, nodes_from_template, pair_with_template};
 
@@ -103,8 +103,7 @@ mod tests {
         let plan = plan(&paired, &AllFree, &PlanOptions::default(), &[]).unwrap();
         assert!(plan.nodes[0].is_relayed());
         assert_eq!(
-            plan.xray_config["outbounds"][0]["streamSettings"]["realitySettings"]["publicKey"],
-            "from-template",
+            plan.xray_config["outbounds"][0]["streamSettings"]["realitySettings"]["publicKey"], "from-template",
             "the template's outbound is used as it arrived, not rebuilt"
         );
     }

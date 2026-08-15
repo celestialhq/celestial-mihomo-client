@@ -123,6 +123,10 @@ pub struct Node {
     pub port: u16,
     pub params: BTreeMap<String, String>,
     pub creds: Credentials,
+    /// Transport options that map onto xray's `xhttpSettings.extra`, already translated.
+    ///
+    /// Kept apart from `params` because these nest (`xmux`) and `params` is flat.
+    pub extra: Option<serde_json::Value>,
     /// An outbound lifted verbatim from a mode-A xray template.
     ///
     /// When present it is used exactly as it arrived — that is the whole point of the
@@ -140,6 +144,7 @@ impl Node {
             port,
             params: BTreeMap::new(),
             creds: Credentials::default(),
+            extra: None,
             template_outbound: None,
         }
     }
@@ -175,17 +180,26 @@ pub struct Warning {
 
 impl Warning {
     pub fn new(message: impl Into<String>) -> Self {
-        Self { line: None, message: message.into() }
+        Self {
+            line: None,
+            message: message.into(),
+        }
     }
 
     pub fn at_line(line: usize, message: impl Into<String>) -> Self {
-        Self { line: Some(line), message: message.into() }
+        Self {
+            line: Some(line),
+            message: message.into(),
+        }
     }
 }
 
 impl NodeSet {
     pub const fn new() -> Self {
-        Self { nodes: Vec::new(), warnings: Vec::new() }
+        Self {
+            nodes: Vec::new(),
+            warnings: Vec::new(),
+        }
     }
 
     /// Appends a node, making its name unique.

@@ -223,7 +223,10 @@ fn parse_vmess(raw: &str) -> Result<Node, String> {
     let name = json.get("ps").and_then(serde_json::Value::as_str).unwrap_or_default();
 
     let mut node = Node::new(name, Protocol::Vmess, server, port);
-    node.creds.uuid = json.get("id").and_then(serde_json::Value::as_str).map(ToOwned::to_owned);
+    node.creds.uuid = json
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned);
     node.creds.alter_id = json.get("aid").and_then(as_u16).map(u32::from);
 
     for (from, to) in [
@@ -332,7 +335,11 @@ pub fn node_from_mihomo_proxy(proxy: &serde_yaml_ng::Value) -> Result<Node, Stri
         if let Some(value) = ws.get("path").and_then(|it| it.as_str()) {
             node.set_param("path", value);
         }
-        if let Some(value) = ws.get("headers").and_then(|it| it.get("Host")).and_then(|it| it.as_str()) {
+        if let Some(value) = ws
+            .get("headers")
+            .and_then(|it| it.get("Host"))
+            .and_then(|it| it.as_str())
+        {
             node.set_param("host", value);
         }
     }
@@ -348,22 +355,114 @@ pub fn node_from_mihomo_proxy(proxy: &serde_yaml_ng::Value) -> Result<Node, Stri
         if let Some(value) = xhttp.get("mode").and_then(|it| it.as_str()) {
             node.set_param("mode", value);
         }
-        // Anything beyond path/mode is masking configuration the converter cannot express;
-        // record it so the node is refused rather than quietly relayed without it.
-        if let Some(map) = xhttp.as_mapping() {
-            let unknown: Vec<String> = map
-                .keys()
-                .filter_map(|key| key.as_str())
-                .filter(|key| !matches!(*key, "path" | "mode" | "extra"))
-                .map(ToOwned::to_owned)
-                .collect();
-            if !unknown.is_empty() {
-                node.set_param("__unmapped", unknown.join(","));
-            }
+        if let Some(value) = xhttp.get("host").and_then(|it| it.as_str()) {
+            node.set_param("host", value);
+        }
+        let (extra, unknown) = xhttp_extra(xhttp);
+        if !extra.is_empty() {
+            node.extra = Some(serde_json::Value::Object(extra));
+        }
+        // Whatever is left is masking configuration with no known xray field. Record it so
+        // the node is refused rather than quietly relayed without it.
+        if !unknown.is_empty() {
+            node.set_param("__unmapped", unknown.join(","));
         }
     }
 
     Ok(node)
+}
+
+/// mihomo's `xhttp-opts` are xray's `xhttpSettings.extra` rendered in kebab-case.
+///
+/// The panel generates the mihomo profile by converting its own xray config, so the field
+/// set is xray's and the transform is mechanical. That makes an allow-list the wrong shape:
+/// it is guaranteed to fall behind xray's options and refuse nodes that convert perfectly
+/// well — as it did for `seq-placement`, which is simply `seqPlacement`. So convert
+/// mechanically and keep a table only for the names where the mechanical rule gets the
+/// casing wrong or the name changes outright.
+///
+/// A field xray does not recognise is caught by `xray -test -config` before either core
+/// starts, which is a better place to fail than a hand-maintained list here.
+fn xhttp_extra(xhttp: &serde_yaml_ng::Value) -> (serde_json::Map<String, serde_json::Value>, Vec<String>) {
+    /// Names the mechanical rule cannot produce: acronyms it would mis-case, and
+    /// `reuse-settings`, which xray calls `xmux`.
+    const IRREGULAR: &[(&str, &str)] = &[
+        ("no-grpc-header", "noGRPCHeader"),
+        ("no-sse-header", "noSSEHeader"),
+        ("reuse-settings", "xmux"),
+    ];
+    /// Handled on `xhttpSettings` itself rather than inside `extra`.
+    const HANDLED_ELSEWHERE: &[&str] = &["path", "mode", "host", "extra"];
+
+    let mut extra = serde_json::Map::new();
+    let mut unmappable = Vec::new();
+    let Some(map) = xhttp.as_mapping() else {
+        return (extra, unmappable);
+    };
+
+    for (key, value) in map {
+        let Some(key) = key.as_str() else {
+            continue;
+        };
+        if HANDLED_ELSEWHERE.contains(&key) {
+            continue;
+        }
+        let xray_key = IRREGULAR
+            .iter()
+            .find(|(it, _)| *it == key)
+            .map_or_else(|| kebab_to_camel(key), |(_, it)| (*it).to_owned());
+
+        match yaml_to_json(value) {
+            Some(translated) => {
+                extra.insert(xray_key, translated);
+            }
+            None => unmappable.push(key.to_owned()),
+        }
+    }
+
+    (extra, unmappable)
+}
+
+/// `x-padding-bytes` becomes `xPaddingBytes`.
+fn kebab_to_camel(key: &str) -> String {
+    let mut out = String::with_capacity(key.len());
+    let mut capitalise = false;
+    for ch in key.chars() {
+        if ch == '-' {
+            capitalise = true;
+            continue;
+        }
+        if capitalise {
+            out.extend(ch.to_uppercase());
+            capitalise = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+/// Translates a YAML value into the JSON xray expects, nested maps and lists included.
+///
+/// Nested maps recurse through the same key conversion, which is what carries
+/// `reuse-settings` into a fully translated `xmux`.
+fn yaml_to_json(value: &serde_yaml_ng::Value) -> Option<serde_json::Value> {
+    match value {
+        serde_yaml_ng::Value::Bool(it) => Some(serde_json::Value::Bool(*it)),
+        serde_yaml_ng::Value::String(it) => Some(serde_json::Value::String(it.clone())),
+        serde_yaml_ng::Value::Number(it) => it
+            .as_i64()
+            .map(serde_json::Value::from)
+            .or_else(|| it.as_f64().and_then(serde_json::Number::from_f64).map(serde_json::Value::Number)),
+        serde_yaml_ng::Value::Sequence(items) => {
+            items.iter().map(yaml_to_json).collect::<Option<Vec<_>>>().map(serde_json::Value::Array)
+        }
+        serde_yaml_ng::Value::Mapping(nested) => {
+            let (translated, unmappable) = xhttp_extra(&serde_yaml_ng::Value::Mapping(nested.clone()));
+            unmappable.is_empty().then_some(serde_json::Value::Object(translated))
+        }
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -412,7 +511,10 @@ mod tests {
 
     #[test]
     fn json_and_yaml_bodies_are_recognised_in_the_clear() {
-        assert!(matches!(detect("[{\"outbounds\":[]}]").unwrap(), Payload::XrayTemplate(_)));
+        assert!(matches!(
+            detect("[{\"outbounds\":[]}]").unwrap(),
+            Payload::XrayTemplate(_)
+        ));
         assert!(matches!(
             detect("proxies:\n  - name: a\n    type: vless\n    server: a.example\n    port: 443\n").unwrap(),
             Payload::MihomoConfig(_)
@@ -421,7 +523,8 @@ mod tests {
 
     #[test]
     fn a_percent_encoded_emoji_name_survives_the_fragment() {
-        let node = parse_uri("vless://uuid@a.example:443?security=reality&pbk=key#%F0%9F%87%AB%F0%9F%87%AE%20finland").unwrap();
+        let node = parse_uri("vless://uuid@a.example:443?security=reality&pbk=key#%F0%9F%87%AB%F0%9F%87%AE%20finland")
+            .unwrap();
         assert_eq!(node.name, "🇫🇮 finland");
         assert_eq!(node.param("security"), Some("reality"));
         assert_eq!(node.param("pbk"), Some("key"));
