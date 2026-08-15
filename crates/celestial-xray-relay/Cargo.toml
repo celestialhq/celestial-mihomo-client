@@ -1,0 +1,18 @@
+[package]
+name = "celestial-xray-relay"
+version = "0.1.0"
+edition = "2024"
+description = "Parses subscription sources into one node set and plans an xray relay for mihomo"
+license = "GPL-3.0-only"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_yaml_ng = { workspace = true }
+base64 = "0.23.0"
+percent-encoding = "2.3.2"
+url = "2.5.8"
+thiserror = "2"
+
+[lints]
+workspace = true

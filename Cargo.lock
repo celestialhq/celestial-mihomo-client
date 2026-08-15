@@ -1216,6 +1216,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "celestial-xray-relay"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "thiserror 2.0.18",
+ "url",
+]
+
+[[package]]
 name = "celestial_logger"
 version = "0.2.2"
 source = "git+https://github.com/pius-pp/celestial-logger#3ad358b9df956cc5282f765a835ed6cdfdf3575d"
