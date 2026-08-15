@@ -109,9 +109,20 @@ fn shadowsocks_settings(node: &Node) -> Result<Value, ConversionRefused> {
         .cipher
         .as_deref()
         .ok_or_else(|| ConversionRefused::new("a shadowsocks node needs a cipher"))?;
-    Ok(json!({
-        "servers": [{ "address": node.server, "port": node.port, "password": password, "method": method }]
-    }))
+    let mut server = json!({
+        "address": node.server, "port": node.port, "password": password, "method": method
+    });
+    // `UoTVersion` really is capitalised that way in xray; the panel's own generator spells
+    // it the same, so this is not a typo to tidy up.
+    if let Some(map) = server.as_object_mut() {
+        if let Some(uot) = node.param("uot") {
+            map.insert("uot".to_owned(), Value::Bool(uot == "true"));
+        }
+        if let Some(version) = node.param("uot-version").and_then(|it| it.parse::<u64>().ok()) {
+            map.insert("UoTVersion".to_owned(), Value::from(version));
+        }
+    }
+    Ok(json!({ "servers": [server] }))
 }
 
 /// Transport and TLS. Anything unrecognised refuses rather than falling back to plain TCP.
@@ -126,13 +137,18 @@ fn stream_settings(node: &Node) -> Result<Value, ConversionRefused> {
     match network {
         "tcp" | "raw" | "" => {}
         "ws" => {
-            let mut ws = json!({ "path": node.param("path").unwrap_or("/") });
-            if let Some(host) = node.param("host")
-                && let Some(map) = ws.as_object_mut()
-            {
-                map.insert("headers".to_owned(), json!({ "Host": host }));
+            let mut ws = Map::new();
+            ws.insert(
+                "path".to_owned(),
+                Value::String(node.param("path").unwrap_or("/").to_owned()),
+            );
+            // The panel writes the host into its own field, which is what current xray reads;
+            // the header is kept alongside it for older builds that only look there.
+            if let Some(host) = node.param("host") {
+                ws.insert("host".to_owned(), Value::String(host.to_owned()));
+                ws.insert("headers".to_owned(), json!({ "Host": host }));
             }
-            stream.insert("wsSettings".to_owned(), ws);
+            stream.insert("wsSettings".to_owned(), Value::Object(ws));
         }
         "grpc" => {
             stream.insert(
@@ -158,7 +174,7 @@ fn stream_settings(node: &Node) -> Result<Value, ConversionRefused> {
             {
                 map.insert("request".to_owned(), json!({ "headers": { "Host": [host] } }));
             }
-            stream.insert("rawSettings".to_owned(), json!({ "header": header }));
+            stream.insert("tcpSettings".to_owned(), json!({ "header": header }));
         }
         "h2" => {
             let mut http = json!({ "path": node.param("path").unwrap_or("/") });
@@ -258,8 +274,10 @@ fn tls_settings(node: &Node) -> Value {
 /// mihomo and xray disagree on what plain TCP is called.
 const fn normalise_network(network: &str) -> &str {
     match network.as_bytes() {
-        // `tcp-http-header` is mihomo's `network: http`, which is the raw transport in xray.
-        b"" | b"tcp" | b"tcp-http-header" => "raw",
+        // The panel emits `network: host.transport`, so plain TCP is `tcp` — xray's legacy
+        // name for what it now also calls `raw`. Match what is known to work against these
+        // servers rather than the newer spelling.
+        b"" | b"tcp" | b"tcp-http-header" => "tcp",
         b"h2" => "http",
         _ => network,
     }
@@ -293,7 +311,10 @@ mod tests {
         assert_eq!(stream["security"], "reality");
         assert_eq!(stream["realitySettings"]["publicKey"], "public-key");
         assert_eq!(stream["realitySettings"]["fingerprint"], "chrome");
-        assert_eq!(stream["network"], "raw", "mihomo's tcp is xray's raw");
+        assert_eq!(
+            stream["network"], "tcp",
+            "the panel's own xray generator emits `tcp`, so match that rather than the newer `raw`"
+        );
     }
 
     #[test]
