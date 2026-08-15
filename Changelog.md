@@ -1,3 +1,9 @@
+## v4.0.1
+
+### Fixed
+
+- **The relay's local socks5 inbounds were open to anything on the machine.** Each relayed node is reached through an inbound on `127.0.0.1`, and those were generated without authentication — but loopback is not a boundary between programs. Any process on a desktop, and on Android any installed application, could dial one and reach the internet through a chosen exit node, past every rule mihomo was about to apply and at the subscriber's expense. The inbounds now require a credential that is generated fresh each time the core starts and known only to the client's own configuration. Anyone running 4.0.0 with the relay on should update.
+
 ## v4.0.0
 
 ### New
