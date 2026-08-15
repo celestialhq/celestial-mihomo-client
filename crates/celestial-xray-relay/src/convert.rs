@@ -67,16 +67,25 @@ fn vless_settings(node: &Node) -> Result<Value, ConversionRefused> {
         "id": uuid,
         "encryption": node.param("encryption").unwrap_or("none"),
     });
-    // `flow` only belongs on the raw transport. The panel writes `xtls-rprx-vision` onto
-    // every vless node regardless of transport and mihomo ignores it where it does not
-    // apply, but xray honours it — and the server has no flow configured for an xhttp or ws
-    // inbound, so carrying it across kills the connection outright.
+    // XTLS is only available in two combinations: raw transport with TLS or REALITY, where
+    // the payload can be copied at the layer below; or VLESS Encryption, which lifts the
+    // transport restriction entirely because the flow then only penetrates the encryption.
     //
-    // Nothing downstream catches this: `xray -test -config` accepts the combination happily,
-    // so the first sign of trouble would be a node that silently fails to connect. Drop it
-    // here instead.
-    let raw_transport = matches!(node.param("type").unwrap_or("tcp"), "tcp" | "raw" | "" | "tcp-http-header");
-    if raw_transport
+    // This matters because the panel writes `xtls-rprx-vision` onto every vless node whatever
+    // its transport. mihomo ignores it where it does not apply; xray honours it and hands it
+    // to a server whose xhttp or ws inbound has no flow configured, and the connection dies.
+    // Nothing downstream catches that — `xray -test -config` accepts the combination without
+    // complaint — so the node would relay and then silently fail, which is worse than
+    // refusing, because it looks like it works.
+    let raw_transport = matches!(
+        node.param("type").unwrap_or("tcp"),
+        "tcp" | "raw" | "" | "tcp-http-header"
+    );
+    let secured = matches!(node.param("security").unwrap_or("none"), "tls" | "reality");
+    let vless_encryption = node
+        .param("encryption")
+        .is_some_and(|it| !it.is_empty() && it != "none");
+    if ((raw_transport && secured) || vless_encryption)
         && let Some(flow) = node.param("flow")
         && let Some(map) = user.as_object_mut()
     {
@@ -465,23 +474,43 @@ proxies:
         assert_eq!(produced, &expected);
     }
 
+    /// XTLS is valid on raw+TLS/REALITY, and on any transport once VLESS Encryption is in
+    /// play. Everywhere else it must not be carried across.
     #[test]
-    fn flow_is_dropped_on_every_transport_but_raw() {
-        let mut raw = Node::new("raw", Protocol::Vless, "a.example", 443);
-        raw.creds.uuid = Some("u".to_owned());
-        raw.set_param("flow", "xtls-rprx-vision");
-        let outbound = to_outbound(&raw).unwrap();
-        assert_eq!(outbound["settings"]["vnext"][0]["users"][0]["flow"], "xtls-rprx-vision");
-
-        for transport in ["xhttp", "ws", "grpc", "httpupgrade"] {
-            let mut node = Node::new(transport, Protocol::Vless, "a.example", 443);
+    fn flow_is_kept_only_where_xtls_actually_applies() {
+        let flowed = |transport: &str, security: &str, encryption: Option<&str>| {
+            let mut node = Node::new("n", Protocol::Vless, "a.example", 443);
             node.creds.uuid = Some("u".to_owned());
             node.set_param("flow", "xtls-rprx-vision");
             node.set_param("type", transport);
+            node.set_param("security", security);
+            if security == "reality" {
+                node.set_param("pbk", "public-key");
+            }
+            if let Some(encryption) = encryption {
+                node.set_param("encryption", encryption);
+            }
             let outbound = to_outbound(&node).unwrap();
+            outbound["settings"]["vnext"][0]["users"][0]
+                .get("flow")
+                .is_some()
+        };
+
+        assert!(flowed("tcp", "reality", None), "raw + REALITY is the classic XTLS case");
+        assert!(flowed("tcp", "tls", None), "raw + TLS likewise");
+        assert!(
+            !flowed("tcp", "none", None),
+            "without TLS there is nothing to copy at the layer below"
+        );
+
+        for transport in ["xhttp", "ws", "grpc", "httpupgrade"] {
             assert!(
-                outbound["settings"]["vnext"][0]["users"][0].get("flow").is_none(),
-                "`flow` on {transport} would be honoured by xray against a server that has                  none configured, and `xray -test` does not object"
+                !flowed(transport, "reality", None),
+                "{transport} has no direct copy below it, and the server has no flow set"
+            );
+            assert!(
+                flowed(transport, "tls", Some("mlkem768x25519plus.native.0rtt.abc")),
+                "VLESS Encryption lifts the transport restriction; the flow penetrates it"
             );
         }
     }
