@@ -62,7 +62,10 @@ impl CoreManager {
     }
 
     /// The plan the currently running xray was started from, if one is running.
-    pub(super) fn running_relay(&self) -> Option<Arc<RelayPlan>> {
+    ///
+    /// Read by the config pipeline as well, which needs the ports it is serving so a
+    /// regeneration does not move them out from under it.
+    pub(crate) fn running_relay(&self) -> Option<Arc<RelayPlan>> {
         self.running_relay.load_full()
     }
 

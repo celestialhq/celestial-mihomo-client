@@ -37,17 +37,40 @@ pub trait PortProbe {
 
 /// Assigns each name a free port, searching upward from [`PORT_SEARCH_START`].
 ///
-/// The result is deliberately a run-time value: it is stable within one launch, which is all
-/// generation needs to be reproducible, and it is free to differ between launches.
-pub fn assign_ports<P: PortProbe>(names: &[String], probe: &P) -> Result<PortMap, PlanError> {
+/// `in_use` is the mapping a relay that is *already running* is serving. Those ports are kept
+/// for the names that hold them and are never probed, because the process holding them is our
+/// own xray: probing would report them busy, the search would move past them, and every
+/// regeneration would hand the same unchanged node a different port.
+///
+/// That mattered more than it looks. A plan differing only in its ports is still a different
+/// plan, so the core chain gets replaced to serve it — which means a subscription refresh that
+/// changed nothing at all would drop every live connection for as long as xray takes to come
+/// back. Keeping the mapping stable is what makes an unchanged profile a no-op.
+///
+/// Ports are still a run-time value and still free to differ between launches; what they may
+/// not do is drift underneath a relay that is up.
+pub fn assign_ports<P: PortProbe>(names: &[String], probe: &P, in_use: &[(String, u16)]) -> Result<PortMap, PlanError> {
     let mut map = PortMap::default();
+    // Reserved before the search starts, so a name that has yet to be assigned cannot be
+    // given a port another name is already being served on.
+    let reserved: Vec<u16> = names
+        .iter()
+        .filter_map(|name| in_use.iter().find(|(it, _)| it == name).map(|(_, port)| *port))
+        .collect();
+
     let mut candidate = PORT_SEARCH_START;
+    // One pass in name order: the mapping is compared for equality to decide whether the
+    // relay has to be replaced, so the order entries are recorded in is part of the answer.
     for name in names {
+        if let Some((_, port)) = in_use.iter().find(|(it, _)| it == name) {
+            map.entries.push((name.clone(), *port));
+            continue;
+        }
         loop {
             if candidate == u16::MAX {
                 return Err(PlanError::NoFreePort);
             }
-            if probe.is_free(candidate) {
+            if !reserved.contains(&candidate) && probe.is_free(candidate) {
                 map.entries.push((name.clone(), candidate));
                 candidate += 1;
                 break;
@@ -134,12 +157,16 @@ impl RelayPlan {
 pub struct PlanOptions {
     /// Substring matches against a node's name that keep it native. Defaults to `hysteria`.
     pub name_exclusions: Vec<String>,
+    /// The mapping a running relay is already serving; see [`assign_ports`]. Empty when
+    /// nothing is running, which is the only time ports are free to move.
+    pub ports_in_use: Vec<(String, u16)>,
 }
 
 impl Default for PlanOptions {
     fn default() -> Self {
         Self {
             name_exclusions: vec!["hysteria".to_owned()],
+            ports_in_use: Vec::new(),
         }
     }
 }
@@ -202,7 +229,7 @@ pub fn plan<P: PortProbe>(
     }
 
     let names: Vec<String> = eligible.iter().map(|(node, _)| node.name.clone()).collect();
-    let ports = assign_ports(&names, probe)?;
+    let ports = assign_ports(&names, probe, &options.ports_in_use)?;
 
     let planned = decided
         .into_iter()
@@ -312,10 +339,79 @@ mod tests {
     #[test]
     fn ports_are_searched_upward_and_step_over_occupied_ones() {
         let names = vec!["a".to_owned(), "b".to_owned(), "c".to_owned()];
-        let map = assign_ports(&names, &Busy(&[20000, 20001, 20003])).unwrap();
+        let map = assign_ports(&names, &Busy(&[20000, 20001, 20003]), &[]).unwrap();
         assert_eq!(map.get("a"), Some(20002));
         assert_eq!(map.get("b"), Some(20004));
         assert_eq!(map.get("c"), Some(20005));
+    }
+
+    /// The regression this exists to prevent: regenerating while the relay is up must not
+    /// move a single port.
+    ///
+    /// The running xray is holding its own inbounds, so a probe reports exactly those ports
+    /// as busy. Without the mapping being carried in, the search walks past all of them and
+    /// every unchanged node comes back on a new port — a different plan, so the chain is
+    /// replaced, so a refresh that changed nothing drops every live connection.
+    #[test]
+    fn a_regeneration_while_the_relay_is_up_keeps_every_port() {
+        let nodes = set_of(vec![vless("a", "a.example"), vless("b", "b.example")]);
+        let first = plan(&nodes, &AllFree, &PlanOptions::default(), &[]).unwrap();
+
+        // What the machine now looks like: our own xray is listening on what it was given,
+        // so the operating system reports exactly those ports as taken.
+        struct Held(Vec<u16>);
+        impl PortProbe for Held {
+            fn is_free(&self, port: u16) -> bool {
+                !self.0.contains(&port)
+            }
+        }
+        let held = Held(first.ports.entries().iter().map(|(_, port)| *port).collect());
+
+        let options = PlanOptions {
+            ports_in_use: first.ports.entries().to_vec(),
+            ..PlanOptions::default()
+        };
+        let second = plan(&nodes, &held, &options, &[]).unwrap();
+
+        assert_eq!(first.ports, second.ports, "the mapping must survive a regeneration");
+        assert_eq!(
+            first, second,
+            "and so must the plan, or the chain gets replaced for nothing"
+        );
+    }
+
+    /// A node added to a running relay gets a new port, and the ones already being served
+    /// keep theirs — only the addition costs a restart, not the whole set.
+    #[test]
+    fn a_new_node_is_given_a_port_beside_the_ones_already_serving() {
+        let names = vec!["a".to_owned(), "new".to_owned(), "b".to_owned()];
+        let in_use = vec![("a".to_owned(), 20000), ("b".to_owned(), 20001)];
+        let map = assign_ports(&names, &Busy(&[20000, 20001]), &in_use).unwrap();
+
+        assert_eq!(map.get("a"), Some(20000));
+        assert_eq!(map.get("b"), Some(20001));
+        assert_eq!(map.get("new"), Some(20002));
+        assert_eq!(
+            map.entries().iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(),
+            ["a", "new", "b"],
+            "recorded in name order, because the mapping is compared for equality"
+        );
+    }
+
+    /// A port still recorded for a node that is no longer eligible must not be handed to
+    /// somebody else while its old owner may still be listening on it.
+    #[test]
+    fn a_reserved_port_is_not_handed_to_another_name() {
+        let names = vec!["new".to_owned(), "b".to_owned()];
+        let in_use = vec![("b".to_owned(), 20000)];
+        let map = assign_ports(&names, &AllFree, &in_use).unwrap();
+
+        assert_eq!(map.get("b"), Some(20000));
+        assert_ne!(
+            map.get("new"),
+            Some(20000),
+            "20000 belongs to `b` for as long as it is served"
+        );
     }
 
     #[test]

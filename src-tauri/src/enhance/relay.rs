@@ -60,7 +60,12 @@ pub fn use_relay(
         }
     }
 
-    let plan = match plan(&nodes, &BindProbe, &PlanOptions::default(), overrides) {
+    let options = PlanOptions {
+        ports_in_use: ports_in_use(),
+        ..PlanOptions::default()
+    };
+
+    let plan = match plan(&nodes, &BindProbe, &options, overrides) {
         Ok(plan) => plan,
         Err(err) => {
             logging!(
@@ -83,6 +88,24 @@ pub fn use_relay(
     log_dispositions(&plan);
     log_substitution(&substitution);
     Some(plan)
+}
+
+/// The mapping the running relay is serving, so a regeneration does not move it.
+///
+/// Empty when nothing is running, which is the only moment the ports are actually free. The
+/// probe cannot work this out on its own: a port held by our own xray looks exactly as busy
+/// as one held by anything else, so the search would walk past every port already in use and
+/// hand each unchanged node a new one.
+fn ports_in_use() -> Vec<(std::string::String, u16)> {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        crate::core::CoreManager::global()
+            .running_relay()
+            .map(|plan| plan.ports.entries().to_vec())
+            .unwrap_or_default()
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    Vec::new()
 }
 
 /// Puts the subscription's own xray outbounds behind the nodes they describe (mode A).
