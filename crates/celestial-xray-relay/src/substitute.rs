@@ -12,7 +12,7 @@
 
 use serde_yaml_ng::{Mapping, Value};
 
-use crate::plan::{LOOPBACK_RULE, RelayPlan};
+use crate::plan::{LOOPBACK_RULE, RelayPlan, SocksAuth};
 
 /// What a substitution pass changed, for the log and the UI.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -86,7 +86,7 @@ fn substitute_list(proxies: &mut [Value], plan: &RelayPlan, result: &mut Substit
         };
         match &planned.disposition {
             crate::plan::Disposition::Relay { port } => {
-                *proxy = Value::Mapping(stand_in(&name, *port));
+                *proxy = Value::Mapping(stand_in(&name, *port, &plan.auth));
                 result.replaced.push(name);
             }
             crate::plan::Disposition::Native { reason } => {
@@ -97,12 +97,17 @@ fn substitute_list(proxies: &mut [Value], plan: &RelayPlan, result: &mut Substit
 }
 
 /// The socks5 entry that takes a relayed node's place.
-fn stand_in(name: &str, port: u16) -> Mapping {
+///
+/// Carries the credential because the inbound demands one — the two are generated together
+/// and are useless apart.
+fn stand_in(name: &str, port: u16, auth: &SocksAuth) -> Mapping {
     let mut entry = Mapping::new();
     entry.insert("name".into(), Value::String(name.to_owned()));
     entry.insert("type".into(), Value::String("socks5".to_owned()));
     entry.insert("server".into(), Value::String("127.0.0.1".to_owned()));
     entry.insert("port".into(), Value::Number(port.into()));
+    entry.insert("username".into(), Value::String(auth.user.clone()));
+    entry.insert("password".into(), Value::String(auth.pass.clone()));
     entry.insert("udp".into(), Value::Bool(true));
     entry
 }
@@ -132,7 +137,7 @@ fn ensure_loopback_rule(config: &mut Mapping) -> bool {
 #[allow(clippy::unwrap_used, clippy::panic, reason = "a failed assertion is a failed test")]
 mod tests {
     use super::{apply_relay, ensure_loopback_rule};
-    use crate::plan::{LOOPBACK_RULE, PlanOptions, PortProbe, plan};
+    use crate::plan::{LOOPBACK_RULE, PlanOptions, PortProbe, SocksAuth, plan};
 
     struct AllFree;
     impl PortProbe for AllFree {
@@ -159,9 +164,16 @@ rules:
         serde_yaml_ng::from_str(yaml).unwrap()
     }
 
+    fn auth() -> SocksAuth {
+        SocksAuth {
+            user: "celestial".to_owned(),
+            pass: "test-secret".to_owned(),
+        }
+    }
+
     fn planned(config: &serde_yaml_ng::Mapping) -> crate::plan::RelayPlan {
         let set = crate::parse_mihomo_proxies(&serde_yaml_ng::Value::Mapping(config.clone()));
-        plan(&set, &AllFree, &PlanOptions::default(), &[]).unwrap()
+        plan(&set, &AllFree, &PlanOptions::new(auth()), &[]).unwrap()
     }
 
     /// The shape the panel produces when a template asks for `include-proxies`: the whole
@@ -291,6 +303,11 @@ proxies:
         assert_eq!(relayed["udp"], true);
         assert!(relayed["port"].as_u64().is_some_and(|it| it >= 20000));
         assert!(relayed.get("uuid").is_none(), "the real credentials do not stay behind");
+        assert_eq!(
+            relayed["username"], "celestial",
+            "without the credential the stand-in cannot use the inbound it points at"
+        );
+        assert_eq!(relayed["password"], "test-secret");
     }
 
     #[test]

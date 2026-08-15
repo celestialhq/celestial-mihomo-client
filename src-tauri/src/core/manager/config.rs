@@ -424,7 +424,7 @@ fn relay_change(
 mod tests {
     use super::{RelayChange, relay_change};
     use celestial_xray_relay::{
-        PlanOptions, PortProbe, RelayPlan,
+        PlanOptions, PortProbe, RelayPlan, SocksAuth,
         node::{Node, NodeSet, Protocol},
         plan,
     };
@@ -443,7 +443,16 @@ mod tests {
         node.set_param("pbk", "key");
         let mut set = NodeSet::new();
         set.push(node);
-        plan(&set, &FixedPorts(first_port), &PlanOptions::default(), &[]).unwrap()
+        plan(
+            &set,
+            &FixedPorts(first_port),
+            &PlanOptions::new(SocksAuth {
+                user: "celestial".to_owned(),
+                pass: "test-secret".to_owned(),
+            }),
+            &[],
+        )
+        .unwrap()
     }
 
     #[test]

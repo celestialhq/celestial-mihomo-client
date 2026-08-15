@@ -24,6 +24,9 @@ const SECRET_KEYS: &[&str] = &[
     // xray
     "id",
     "password",
+    // xray spells the socks account's secret this way; ours is generated per launch, but it
+    // is still the key to every inbound the relay opened.
+    "pass",
     "publicKey",
     "privateKey",
     "shortId",

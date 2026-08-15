@@ -9,8 +9,8 @@
 //! the user goes out natively with a note in the log, never that they go nowhere.
 
 use celestial_xray_relay::{
-    Disposition, NodeSet, Override, PlanOptions, PortProbe, RelayPlan, Substitution, apply_relay, node_set_from_body,
-    pair_with_template, parse_mihomo_proxies, plan,
+    Disposition, NodeSet, Override, PlanOptions, PortProbe, RelayPlan, SocksAuth, Substitution, apply_relay,
+    node_set_from_body, pair_with_template, parse_mihomo_proxies, plan,
 };
 use clash_verge_logging::{Type, logging};
 use serde_yaml_ng::{Mapping, Value};
@@ -60,9 +60,16 @@ pub fn use_relay(
         }
     }
 
+    // Both are properties of the *running* relay rather than of this generation, so they are
+    // read together: a plan that moved either would be a different plan, and the core chain
+    // would be replaced to serve a configuration that changed nothing else.
+    let running = running_relay();
     let options = PlanOptions {
-        ports_in_use: ports_in_use(),
-        ..PlanOptions::default()
+        ports_in_use: running
+            .as_ref()
+            .map(|plan| plan.ports.entries().to_vec())
+            .unwrap_or_default(),
+        ..PlanOptions::new(running.map_or_else(fresh_socks_auth, |plan| plan.auth.clone()))
     };
 
     let plan = match plan(&nodes, &BindProbe, &options, overrides) {
@@ -90,28 +97,38 @@ pub fn use_relay(
     Some(plan)
 }
 
-/// The mapping the running relay is serving, so a regeneration does not move it.
+/// The relay the core chain is currently serving, if any.
 ///
-/// Empty when nothing is running, which is the only moment the ports are actually free. The
-/// probe cannot work this out on its own: a port held by our own xray looks exactly as busy
-/// as one held by anything else, so the search would walk past every port already in use and
-/// hand each unchanged node a new one.
-// On mobile the body is a bare `Vec::new()`, which clippy rightly notices could be const —
-// but only there, and the desktop body cannot be.
-#[cfg_attr(
-    any(target_os = "android", target_os = "ios"),
-    allow(clippy::missing_const_for_fn, reason = "const only on the platform with no relay")
-)]
-fn ports_in_use() -> Vec<(std::string::String, u16)> {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        crate::core::CoreManager::global()
-            .running_relay()
-            .map(|plan| plan.ports.entries().to_vec())
-            .unwrap_or_default()
+/// Both the port map and the credential have to stay put for as long as it runs: a plan that
+/// moved either is a different plan, and a different plan replaces the core — a subscription
+/// refresh that changed nothing would drop every live connection.
+///
+/// None where no relay is ever planned, which is every target the second core is not shipped
+/// for.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn running_relay() -> Option<std::sync::Arc<RelayPlan>> {
+    crate::core::CoreManager::global().running_relay()
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+const fn running_relay() -> Option<std::sync::Arc<RelayPlan>> {
+    None
+}
+
+/// A new credential for a relay that is about to start.
+///
+/// Minted per launch of the core rather than per configuration change, which is what reusing
+/// the running relay's credential amounts to: a new secret on every regeneration would change
+/// the plan, and changing the plan replaces the core.
+///
+/// The alphabet is nanoid's URL-safe default and the length is well past guessing — this is
+/// what stands between a local program and a way out through the user's exit node, and it is
+/// never typed by anyone.
+fn fresh_socks_auth() -> SocksAuth {
+    SocksAuth {
+        user: "celestial".to_owned(),
+        pass: nanoid::nanoid!(32),
     }
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    Vec::new()
 }
 
 /// Puts the subscription's own xray outbounds behind the nodes they describe (mode A).

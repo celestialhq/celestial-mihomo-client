@@ -28,7 +28,7 @@ pub use node::{Credentials, Node, NodeSet, Protocol, Warning};
 pub use parse::{Payload, decode_base64, detect, parse_mihomo_proxies, parse_uri, parse_uri_list};
 pub use plan::{
     Disposition, LOOPBACK_RULE, Override, PORT_SEARCH_START, PlanError, PlanOptions, PlannedNode, PortMap, PortProbe,
-    RelayPlan, assign_ports, plan,
+    RelayPlan, SocksAuth, assign_ports, plan,
 };
 pub use substitute::{Substitution, apply_relay};
 pub use template::{Mismatch, nodes_from_template, pair_with_template};
@@ -49,7 +49,14 @@ pub fn node_set_from_body(body: &str) -> Result<NodeSet, parse::ParseError> {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic, reason = "a failed assertion is a failed test")]
 mod tests {
-    use super::{Disposition, PlanOptions, PortProbe, node_set_from_body, plan};
+    use super::{Disposition, PlanOptions, PortProbe, SocksAuth, node_set_from_body, plan};
+
+    fn test_auth() -> SocksAuth {
+        SocksAuth {
+            user: "celestial".to_owned(),
+            pass: "test-secret".to_owned(),
+        }
+    }
 
     struct AllFree;
     impl PortProbe for AllFree {
@@ -74,7 +81,7 @@ mod tests {
         assert_eq!(set.len(), 3, "the broken line is skipped, the tuic node is kept");
         assert_eq!(set.warnings().len(), 1);
 
-        let plan = plan(&set, &AllFree, &PlanOptions::default(), &[]).unwrap();
+        let plan = plan(&set, &AllFree, &PlanOptions::new(test_auth()), &[]).unwrap();
         assert_eq!(plan.nodes[0].name, "🇫🇮 finland");
         assert!(plan.nodes[0].is_relayed());
         assert!(plan.nodes[1].is_relayed());
@@ -104,7 +111,7 @@ mod tests {
         let (paired, mismatches) = pair_with_template(&mihomo_set, &nodes_from_template(&template));
         assert!(mismatches.is_empty());
 
-        let plan = plan(&paired, &AllFree, &PlanOptions::default(), &[]).unwrap();
+        let plan = plan(&paired, &AllFree, &PlanOptions::new(test_auth()), &[]).unwrap();
         assert!(plan.nodes[0].is_relayed());
         assert_eq!(
             plan.xray_config["outbounds"][0]["streamSettings"]["realitySettings"]["publicKey"], "from-template",

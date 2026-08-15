@@ -81,6 +81,29 @@ pub fn assign_ports<P: PortProbe>(names: &[String], probe: &P, in_use: &[(String
     Ok(map)
 }
 
+/// The credential the relay's socks5 inbounds demand.
+///
+/// Without one, every inbound is an open proxy on loopback, and loopback is not a boundary
+/// between programs: any process on a desktop — and on Android any *application*, since the
+/// interface is shared across the device — can dial one and be tunnelled straight out of a
+/// chosen exit node, past every rule mihomo was going to apply. That is the whole reason this
+/// exists, and it is a defect other xray clients have shipped.
+///
+/// One credential for the whole relay rather than one per node: the boundary being drawn is
+/// "programs that were not told the secret", and every inbound is equally reachable, so
+/// per-node secrets would divide nothing.
+///
+/// Supplied by the caller rather than generated here, for two reasons. The crate stays
+/// deterministic, so a plan built from the same inputs is the same plan. And the caller is
+/// the only one that knows whether a relay is already running — the credential has to stay
+/// put for as long as it is, or every regeneration would produce a different plan and
+/// replace a working core to change nothing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SocksAuth {
+    pub user: String,
+    pub pass: String,
+}
+
 /// Node name to the socks5 port standing in for it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PortMap {
@@ -142,6 +165,8 @@ pub struct RelayPlan {
     pub nodes: Vec<PlannedNode>,
     pub xray_config: Value,
     pub ports: PortMap,
+    /// What mihomo's stand-ins must present to reach the inbounds; see [`SocksAuth`].
+    pub auth: SocksAuth,
 }
 
 impl RelayPlan {
@@ -160,13 +185,19 @@ pub struct PlanOptions {
     /// The mapping a running relay is already serving; see [`assign_ports`]. Empty when
     /// nothing is running, which is the only time ports are free to move.
     pub ports_in_use: Vec<(String, u16)>,
+    /// The credential the inbounds will demand; see [`SocksAuth`].
+    pub auth: SocksAuth,
 }
 
-impl Default for PlanOptions {
-    fn default() -> Self {
+impl PlanOptions {
+    /// There is deliberately no `Default`: a relay cannot be planned without deciding what
+    /// its inbounds accept, and a default would have to invent a credential — which is
+    /// exactly how an open proxy ships by accident.
+    pub fn new(auth: SocksAuth) -> Self {
         Self {
             name_exclusions: vec!["hysteria".to_owned()],
             ports_in_use: Vec::new(),
+            auth,
         }
     }
 }
@@ -248,17 +279,18 @@ pub fn plan<P: PortProbe>(
         })
         .collect();
 
-    let xray_config = build_xray_config(&eligible, &ports);
+    let xray_config = build_xray_config(&eligible, &ports, &options.auth);
     Ok(RelayPlan {
         nodes: planned,
         xray_config,
         ports,
+        auth: options.auth.clone(),
     })
 }
 
 /// Assembles the `xray.json`: one socks inbound per relayed node, the matching outbound, and
 /// a 1:1 route between them.
-fn build_xray_config(eligible: &[(&Node, Value)], ports: &PortMap) -> Value {
+fn build_xray_config(eligible: &[(&Node, Value)], ports: &PortMap, auth: &SocksAuth) -> Value {
     let mut inbounds = Vec::with_capacity(eligible.len());
     let mut outbounds = Vec::with_capacity(eligible.len());
     let mut rules = Vec::with_capacity(eligible.len());
@@ -273,7 +305,13 @@ fn build_xray_config(eligible: &[(&Node, Value)], ports: &PortMap) -> Value {
             "listen": "127.0.0.1",
             "port": port,
             "protocol": "socks",
-            "settings": { "auth": "noauth", "udp": true },
+            // Never `noauth`: see `SocksAuth`. Any local program could otherwise use this
+            // inbound as its own way out through this node.
+            "settings": {
+                "auth": "password",
+                "accounts": [{ "user": auth.user, "pass": auth.pass }],
+                "udp": true
+            },
             // mihomo has already sniffed and passes the domain through; sniffing again here
             // would only re-resolve what we were handed.
             "sniffing": { "enabled": false }
@@ -302,7 +340,7 @@ fn build_xray_config(eligible: &[(&Node, Value)], ports: &PortMap) -> Value {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic, reason = "a failed assertion is a failed test")]
 mod tests {
-    use super::{Disposition, Override, PlanOptions, PortProbe, assign_ports, plan};
+    use super::{Disposition, Override, PlanOptions, PortProbe, SocksAuth, assign_ports, plan};
     use crate::node::{Node, NodeSet, Protocol};
 
     struct AllFree;
@@ -318,6 +356,17 @@ mod tests {
         fn is_free(&self, port: u16) -> bool {
             !self.0.contains(&port)
         }
+    }
+
+    fn auth() -> SocksAuth {
+        SocksAuth {
+            user: "celestial".to_owned(),
+            pass: "test-secret".to_owned(),
+        }
+    }
+
+    fn options() -> PlanOptions {
+        PlanOptions::new(auth())
     }
 
     fn vless(name: &str, server: &str) -> Node {
@@ -355,7 +404,7 @@ mod tests {
     #[test]
     fn a_regeneration_while_the_relay_is_up_keeps_every_port() {
         let nodes = set_of(vec![vless("a", "a.example"), vless("b", "b.example")]);
-        let first = plan(&nodes, &AllFree, &PlanOptions::default(), &[]).unwrap();
+        let first = plan(&nodes, &AllFree, &options(), &[]).unwrap();
 
         // What the machine now looks like: our own xray is listening on what it was given,
         // so the operating system reports exactly those ports as taken.
@@ -369,7 +418,7 @@ mod tests {
 
         let options = PlanOptions {
             ports_in_use: first.ports.entries().to_vec(),
-            ..PlanOptions::default()
+            ..options()
         };
         let second = plan(&nodes, &held, &options, &[]).unwrap();
 
@@ -417,8 +466,8 @@ mod tests {
     #[test]
     fn generation_is_byte_identical_for_the_same_nodes_and_the_same_mapping() {
         let nodes = set_of(vec![vless("a", "a.example"), vless("b", "b.example")]);
-        let first = plan(&nodes, &AllFree, &PlanOptions::default(), &[]).unwrap();
-        let second = plan(&nodes, &AllFree, &PlanOptions::default(), &[]).unwrap();
+        let first = plan(&nodes, &AllFree, &options(), &[]).unwrap();
+        let second = plan(&nodes, &AllFree, &options(), &[]).unwrap();
         assert_eq!(first.ports, second.ports);
         assert_eq!(
             serde_json::to_string(&first.xray_config).unwrap(),
@@ -429,7 +478,7 @@ mod tests {
     #[test]
     fn every_relayed_node_gets_an_inbound_an_outbound_and_a_route() {
         let nodes = set_of(vec![vless("a", "a.example"), vless("b", "b.example")]);
-        let plan = plan(&nodes, &AllFree, &PlanOptions::default(), &[]).unwrap();
+        let plan = plan(&nodes, &AllFree, &options(), &[]).unwrap();
 
         let config = &plan.xray_config;
         assert_eq!(config["inbounds"].as_array().unwrap().len(), 2);
@@ -452,11 +501,39 @@ mod tests {
         assert_eq!(config["routing"]["rules"][0]["outboundTag"], "a");
     }
 
+    /// The inbounds live on loopback, and loopback is not a boundary between programs: on a
+    /// desktop any process and on Android any application can reach them. An inbound without
+    /// a credential is a way out through the user's exit node for anything on the device.
+    #[test]
+    fn every_inbound_demands_the_credential_and_the_stand_ins_carry_it() {
+        let nodes = set_of(vec![vless("a", "a.example"), vless("b", "b.example")]);
+        let plan = plan(&nodes, &AllFree, &options(), &[]).unwrap();
+
+        for inbound in plan.xray_config["inbounds"].as_array().unwrap() {
+            let settings = &inbound["settings"];
+            assert_eq!(settings["auth"], "password", "an inbound must never be open");
+            assert_eq!(settings["accounts"][0]["user"], "celestial");
+            assert_eq!(settings["accounts"][0]["pass"], "test-secret");
+        }
+
+        assert_eq!(plan.auth, auth(), "the plan carries what the stand-ins have to present");
+    }
+
+    /// The credential is the caller's to keep still. Were it minted here, every regeneration
+    /// would produce a different plan and replace a working core to change nothing.
+    #[test]
+    fn the_same_credential_produces_the_same_plan() {
+        let nodes = set_of(vec![vless("a", "a.example")]);
+        let first = plan(&nodes, &AllFree, &options(), &[]).unwrap();
+        let second = plan(&nodes, &AllFree, &options(), &[]).unwrap();
+        assert_eq!(first, second);
+    }
+
     #[test]
     fn a_node_with_no_outbound_stays_native_even_though_its_protocol_is_supported() {
         // vless with no uuid: the protocol passes, the conversion does not.
         let nodes = set_of(vec![Node::new("broken", Protocol::Vless, "a.example", 443)]);
-        let plan = plan(&nodes, &AllFree, &PlanOptions::default(), &[]).unwrap();
+        let plan = plan(&nodes, &AllFree, &options(), &[]).unwrap();
         let Disposition::Native { reason } = &plan.nodes[0].disposition else {
             panic!("expected the node to stay native");
         };
@@ -470,7 +547,7 @@ mod tests {
             vless("🇫🇮 Hysteria fast", "a.example"),
             vless("plain", "b.example"),
         ]);
-        let plan = plan(&nodes, &AllFree, &PlanOptions::default(), &[]).unwrap();
+        let plan = plan(&nodes, &AllFree, &options(), &[]).unwrap();
         assert!(matches!(plan.nodes[0].disposition, Disposition::Native { .. }));
         assert!(plan.nodes[1].is_relayed());
     }
@@ -485,7 +562,7 @@ mod tests {
             ("hysteria-named".to_owned(), Override::ForceRelay),
             ("real-hy".to_owned(), Override::ForceRelay),
         ];
-        let plan = plan(&nodes, &AllFree, &PlanOptions::default(), &overrides).unwrap();
+        let plan = plan(&nodes, &AllFree, &options(), &overrides).unwrap();
         assert!(plan.nodes[0].is_relayed(), "the exclusion list is overridden");
         assert!(
             !plan.nodes[1].is_relayed(),
@@ -497,7 +574,7 @@ mod tests {
     fn forcing_a_node_native_keeps_it_out_of_the_relay() {
         let nodes = set_of(vec![vless("a", "a.example")]);
         let overrides = vec![("a".to_owned(), Override::ForceNative)];
-        let plan = plan(&nodes, &AllFree, &PlanOptions::default(), &overrides).unwrap();
+        let plan = plan(&nodes, &AllFree, &options(), &overrides).unwrap();
         assert!(!plan.relays_anything());
         assert_eq!(plan.xray_config["inbounds"].as_array().unwrap().len(), 0);
     }
