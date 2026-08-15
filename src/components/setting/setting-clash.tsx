@@ -171,28 +171,30 @@ const SettingClash = ({ onError }: Props) => {
         />
       </SettingItem>
 
-      <SettingItem
-        label={t('settings.sections.clash.form.fields.xrayRelay')}
-        extra={
-          <>
-            <TooltipIcon
-              title={t('settings.sections.clash.form.tooltips.xrayRelay')}
-              sx={{ opacity: '0.7' }}
-            />
-            <TooltipIcon
-              icon={SettingsRounded}
-              onClick={() => relayRef.current?.open()}
-            />
-          </>
-        }
-      >
-        <Switch
-          edge="end"
-          checked={relay?.enabled ?? false}
-          disabled={relay?.forced ?? false}
-          onChange={(_, checked) => handleRelayToggle(checked)}
-        />
-      </SettingItem>
+      {relay?.supported && (
+        <SettingItem
+          label={t('settings.sections.clash.form.fields.xrayRelay')}
+          extra={
+            <>
+              <TooltipIcon
+                title={t('settings.sections.clash.form.tooltips.xrayRelay')}
+                sx={{ opacity: '0.7' }}
+              />
+              <TooltipIcon
+                icon={SettingsRounded}
+                onClick={() => relayRef.current?.open()}
+              />
+            </>
+          }
+        >
+          <Switch
+            edge="end"
+            checked={relay?.enabled ?? false}
+            disabled={relay?.forced ?? false}
+            onChange={(_, checked) => handleRelayToggle(checked)}
+          />
+        </SettingItem>
+      )}
 
       <SettingItem label={t('settings.sections.clash.form.fields.ipv6')}>
         <GuardState

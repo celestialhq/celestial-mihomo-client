@@ -341,6 +341,8 @@ interface IXrayRelayNode {
 }
 
 interface IXrayRelayStatus {
+  /** False on mobile, where there is no second process to run; the control is hidden. */
+  supported: boolean
   enabled: boolean
   /** The build pins the mode on; the switch must not be operable. */
   forced: boolean

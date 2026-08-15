@@ -1,3 +1,30 @@
+## v4.0.0
+
+### New
+
+- **Xray relay.** Traffic now leaves through a bundled xray core instead of mihomo dialling the nodes itself. mihomo stays the routing frontend — TUN, rules, groups, process rules are unchanged — and each relayable node is replaced by a socks5 stand-in pointing at a local xray inbound. The point is that the TLS fingerprint and the REALITY / Vision / XHTTP implementations always come from xray, so the client does not trip over `minClientVer` on a freshly configured server or announce a home-made ClientHello. **The mode is pinned on from this release** and the switch is locked; that has never meant every node is relayed, nor that a failure leaves you without a connection.
+- **Nodes that xray cannot carry keep working.** Eligibility is three things: a protocol xray speaks, a name not on the exclusion list, and an outbound that actually exists. The third decides — a supported protocol still stays native when no outbound could be produced for it. Hysteria2, TUIC, SSH and the rest simply go on being dialled by mihomo, and the settings dialog lists every node with the reason it is where it is.
+- **The subscription's own xray config is used where it exists.** Profiles are fetched a second time from the same URL with `celestial/xray/<ver>`, and outbounds that come back are used verbatim rather than converted, so nothing can be lost in translation. A panel that ignores the User-Agent, serves the same bytes twice, or serves no template at all falls back to converting the mihomo side — a subscription is free to be a mixture, and usually is.
+- **Per-node control.** Any node can be pinned to the relay or to native by hand, stored with the profile so it survives a subscription refresh. An override outranks the name-exclusion list but cannot make a node relayable that has no outbound.
+- **Diagnostic export.** The generated `xray.json` and `config.yaml` can be exported with credentials replaced. The masking parameters themselves are deliberately not hidden — an export that cannot be used to check that the obfuscation survived conversion would defeat the point.
+
+### Improved
+
+- The xray core is validated before either process starts, and the chain comes up from the far end: xray first, a TCP connect on every relayed port, then mihomo. Stopping goes the other way. mihomo pointed at stand-ins nothing is listening on is not a degraded client, it is a client with no working proxies.
+- A relay that will not come up never costs the connection. The first failure is treated as the port race the search cannot close on its own and answered by regenerating with fresh ports; a second gives up for the session and rebuilds the configuration natively, with mihomo left running throughout.
+- Nodes the panel inlines into a `proxy-providers` payload are relayed too. Groups commonly source their nodes from a provider rather than from `proxies`, and a relay confined to `proxies` would generate, start, and carry nothing while appearing to work.
+
+### Changed
+
+- Windows portable archives now carry the xray core alongside mihomo, and the packagers refuse to build an archive with a core missing rather than shipping one quietly incomplete.
+- The relay is desktop-only. On Android the core runs in-process through cgo and there is no second process to spawn, so nothing is planned there and the control is hidden rather than shown inert.
+
+### Fixed
+
+- A subscription refresh no longer drops connections when nothing changed. The port search asks the operating system what is free, and the process holding those ports is the running xray — so every regeneration moved unchanged nodes onto new ports, and the chain was replaced to serve a plan that differed in nothing else. Long enough to be thrown out of an online game by a timer nobody set.
+- `flow` is dropped on the transports XTLS cannot apply to. Panels attach `xtls-rprx-vision` to every VLESS node regardless of transport; mihomo ignores it where it is inapplicable and xray executes it, so the connection dies on a server that never enabled flow. `xray -test -config` accepts the combination silently, which is the one place validation is no help.
+- XHTTP masking options are converted mechanically rather than against a list of known names, so an option added to xray later is carried rather than turning into a refused node. The session fields are written under both spellings the core has used, since the release and pre-release channels disagree about them and xray ignores the one it does not know.
+
 ## v3.0.0
 
 ### New

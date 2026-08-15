@@ -31,6 +31,13 @@ pub struct RelayNodeStatus {
 
 #[derive(Debug, Serialize)]
 pub struct RelayStatus {
+    /// Whether this platform can relay at all.
+    ///
+    /// False on mobile, where the core runs in-process and there is no second process to
+    /// spawn. The interface hides the whole control there rather than showing one that
+    /// cannot do anything — which is what it would be, since `forced` follows the version
+    /// on every platform while `enabled` cannot be true on this one.
+    pub supported: bool,
     /// Whether the mode is on, taking the build feature and this session's fallback into
     /// account — that is, whether a relay is being planned at all.
     pub enabled: bool,
@@ -51,7 +58,11 @@ pub struct RelayStatus {
 #[tauri::command]
 pub async fn get_xray_relay_status() -> CmdResult<RelayStatus> {
     let verge = Config::verge().await.latest_arc();
-    let forced = constants::relay::is_forced();
+    let supported = cfg!(not(any(target_os = "android", target_os = "ios")));
+    // Reported only where it can mean something. Pinned on is a property of the build, so it
+    // is true on mobile too — but nothing is relayed there, and a switch that reads "pinned
+    // on" while off is worse than no switch.
+    let forced = supported && constants::relay::is_forced();
     let suppressed = Config::relay_suppressed_for_session();
 
     let overrides = current_overrides().await;
@@ -83,6 +94,7 @@ pub async fn get_xray_relay_status() -> CmdResult<RelayStatus> {
         .unwrap_or_default();
 
     Ok(RelayStatus {
+        supported,
         enabled: verge.xray_relay_enabled() && !suppressed,
         forced,
         suppressed,
