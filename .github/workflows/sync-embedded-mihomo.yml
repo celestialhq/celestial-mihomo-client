@@ -1,0 +1,164 @@
+# Keeps the embedded mihomo in step with the one the desktop builds download.
+#
+# Desktop resolves its sidecar from `releases/latest` on every build, deliberately, so it
+# follows upstream on its own. Android compiles the core from a submodule instead — it needs
+# patches and a cgo wrapper, neither of which a released binary can provide — and a submodule
+# only moves when somebody moves it. Nobody did for six weeks, and the two platforms shipped
+# cores a month and a half apart.
+#
+# So this follows exactly the source the prebuild script follows, and turns the difference
+# into a pull request rather than something to notice.
+name: Sync embedded mihomo
+
+on:
+  schedule:
+    # Weekly. mihomo releases every few weeks; a tighter schedule would only mean more runs
+    # finding nothing to do.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  ANDROID_NDK_VERSION: '27.3.13750724'
+  BRANCH: chore/sync-embedded-mihomo
+
+jobs:
+  sync:
+    name: Follow the release the desktop sidecar uses
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: dev
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Resolve the release desktop is on
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The same document `getLatestReleaseVersion` reads in scripts/prebuild.mjs. Reading
+          # the tag list instead would drift the moment upstream tags something it has not
+          # released.
+          version="$(curl -fsSL https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt | tr -d '[:space:]')"
+          [ -n "$version" ] || { echo "empty version.txt"; exit 1; }
+
+          cd crates/tauri-plugin-celestial-vpn/golang/mihomo
+          # Compared by commit rather than by `describe`: a submodule checkout carries no tags
+          # of its own, so a name comparison would report a difference every week and open a
+          # pull request that changes nothing.
+          git fetch --tags --depth 1 origin "$version"
+          target="$(git rev-parse "FETCH_HEAD^{commit}")"
+          current="$(git rev-parse HEAD)"
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "current=$(git describe --tags 2>/dev/null || echo "$current")" >> "$GITHUB_OUTPUT"
+          if [ "$target" = "$current" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Embedded core is already on $version"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Embedded core is on $current, desktop is on $version ($target)"
+          fi
+
+      - name: Move the submodule
+        if: steps.target.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd crates/tauri-plugin-celestial-vpn/golang/mihomo
+          git checkout --detach FETCH_HEAD
+
+      - name: Check the Android patches still apply
+        if: steps.target.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd crates/tauri-plugin-celestial-vpn
+          # Reported rather than applied here, so the failure names the patch. The build
+          # applies them itself; what this catches is upstream moving the code they touch,
+          # which no amount of retrying will fix and a person has to look at.
+          for patch in patches/*.patch; do
+            if git -C golang/mihomo apply --check "../../$patch"; then
+              echo "ok: $patch"
+            else
+              echo "::error::$patch no longer applies to ${{ steps.target.outputs.version }}"
+              exit 1
+            fi
+          done
+
+      - name: Install Go
+        if: steps.target.outputs.changed == 'true'
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.5'
+
+      - name: Install Android SDK
+        if: steps.target.outputs.changed == 'true'
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        if: steps.target.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install "ndk;${{ env.ANDROID_NDK_VERSION }}"
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/${{ env.ANDROID_NDK_VERSION }}" >> "$GITHUB_ENV"
+
+      - name: Retidy and build the wrapper
+        if: steps.target.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd crates/tauri-plugin-celestial-vpn/golang/wrapper
+          # A release that moves mihomo's own dependencies leaves this module stale, and the
+          # build then fails with "updates to go.mod needed" rather than quietly compiling
+          # against the old versions. Doing it here is most of the value of this job.
+          go mod tidy
+
+          cd ../mihomo && git apply ../../patches/*.patch && cd ../wrapper
+          CC="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+          # One ABI is enough to prove it compiles: what breaks across a version bump is the
+          # source and the dependency graph, neither of which is architecture-specific.
+          CGO_ENABLED=1 GOOS=android GOARCH=arm64 CC="$CC" \
+            go build -tags cmfa,with_gvisor -buildmode=c-shared -ldflags "-s -w" -o /tmp/libmihomo_wrapper.so .
+
+          # The patched checkout must not reach the commit: the patches live in `patches/`
+          # and are applied at build time on purpose.
+          cd ../mihomo && git checkout -- .
+
+      - name: Open a pull request
+        if: steps.target.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.target.outputs.version }}
+          CURRENT: ${{ steps.target.outputs.current }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B "$BRANCH"
+          git add crates/tauri-plugin-celestial-vpn/golang/mihomo \
+                  crates/tauri-plugin-celestial-vpn/golang/wrapper/go.mod \
+                  crates/tauri-plugin-celestial-vpn/golang/wrapper/go.sum
+
+          git commit -m "build(android): move the embedded mihomo to $VERSION" -m \
+            "Follows the release the desktop sidecar is downloading, so both platforms run the same core. Patches still apply and the wrapper builds; see the job that opened this."
+
+          git push --force origin "$BRANCH"
+
+          if [ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            gh pr create --base dev --head "$BRANCH" \
+              --title "build(android): move the embedded mihomo to $VERSION" \
+              --body "The desktop sidecar resolves \`releases/latest\` on every build and is on \`$VERSION\`; the embedded Android core was on \`$CURRENT\`. This moves the submodule to match and retidies the wrapper module.
+
+          The Android patches were checked against \`$VERSION\` and the cgo wrapper was built for arm64-v8a before this was opened, so the two things a version bump usually breaks are already known to be fine. What is *not* covered is behaviour on a device."
+          fi
