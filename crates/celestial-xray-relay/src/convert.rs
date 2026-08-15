@@ -174,7 +174,7 @@ fn stream_settings(node: &Node) -> Result<Value, ConversionRefused> {
             {
                 map.insert("request".to_owned(), json!({ "headers": { "Host": [host] } }));
             }
-            stream.insert("tcpSettings".to_owned(), json!({ "header": header }));
+            stream.insert("rawSettings".to_owned(), json!({ "header": header }));
         }
         "h2" => {
             let mut http = json!({ "path": node.param("path").unwrap_or("/") });
@@ -274,10 +274,14 @@ fn tls_settings(node: &Node) -> Value {
 /// mihomo and xray disagree on what plain TCP is called.
 const fn normalise_network(network: &str) -> &str {
     match network.as_bytes() {
-        // The panel emits `network: host.transport`, so plain TCP is `tcp` — xray's legacy
-        // name for what it now also calls `raw`. Match what is known to work against these
-        // servers rather than the newer spelling.
-        b"" | b"tcp" | b"tcp-http-header" => "tcp",
+        // xray renamed this transport to `raw` and kept `tcp` only as a deprecated alias, so
+        // emit the current name. The panel's own generator still writes `tcp`, but following
+        // it here would mean adopting a spelling that is on its way out. Nothing forces our
+        // hand: the xray binary is a sidecar we ship, so its version is ours to pin.
+        //
+        // Mode A is unaffected either way — a template outbound is passed through verbatim,
+        // alias and all.
+        b"" | b"tcp" | b"tcp-http-header" => "raw",
         b"h2" => "http",
         _ => network,
     }
@@ -312,8 +316,8 @@ mod tests {
         assert_eq!(stream["realitySettings"]["publicKey"], "public-key");
         assert_eq!(stream["realitySettings"]["fingerprint"], "chrome");
         assert_eq!(
-            stream["network"], "tcp",
-            "the panel's own xray generator emits `tcp`, so match that rather than the newer `raw`"
+            stream["network"], "raw",
+            "`tcp` is a deprecated alias in xray; emit the name that is not on its way out"
         );
     }
 

@@ -322,10 +322,7 @@ pub fn node_from_mihomo_proxy(proxy: &serde_yaml_ng::Value) -> Result<Node, Stri
     if let Some(value) = proxy.get("udp-over-tcp").and_then(serde_yaml_ng::Value::as_bool) {
         node.set_param("uot", value.to_string());
     }
-    if let Some(value) = proxy
-        .get("udp-over-tcp-version")
-        .and_then(serde_yaml_ng::Value::as_u64)
-    {
+    if let Some(value) = proxy.get("udp-over-tcp-version").and_then(serde_yaml_ng::Value::as_u64) {
         node.set_param("uot-version", value.to_string());
     }
     if let Some(alpn) = proxy.get("alpn").and_then(|it| it.as_sequence()) {
