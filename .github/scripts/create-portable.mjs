@@ -25,10 +25,16 @@ const releaseDir = await firstExistingDirectory([
   path.resolve('target', target, 'release'),
   path.resolve('src-tauri', 'target', target, 'release'),
 ])
+// Every core the app ships, under the names Tauri lays them out with beside the binary — the
+// target triple is stripped when bundling. A core missing from this list is not a build
+// failure, it is a portable archive that quietly ships without it: the installer carried
+// `celestial-xray.exe` while the portable zip did not, so the relay there could only fall
+// back to running natively.
 const requiredFiles = [
   'celestial.exe',
   'celestial-mihomo.exe',
   'celestial-mihomo-alpha.exe',
+  'celestial-xray.exe',
 ]
 
 for (const file of requiredFiles) {

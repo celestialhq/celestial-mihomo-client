@@ -21,6 +21,34 @@ const PROCESS_MAP = {
   arm64: 'arm64',
 }
 const arch = target ? ARCH_MAP[target] : PROCESS_MAP[process.arch]
+
+/// The cores the app cannot run without, as Tauri lays them out beside the binary — the
+/// target triple is stripped when bundling, so these are the names on disk.
+///
+/// Listed rather than globbed so that adding a sidecar without adding it here is a build
+/// failure instead of a portable build that silently ships without a core. That is not
+/// hypothetical: the xray core was bundled by the installer and missing from the portable
+/// zip, where the relay could only fall back to running natively.
+const SIDECARS = [
+  'celestial-mihomo.exe',
+  'celestial-mihomo-alpha.exe',
+  'celestial-xray.exe',
+]
+
+function addSidecars(zip, releaseDir) {
+  const missing = SIDECARS.filter(
+    (name) => !fs.existsSync(path.join(releaseDir, name)),
+  )
+  if (missing.length > 0) {
+    throw new Error(
+      `missing sidecar(s) in ${releaseDir}: ${missing.join(', ')}. ` +
+        'Run `pnpm prebuild` before packaging.',
+    )
+  }
+  for (const name of SIDECARS) {
+    zip.addLocalFile(path.join(releaseDir, name))
+  }
+}
 /// Script for ci
 /// 打包绿色版/便携版 (only Windows)
 async function resolvePortable() {
@@ -50,8 +78,7 @@ async function resolvePortable() {
   const zip = new AdmZip()
 
   zip.addLocalFile(path.join(releaseDir, 'celestial.exe'))
-  zip.addLocalFile(path.join(releaseDir, 'celestial-mihomo.exe'))
-  zip.addLocalFile(path.join(releaseDir, 'celestial-mihomo-alpha.exe'))
+  addSidecars(zip, releaseDir)
   zip.addLocalFolder(path.join(releaseDir, 'resources'), 'resources')
   zip.addLocalFolder(
     path.join(
