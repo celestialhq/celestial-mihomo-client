@@ -22,9 +22,10 @@ tauri-dev = []
 tokio-trace = ["console-subscriber"]
 clippy = ["tauri/test"]
 tracing = []
-# Pins the xray relay on and locks the UI switch. Enabled for builds cut from a
-# v4.0.0+ tag; it does not promise every node is relayed, and never overrides the
-# fallback to native when xray is unavailable.
+# Pins the xray relay on and locks the UI switch, for trying that behaviour on before
+# the version gets there. From v4.0.0 the crate version pins it anyway and this feature
+# changes nothing — see `constants::relay::is_forced`. Pinned on has never meant every
+# node is relayed, nor that the fallback to native is skipped when xray is unavailable.
 force-xray-relay = []
 
 [package.metadata.bundle]

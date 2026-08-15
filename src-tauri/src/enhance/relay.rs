@@ -96,6 +96,12 @@ pub fn use_relay(
 /// probe cannot work this out on its own: a port held by our own xray looks exactly as busy
 /// as one held by anything else, so the search would walk past every port already in use and
 /// hand each unchanged node a new one.
+// On mobile the body is a bare `Vec::new()`, which clippy rightly notices could be const —
+// but only there, and the desktop body cannot be.
+#[cfg_attr(
+    any(target_os = "android", target_os = "ios"),
+    allow(clippy::missing_const_for_fn, reason = "const only on the platform with no relay")
+)]
 fn ports_in_use() -> Vec<(std::string::String, u16)> {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {

@@ -7,7 +7,7 @@
 use super::{CmdResult, StringifyErr as _};
 use crate::{
     config::{Config, PrfRelayOverride},
-    constants::files,
+    constants::{self, files},
     core::{CoreManager, handle},
     utils::dirs,
 };
@@ -51,7 +51,7 @@ pub struct RelayStatus {
 #[tauri::command]
 pub async fn get_xray_relay_status() -> CmdResult<RelayStatus> {
     let verge = Config::verge().await.latest_arc();
-    let forced = cfg!(feature = "force-xray-relay");
+    let forced = constants::relay::is_forced();
     let suppressed = Config::relay_suppressed_for_session();
 
     let overrides = current_overrides().await;
@@ -98,7 +98,7 @@ pub async fn get_xray_relay_status() -> CmdResult<RelayStatus> {
 /// the one thing that should overrule a decision made on their behalf after it failed.
 #[tauri::command]
 pub async fn set_xray_relay_enabled(enabled: bool) -> CmdResult<()> {
-    if cfg!(feature = "force-xray-relay") {
+    if constants::relay::is_forced() {
         return Err("the xray relay is pinned on in this build".into());
     }
 
