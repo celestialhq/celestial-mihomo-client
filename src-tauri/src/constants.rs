@@ -73,6 +73,17 @@ pub mod relay {
     /// The release the xray relay stops being optional at.
     pub const FORCED_FROM_MAJOR: u32 = 4;
 
+    /// Whether this build can relay at all.
+    ///
+    /// Desktop spawns the core as a sidecar; Android links it in, but only for the ABIs it
+    /// is shipped for (see `XRAY_ABIS` in the vpn plugin's build.rs) — elsewhere the nodes
+    /// are dialled natively, which is what mobile did before any of this existed. Everything
+    /// above this line in the pipeline is platform-independent: only starting differs.
+    pub const fn is_supported() -> bool {
+        cfg!(not(any(target_os = "android", target_os = "ios")))
+            || cfg!(all(target_os = "android", target_arch = "aarch64"))
+    }
+
     /// Whether this build has the relay pinned on and its switch locked.
     ///
     /// Decided from the crate version rather than from a flag CI has to remember to pass.

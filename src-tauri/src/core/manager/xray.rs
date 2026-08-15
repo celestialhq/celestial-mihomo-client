@@ -9,26 +9,28 @@
 //! Desktop only. On mobile the core runs in-process and there is no second process to
 //! spawn, so the relay is never planned there in the first place.
 
-use super::{CLASH_LOGGER, CoreManager};
-use crate::{
-    config::Config,
-    constants::files,
-    core::{handle, logger::Logger, validate::CoreConfigValidator},
-    process::AsyncHandler,
-    utils::dirs,
-};
+use super::CoreManager;
+use crate::{config::Config, constants::files, core::handle, process::AsyncHandler, utils::dirs};
 use anyhow::{Result, bail};
 use celestial_xray_relay::RelayPlan;
 use clash_verge_logging::{Type, logging};
-use compact_str::CompactString;
-use log::Level;
 use std::{
     net::Ipv4Addr,
     sync::{Arc, atomic::Ordering},
     time::Duration,
 };
-use tauri_plugin_shell::ShellExt as _;
 use tokio::{net::TcpStream, time::Instant};
+
+// Only the spawning half needs these: the embedded core has no child process to watch, no
+// output stream to pump into the log, and validates the config by building it.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use {
+    super::CLASH_LOGGER,
+    crate::core::{logger::Logger, validate::CoreConfigValidator},
+    compact_str::CompactString,
+    log::Level,
+    tauri_plugin_shell::ShellExt as _,
+};
 
 /// The sidecar's name. Deliberately not `xray`: the anti-loop rule matches the process name,
 /// and a bare `xray` would also catch another client's core and divert its traffic.
@@ -71,7 +73,7 @@ impl CoreManager {
 
     async fn start_xray(&self, plan: &RelayPlan) -> Result<()> {
         // Whatever was running was started from a different plan, or the same one; either
-        // way it is replaced rather than reused, so the ports and the process agree.
+        // way it is replaced rather than reused, so the ports and the core agree.
         self.stop_xray();
 
         let config_path = dirs::app_home_dir()?.join(files::XRAY_CONFIG);
@@ -79,9 +81,36 @@ impl CoreManager {
             bail!("the relay config \"{}\" was not generated", config_path.display());
         }
 
+        self.launch_core(&config_path).await?;
+
+        if let Err(error) = wait_for_ports(plan.ports.entries(), PORT_WAIT_TIMEOUT).await {
+            // A core that came up but never opened its inbounds is worse than one that
+            // never started: it would sit there while mihomo hands it traffic.
+            self.stop_xray();
+            return Err(error);
+        }
+
+        self.running_relay.store(Some(Arc::new(plan.clone())));
+        self.relay_attempts.store(0, Ordering::Release);
+        logging!(
+            info,
+            Type::Core,
+            "xray relay ready on {} port(s)",
+            plan.ports.entries().len()
+        );
+        Ok(())
+    }
+
+    /// Starts the core from the generated config. The one genuinely platform-specific step.
+    ///
+    /// Desktop spawns the bundled sidecar; Android links the core in and hands it the same
+    /// document, because there is no second process to spawn there and executing a packaged
+    /// binary would mean legacy APK packaging to get one past W^X.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    async fn launch_core(&self, config_path: &std::path::PathBuf) -> Result<()> {
         // Before the process, not after: a config xray rejects would otherwise show up as a
         // start that failed for no stated reason.
-        let outcome = CoreConfigValidator::validate_xray_config(&config_path).await?;
+        let outcome = CoreConfigValidator::validate_xray_config(config_path).await?;
         if !outcome.is_valid() {
             bail!("xray rejected the relay config: {outcome}");
         }
@@ -90,7 +119,7 @@ impl CoreManager {
         let (mut rx, child) = app_handle
             .shell()
             .sidecar(XRAY_SIDECAR)?
-            .args(["run", "-config", dirs::path_to_str(&config_path)?])
+            .args(["run", "-config", dirs::path_to_str(config_path)?])
             .spawn()?;
 
         // Same reasoning as the mihomo sidecar: Windows has no parent-death signal, so
@@ -139,22 +168,31 @@ impl CoreManager {
             }
         });
 
-        if let Err(error) = wait_for_ports(plan.ports.entries(), PORT_WAIT_TIMEOUT).await {
-            // A core that came up but never opened its inbounds is worse than one that
-            // never started: it would sit there while mihomo hands it traffic.
-            self.stop_xray();
-            return Err(error);
-        }
-
-        self.running_relay.store(Some(Arc::new(plan.clone())));
-        self.relay_attempts.store(0, Ordering::Release);
-        logging!(
-            info,
-            Type::Core,
-            "xray relay ready on {} port(s)",
-            plan.ports.entries().len()
-        );
         Ok(())
+    }
+
+    /// The embedded counterpart. No pre-validation step: `core.New` parses and builds the
+    /// same config and reports the same rejection, so a separate check would only be a
+    /// second opinion from the same code.
+    ///
+    /// There is also no watcher. A linked core does not terminate the way a process does —
+    /// there is no exit to observe — so an unexpected stop is not a state this can reach.
+    #[cfg(all(target_os = "android", target_arch = "aarch64"))]
+    async fn launch_core(&self, config_path: &std::path::PathBuf) -> Result<()> {
+        let config = tokio::fs::read_to_string(config_path).await?;
+        tauri_plugin_celestial_vpn::start_xray(&config).map_err(|error| anyhow::anyhow!("{error}"))?;
+
+        self.xray_generation.fetch_add(1, Ordering::AcqRel);
+        logging!(info, Type::Core, "embedded xray core started");
+        Ok(())
+    }
+
+    /// Unreachable: the relay is never planned where the core is not linked, so this exists
+    /// only so the shared pipeline above compiles for every target.
+    #[cfg(any(target_os = "ios", all(target_os = "android", not(target_arch = "aarch64"))))]
+    #[allow(clippy::unused_async, reason = "matches the real implementations' signature")]
+    async fn launch_core(&self, _config_path: &std::path::PathBuf) -> Result<()> {
+        bail!("this build does not ship the xray core")
     }
 
     /// Stops xray, if it is running. Never fails: this runs on shutdown paths too.
@@ -163,7 +201,11 @@ impl CoreManager {
         // reported as the core being lost.
         self.xray_generation.fetch_add(1, Ordering::AcqRel);
         self.running_relay.store(None);
+        self.shutdown_core();
+    }
 
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    fn shutdown_core(&self) {
         let Some(child) = self.take_child_xray() else {
             return;
         };
@@ -178,6 +220,17 @@ impl CoreManager {
         let result = child.kill();
         logging!(info, Type::Core, "xray stopped (PID: {pid}, Result: {result:?})");
     }
+
+    #[cfg(all(target_os = "android", target_arch = "aarch64"))]
+    fn shutdown_core(&self) {
+        // Safe to call with nothing running: the stop paths run on shutdown and on failure
+        // alike, and the library treats it as a no-op.
+        tauri_plugin_celestial_vpn::stop_xray();
+        logging!(info, Type::Core, "embedded xray core stopped");
+    }
+
+    #[cfg(any(target_os = "ios", all(target_os = "android", not(target_arch = "aarch64"))))]
+    const fn shutdown_core(&self) {}
 
     /// xray went away without being asked to.
     fn on_xray_terminated(&self, generation: u64) {

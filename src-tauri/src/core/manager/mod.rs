@@ -1,17 +1,14 @@
 mod config;
 mod lifecycle;
 mod state;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod xray;
 
 use anyhow::Result;
 use arc_swap::{ArcSwap, ArcSwapOption};
 use celestial_logger::AsyncLogger;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use celestial_xray_relay::RelayPlan;
 use clash_verge_logging::{Type, logging};
 use once_cell::sync::Lazy;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use std::sync::atomic::{AtomicU32, AtomicU64};
 use std::{fmt, sync::Arc, time::Instant};
 use tauri_plugin_shell::process::CommandChild;
@@ -79,14 +76,11 @@ pub struct CoreManager {
     // The plan the running xray was started from. Compared against a freshly generated one
     // to decide whether a config change needs the relay replaced or can be reloaded into
     // mihomo alone.
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     running_relay: ArcSwapOption<RelayPlan>,
     // Bumped every time an xray is started or stopped, so the task watching a process that
     // is already being replaced cannot report its death as the relay being lost.
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     xray_generation: AtomicU64,
     // Relay start failures since the last success; see `MAX_RELAY_ATTEMPTS`.
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     relay_attempts: AtomicU32,
     // Serialises staging and applying a configuration change; see [`ConfigUpdatePermit`].
     // Blocking, not try-and-drop: a caller that cannot have the permit now waits for it,
@@ -114,11 +108,8 @@ impl Default for CoreManager {
             job_handle: ArcSwapOption::new(None),
             #[cfg(target_os = "windows")]
             xray_job_handle: ArcSwapOption::new(None),
-            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             running_relay: ArcSwapOption::new(None),
-            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             xray_generation: AtomicU64::new(0),
-            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             relay_attempts: AtomicU32::new(0),
             config_update_lock: tokio::sync::Mutex::new(()),
             lifecycle_lock: tokio::sync::Mutex::new(()),

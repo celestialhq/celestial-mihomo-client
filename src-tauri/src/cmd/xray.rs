@@ -58,7 +58,7 @@ pub struct RelayStatus {
 #[tauri::command]
 pub async fn get_xray_relay_status() -> CmdResult<RelayStatus> {
     let verge = Config::verge().await.latest_arc();
-    let supported = cfg!(not(any(target_os = "android", target_os = "ios")));
+    let supported = constants::relay::is_supported();
     // Reported only where it can mean something. Pinned on is a property of the build, so it
     // is true on mobile too — but nothing is relayed there, and a switch that reads "pinned
     // on" while off is worse than no switch.

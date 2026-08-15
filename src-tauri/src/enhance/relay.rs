@@ -9,8 +9,8 @@
 //! the user goes out natively with a note in the log, never that they go nowhere.
 
 use celestial_xray_relay::{
-    Disposition, NodeSet, Override, PlanOptions, PortProbe, RelayPlan, SocksAuth, Substitution, apply_relay,
-    node_set_from_body, pair_with_template, parse_mihomo_proxies, plan,
+    Disposition, LoopbackRule, NodeSet, Override, PlanOptions, PortProbe, RelayPlan, SocksAuth, Substitution,
+    apply_relay, node_set_from_body, pair_with_template, parse_mihomo_proxies, plan,
 };
 use clash_verge_logging::{Type, logging};
 use serde_yaml_ng::{Mapping, Value};
@@ -91,7 +91,15 @@ pub fn use_relay(
         return None;
     }
 
-    let substitution = apply_relay(config, &plan);
+    // The rule identifies the core by process name, which only exists where the core is its
+    // own process. Where it is linked in, the platform keeps this application's sockets out
+    // of the tunnel instead.
+    let loopback = if cfg!(any(target_os = "android", target_os = "ios")) {
+        LoopbackRule::Skip
+    } else {
+        LoopbackRule::Insert
+    };
+    let substitution = apply_relay(config, &plan, loopback);
     log_dispositions(&plan);
     log_substitution(&substitution);
     Some(plan)
@@ -102,17 +110,8 @@ pub fn use_relay(
 /// Both the port map and the credential have to stay put for as long as it runs: a plan that
 /// moved either is a different plan, and a different plan replaces the core — a subscription
 /// refresh that changed nothing would drop every live connection.
-///
-/// None where no relay is ever planned, which is every target the second core is not shipped
-/// for.
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn running_relay() -> Option<std::sync::Arc<RelayPlan>> {
     crate::core::CoreManager::global().running_relay()
-}
-
-#[cfg(any(target_os = "android", target_os = "ios"))]
-const fn running_relay() -> Option<std::sync::Arc<RelayPlan>> {
-    None
 }
 
 /// A new credential for a relay that is about to start.

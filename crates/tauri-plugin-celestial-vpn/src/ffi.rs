@@ -1,7 +1,11 @@
-//! Direct FFI bindings to the embedded mihomo core (`golang/wrapper`), built
-//! as a cgo C-shared library and linked in via `android/src/main/jniLibs/`
-//! (see build.rs). No JNI/Kotlin involvement in this path — Rust calls
-//! straight into the Go runtime.
+//! Direct FFI bindings to the embedded cores (`golang/wrapper`, `golang/xray-wrapper`),
+//! built as cgo C-shared libraries and linked in via `android/src/main/jniLibs/` (see
+//! build.rs). No JNI/Kotlin involvement in this path — Rust calls straight into the Go
+//! runtime.
+//!
+//! The two cores are separate libraries with separate Go runtimes. That is deliberate: one
+//! module would mean one resolved version of every dependency they share, and neither core
+//! could then be updated without moving the other.
 
 use std::ffi::{c_char, CStr, CString};
 
@@ -16,6 +20,27 @@ unsafe extern "C" {
     fn StopCore();
     fn FreeString(s: *mut c_char);
     fn MihomoVersion() -> *mut c_char;
+}
+
+// Only linked for the ABIs the relay ships on; see `XRAY_ABIS` in build.rs. Where it is not
+// linked the relay reports itself unsupported and nothing here is reached.
+#[cfg(all(target_os = "android", target_arch = "aarch64"))]
+#[link(name = "xray_wrapper")]
+unsafe extern "C" {
+    fn StartXray(config_json: *const c_char) -> *mut c_char;
+    fn StopXray();
+    fn XrayVersion() -> *mut c_char;
+    // Each library exports its own allocator-matched free; the two must not be crossed.
+    #[link_name = "FreeString"]
+    fn FreeXrayString(s: *mut c_char);
+}
+
+/// Whether this build links the xray core at all.
+///
+/// False on the ABIs it is not shipped for, which is not a failure: the caller runs the
+/// nodes natively, exactly as mobile did before the relay existed.
+pub const fn xray_available() -> bool {
+    cfg!(all(target_os = "android", target_arch = "aarch64"))
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -56,6 +81,46 @@ pub fn start_core(config_yaml: &str, home_dir: &str, external_controller: &str) 
 #[cfg(target_os = "android")]
 pub fn stop_core() {
     unsafe { StopCore() };
+}
+
+/// Starts the embedded xray core from the same `xray.json` the desktop build writes to disk.
+///
+/// Replacing a running instance is the library's job rather than this caller's, so a restart
+/// cannot leave two cores contending for the same inbound ports.
+#[cfg(all(target_os = "android", target_arch = "aarch64"))]
+pub fn start_xray(config_json: &str) -> Result<(), FfiError> {
+    let config_c = CString::new(config_json)?;
+    let err_ptr = unsafe { StartXray(config_c.as_ptr()) };
+
+    if err_ptr.is_null() {
+        return Ok(());
+    }
+
+    let message = unsafe {
+        let msg = CStr::from_ptr(err_ptr).to_string_lossy().into_owned();
+        FreeXrayString(err_ptr);
+        msg
+    };
+    Err(FfiError::StartFailed(message))
+}
+
+/// Shuts down the running xray core and releases its inbound ports, if one is running.
+#[cfg(all(target_os = "android", target_arch = "aarch64"))]
+pub fn stop_xray() {
+    unsafe { StopXray() };
+}
+
+/// The linked xray core's version, for checking a build against the desktop sidecar rather
+/// than assuming the two match.
+#[cfg(all(target_os = "android", target_arch = "aarch64"))]
+#[allow(dead_code)]
+pub fn xray_version() -> String {
+    unsafe {
+        let ptr = XrayVersion();
+        let version = CStr::from_ptr(ptr).to_string_lossy().into_owned();
+        FreeXrayString(ptr);
+        version
+    }
 }
 
 /// Returns the embedded core's mihomo version string.

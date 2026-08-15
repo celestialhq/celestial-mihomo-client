@@ -30,7 +30,7 @@ pub use plan::{
     Disposition, LOOPBACK_RULE, Override, PORT_SEARCH_START, PlanError, PlanOptions, PlannedNode, PortMap, PortProbe,
     RelayPlan, SocksAuth, assign_ports, plan,
 };
-pub use substitute::{Substitution, apply_relay};
+pub use substitute::{LoopbackRule, Substitution, apply_relay};
 pub use template::{Mismatch, nodes_from_template, pair_with_template};
 
 /// Builds a [`NodeSet`] from a response body, whatever shape it turned out to have.

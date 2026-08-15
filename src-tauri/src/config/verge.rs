@@ -359,11 +359,10 @@ impl IVerge {
     /// `force-xray-relay` feature — have it on regardless of what is stored, which is what
     /// lets the setting stay in the file untouched while the UI shows the switch locked.
     ///
-    /// Never on mobile, feature or not. The core runs in-process there through cgo and no
-    /// second process can be spawned, so planning a relay would only replace every node with
-    /// a stand-in pointing at an inbound that will never exist.
+    /// Never where the core is not shipped: planning a relay there would replace every node
+    /// with a stand-in pointing at an inbound that will never exist.
     pub fn xray_relay_enabled(&self) -> bool {
-        cfg!(not(any(target_os = "android", target_os = "ios")))
+        crate::constants::relay::is_supported()
             && (crate::constants::relay::is_forced() || self.enable_xray_relay.unwrap_or(false))
     }
 

@@ -19,7 +19,6 @@ use std::{collections::HashSet, path::PathBuf, time::Instant};
 use tauri_plugin_mihomo::Error as MihomoError;
 
 /// How a reload has to treat the relay, relative to what is already running.
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RelayChange {
     /// The plan is unchanged; the running xray already serves it.
@@ -332,10 +331,8 @@ impl CoreManager {
     /// told to open is exactly what this ordering exists to prevent, and a plain reload is
     /// where it would otherwise happen unnoticed: mihomo accepts the config either way.
     async fn reload_or_restart(&self, path: &str) -> Result<()> {
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         let relay_change = self.relay_change_for_reload().await;
 
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         if matches!(relay_change, RelayChange::BringUp)
             && let Err(error) = self.start_xray_if_planned().await
         {
@@ -346,7 +343,6 @@ impl CoreManager {
 
         let outcome = self.reload_or_restart_mihomo(path).await;
 
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         if matches!(relay_change, RelayChange::TakeDown) {
             self.stop_xray();
         }
@@ -355,7 +351,6 @@ impl CoreManager {
     }
 
     /// What the freshly generated configuration asks of the running relay.
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     async fn relay_change_for_reload(&self) -> RelayChange {
         let planned = Config::active_relay_plan().await;
         let running = self.running_relay();
@@ -405,7 +400,6 @@ impl CoreManager {
 /// Equality is the whole point: an unchanged plan means the ports mihomo's stand-ins name are
 /// the ports xray already has open, and replacing the process would drop every connection
 /// through it to change nothing.
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn relay_change(
     planned: Option<&celestial_xray_relay::RelayPlan>,
     running: Option<&celestial_xray_relay::RelayPlan>,
@@ -420,7 +414,7 @@ fn relay_change(
 }
 
 #[allow(clippy::unwrap_used, reason = "a failed assertion is a failed test")]
-#[cfg(all(test, not(any(target_os = "android", target_os = "ios"))))]
+#[cfg(test)]
 mod tests {
     use super::{RelayChange, relay_change};
     use celestial_xray_relay::{

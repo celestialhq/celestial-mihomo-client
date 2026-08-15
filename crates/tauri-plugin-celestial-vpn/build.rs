@@ -4,7 +4,19 @@ fn main() {
     tauri_plugin::Builder::new(COMMANDS).android_path("android").build();
 
     build_mihomo_wrapper();
+    build_xray_wrapper();
 }
+
+/// The ABIs the xray relay ships for.
+///
+/// Not all of them, and the reason is weight rather than capability: the core builds cleanly
+/// for every Android ABI, but it adds ~31 MB per ABI to a universal APK that is already
+/// 351 MB. arm64-v8a is every Android phone made in the last several years.
+///
+/// Leaving an ABI out costs those devices the relay, not the app: the relay reports itself
+/// unsupported and the client dials nodes natively, which is the same path mobile took before
+/// any of this existed. Adding one back is a line here.
+const XRAY_ABIS: &[&str] = &["arm64-v8a"];
 
 /// Cross-compiles the mihomo cgo wrapper (golang/wrapper) for the Android
 /// target currently being built and drops the resulting .so directly into
@@ -107,6 +119,73 @@ fn build_mihomo_wrapper() {
     // #[link(name = "mihomo_wrapper")]) — at runtime the Android dynamic
     // linker resolves it from this same jniLibs/<abi>/ dir once packaged.
     println!("cargo:rustc-link-search=native={}", jni_libs_dir.display());
+}
+
+/// Cross-compiles the xray cgo wrapper for the Android target being built.
+///
+/// Mirrors [`build_mihomo_wrapper`] but has no patches to apply: xray only opens loopback
+/// inbounds and dials out, so none of the Android TUN and netlink problems that the mihomo
+/// side has to work around apply to it.
+fn build_xray_wrapper() {
+    let target = std::env::var("TARGET").unwrap_or_default();
+    let Some((go_arch, ndk_triple, android_abi)) = android_target_info(&target) else {
+        return; // desktop host build — the desktop core is a downloaded sidecar instead
+    };
+    if !XRAY_ABIS.contains(&android_abi) {
+        return;
+    }
+
+    println!("cargo:rerun-if-changed=golang/xray-wrapper/main.go");
+    println!("cargo:rerun-if-changed=golang/xray-wrapper/go.mod");
+
+    let cc = ndk_clang(ndk_triple);
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+    let wrapper_dir = std::path::Path::new(&manifest_dir).join("golang/xray-wrapper");
+
+    let jni_libs_dir = std::path::Path::new(&manifest_dir)
+        .join("android/src/main/jniLibs")
+        .join(android_abi);
+    std::fs::create_dir_all(&jni_libs_dir).expect("failed to create jniLibs output dir");
+    let so_path = jni_libs_dir.join("libxray_wrapper.so");
+
+    // Same reasoning as the mihomo wrapper: the core is shipped, never debugged on-device,
+    // and the symbols are most of the file.
+    let status = std::process::Command::new("go")
+        .current_dir(&wrapper_dir)
+        .env("CGO_ENABLED", "1")
+        .env("GOOS", "android")
+        .env("GOARCH", go_arch)
+        .env("CC", &cc)
+        .args(["build", "-buildmode=c-shared", "-ldflags", "-s -w", "-o"])
+        .arg(&so_path)
+        .arg(".")
+        .status()
+        .unwrap_or_else(|e| panic!("failed to invoke `go build` (is Go installed and on PATH?): {e}"));
+
+    assert!(
+        status.success(),
+        "go build failed for the xray wrapper (target={target}, GOARCH={go_arch}, CC={cc})"
+    );
+
+    let _ = std::fs::remove_file(jni_libs_dir.join("libxray_wrapper.h"));
+    println!("cargo:rustc-link-search=native={}", jni_libs_dir.display());
+}
+
+/// The NDK clang wrapper for an Android triple, which is what cgo needs as `CC`.
+fn ndk_clang(ndk_triple: &str) -> String {
+    let ndk_home = std::env::var("NDK_HOME")
+        .or_else(|_| std::env::var("ANDROID_NDK_HOME"))
+        .expect("NDK_HOME or ANDROID_NDK_HOME must be set to build the Android core wrappers");
+
+    let host_tag = if cfg!(target_os = "windows") {
+        "windows-x86_64"
+    } else if cfg!(target_os = "macos") {
+        "darwin-x86_64"
+    } else {
+        "linux-x86_64"
+    };
+    let ext = if cfg!(target_os = "windows") { ".cmd" } else { "" };
+    format!("{ndk_home}/toolchains/llvm/prebuilt/{host_tag}/bin/{ndk_triple}{ext}")
 }
 
 /// `golang/mihomo` is a pristine submodule of MetaCubeX/mihomo, so our

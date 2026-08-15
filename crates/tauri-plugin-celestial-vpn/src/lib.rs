@@ -12,9 +12,12 @@ pub mod ffi;
 mod models;
 
 pub use error::{Error, Result};
+pub use ffi::xray_available;
 pub use ffi::FfiError;
 #[cfg(target_os = "android")]
 pub use ffi::{mihomo_version, start_core, stop_core};
+#[cfg(all(target_os = "android", target_arch = "aarch64"))]
+pub use ffi::{start_xray, stop_xray, xray_version};
 
 #[cfg(target_os = "android")]
 const PLUGIN_IDENTIFIER: &str = "app.tauri.celestialvpn";
