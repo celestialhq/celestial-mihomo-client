@@ -186,7 +186,7 @@ rules:
 
     fn planned(config: &serde_yaml_ng::Mapping) -> crate::plan::RelayPlan {
         let set = crate::parse_mihomo_proxies(&serde_yaml_ng::Value::Mapping(config.clone()));
-        plan(&set, &AllFree, &PlanOptions::new(auth()), &[]).unwrap()
+        plan(&set, &AllFree, &PlanOptions::new(auth())).unwrap()
     }
 
     /// Where the core is linked in rather than spawned, the rule identifies nothing: there

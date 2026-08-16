@@ -113,11 +113,6 @@ export async function setXrayRelayEnabled(enabled: boolean) {
   return invoke<void>('set_xray_relay_enabled', { enabled })
 }
 
-// mode: 'relay' | 'native' | 'auto', where 'auto' drops the override.
-export async function setRelayNodeOverride(name: string, mode: string) {
-  return invoke<void>('set_relay_node_override', { name, mode })
-}
-
 // Both exports mask credentials unless `unmasked` is set, which the caller is expected to
 // make a deliberate choice rather than a default.
 export async function exportXrayConfig(unmasked = false) {

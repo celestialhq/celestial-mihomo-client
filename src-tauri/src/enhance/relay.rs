@@ -9,8 +9,8 @@
 //! the user goes out natively with a note in the log, never that they go nowhere.
 
 use celestial_xray_relay::{
-    Disposition, LoopbackRule, NodeSet, Override, PlanOptions, PortProbe, RelayPlan, SocksAuth, Substitution,
-    apply_relay, node_set_from_body, pair_with_template, parse_mihomo_proxies, plan,
+    Disposition, LoopbackRule, NodeSet, PlanOptions, PortProbe, RelayPlan, SocksAuth, Substitution, apply_relay,
+    node_set_from_body, pair_with_template, parse_mihomo_proxies, plan,
 };
 use clash_verge_logging::{Type, logging};
 use serde_yaml_ng::{Mapping, Value};
@@ -38,11 +38,7 @@ impl PortProbe for BindProbe {
 ///
 /// `None` means the config was left native — no nodes, nothing relayable, or a planning
 /// failure — and the caller must not start xray.
-pub fn use_relay(
-    config: &mut Mapping,
-    xray_template: Option<&str>,
-    overrides: &[(std::string::String, Override)],
-) -> Option<RelayPlan> {
+pub fn use_relay(config: &mut Mapping, xray_template: Option<&str>) -> Option<RelayPlan> {
     // `proxies` and the inline providers are what carry nodes; the rest of the config is
     // handed over untouched only so the parser can find them.
     let mut sources = Mapping::new();
@@ -72,7 +68,7 @@ pub fn use_relay(
         ..PlanOptions::new(running.map_or_else(fresh_socks_auth, |plan| plan.auth.clone()))
     };
 
-    let plan = match plan(&nodes, &BindProbe, &options, overrides) {
+    let plan = match plan(&nodes, &BindProbe, &options) {
         Ok(plan) => plan,
         Err(err) => {
             logging!(
@@ -242,7 +238,7 @@ proxies:
              "streamSettings":{"security":"reality","realitySettings":{"publicKey":"straight-from-the-panel"}}}
         ]}]"#;
 
-        let plan = use_relay(&mut config, Some(template), &[]).expect("the node is relayable");
+        let plan = use_relay(&mut config, Some(template)).expect("the node is relayable");
         assert_eq!(
             plan.xray_config["outbounds"][0]["streamSettings"]["realitySettings"]["publicKey"],
             "straight-from-the-panel",
@@ -260,7 +256,7 @@ proxies:
   - {name: "🇫🇮 finland", type: vless, server: a.example, port: 443, uuid: u, tls: true, servername: a.example}
 "#,
         );
-        let plan = use_relay(&mut config, Some("not a template at all"), &[]).expect("the converter still applies");
+        let plan = use_relay(&mut config, Some("not a template at all")).expect("the converter still applies");
         assert!(plan.relays_anything());
         assert_eq!(config["proxies"][0]["type"].as_str(), Some("socks5"));
     }
@@ -276,7 +272,7 @@ rules:
 "#,
         );
 
-        let plan = use_relay(&mut config, None, &[]).expect("a vless node over tls is relayable");
+        let plan = use_relay(&mut config, None).expect("a vless node over tls is relayable");
         let port = plan.ports.get("🇫🇮 finland").expect("it was given a port");
 
         let proxy = &config["proxies"][0];
@@ -309,17 +305,14 @@ rules:
         let untouched = config(yaml);
         let mut config = config(yaml);
 
-        assert!(
-            use_relay(&mut config, None, &[]).is_none(),
-            "xray carries none of these"
-        );
+        assert!(use_relay(&mut config, None).is_none(), "xray carries none of these");
         assert_eq!(config, untouched, "no stand-ins, and no loopback rule either");
     }
 
     #[test]
     fn a_config_without_proxies_is_not_a_failure() {
         let mut config = config("rules:\n  - \"MATCH,DIRECT\"\n");
-        assert!(use_relay(&mut config, None, &[]).is_none());
+        assert!(use_relay(&mut config, None).is_none());
     }
 
     /// The probe has to answer for a port something is holding, or the search hands xray a

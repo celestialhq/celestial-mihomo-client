@@ -152,13 +152,6 @@ impl PlannedNode {
     }
 }
 
-/// Per-node overrides the user set by hand.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Override {
-    ForceNative,
-    ForceRelay,
-}
-
 /// Everything the rest of the app needs from a planning pass.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RelayPlan {
@@ -208,23 +201,16 @@ impl PlanOptions {
 /// that actually exists — taken from a template or built by the converter. The third is
 /// checked last and decides: a supported protocol still stays native when no outbound could
 /// be produced for it.
-pub fn plan<P: PortProbe>(
-    nodes: &NodeSet,
-    probe: &P,
-    options: &PlanOptions,
-    overrides: &[(String, Override)],
-) -> Result<RelayPlan, PlanError> {
+///
+/// Nothing here can be overruled from outside. A node stays native because xray cannot carry
+/// it, or because no outbound could be built for it — reasons the caller cannot change by
+/// asking. Relaying is what the mode is for; leaving a node out of it is a conclusion, not a
+/// preference.
+pub fn plan<P: PortProbe>(nodes: &NodeSet, probe: &P, options: &PlanOptions) -> Result<RelayPlan, PlanError> {
     let mut eligible: Vec<(&Node, Value)> = Vec::new();
     let mut decided: Vec<(String, Option<String>)> = Vec::new();
 
     for node in nodes.nodes() {
-        let forced = overrides.iter().find(|(name, _)| *name == node.name).map(|(_, it)| *it);
-
-        if forced == Some(Override::ForceNative) {
-            decided.push((node.name.clone(), Some("kept native by hand".to_owned())));
-            continue;
-        }
-
         if !node.protocol.relayable() {
             decided.push((
                 node.name.clone(),
@@ -233,21 +219,17 @@ pub fn plan<P: PortProbe>(
             continue;
         }
 
-        // An explicit override outranks the name list, but cannot rescue a node that has no
-        // outbound — that check still has to pass below.
-        if forced != Some(Override::ForceRelay) {
-            let lowered = node.name.to_lowercase();
-            if let Some(hit) = options
-                .name_exclusions
-                .iter()
-                .find(|it| lowered.contains(&it.to_lowercase()))
-            {
-                decided.push((
-                    node.name.clone(),
-                    Some(format!("the name matches the exclusion `{hit}`")),
-                ));
-                continue;
-            }
+        let lowered = node.name.to_lowercase();
+        if let Some(hit) = options
+            .name_exclusions
+            .iter()
+            .find(|it| lowered.contains(&it.to_lowercase()))
+        {
+            decided.push((
+                node.name.clone(),
+                Some(format!("the name matches the exclusion `{hit}`")),
+            ));
+            continue;
         }
 
         match to_outbound(node) {
@@ -340,7 +322,7 @@ fn build_xray_config(eligible: &[(&Node, Value)], ports: &PortMap, auth: &SocksA
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic, reason = "a failed assertion is a failed test")]
 mod tests {
-    use super::{Disposition, Override, PlanOptions, PortProbe, SocksAuth, assign_ports, plan};
+    use super::{Disposition, PlanOptions, PortProbe, SocksAuth, assign_ports, plan};
     use crate::node::{Node, NodeSet, Protocol};
 
     struct AllFree;
@@ -404,7 +386,7 @@ mod tests {
     #[test]
     fn a_regeneration_while_the_relay_is_up_keeps_every_port() {
         let nodes = set_of(vec![vless("a", "a.example"), vless("b", "b.example")]);
-        let first = plan(&nodes, &AllFree, &options(), &[]).unwrap();
+        let first = plan(&nodes, &AllFree, &options()).unwrap();
 
         // What the machine now looks like: our own xray is listening on what it was given,
         // so the operating system reports exactly those ports as taken.
@@ -420,7 +402,7 @@ mod tests {
             ports_in_use: first.ports.entries().to_vec(),
             ..options()
         };
-        let second = plan(&nodes, &held, &options, &[]).unwrap();
+        let second = plan(&nodes, &held, &options).unwrap();
 
         assert_eq!(first.ports, second.ports, "the mapping must survive a regeneration");
         assert_eq!(
@@ -466,8 +448,8 @@ mod tests {
     #[test]
     fn generation_is_byte_identical_for_the_same_nodes_and_the_same_mapping() {
         let nodes = set_of(vec![vless("a", "a.example"), vless("b", "b.example")]);
-        let first = plan(&nodes, &AllFree, &options(), &[]).unwrap();
-        let second = plan(&nodes, &AllFree, &options(), &[]).unwrap();
+        let first = plan(&nodes, &AllFree, &options()).unwrap();
+        let second = plan(&nodes, &AllFree, &options()).unwrap();
         assert_eq!(first.ports, second.ports);
         assert_eq!(
             serde_json::to_string(&first.xray_config).unwrap(),
@@ -478,7 +460,7 @@ mod tests {
     #[test]
     fn every_relayed_node_gets_an_inbound_an_outbound_and_a_route() {
         let nodes = set_of(vec![vless("a", "a.example"), vless("b", "b.example")]);
-        let plan = plan(&nodes, &AllFree, &options(), &[]).unwrap();
+        let plan = plan(&nodes, &AllFree, &options()).unwrap();
 
         let config = &plan.xray_config;
         assert_eq!(config["inbounds"].as_array().unwrap().len(), 2);
@@ -507,7 +489,7 @@ mod tests {
     #[test]
     fn every_inbound_demands_the_credential_and_the_stand_ins_carry_it() {
         let nodes = set_of(vec![vless("a", "a.example"), vless("b", "b.example")]);
-        let plan = plan(&nodes, &AllFree, &options(), &[]).unwrap();
+        let plan = plan(&nodes, &AllFree, &options()).unwrap();
 
         for inbound in plan.xray_config["inbounds"].as_array().unwrap() {
             let settings = &inbound["settings"];
@@ -524,8 +506,8 @@ mod tests {
     #[test]
     fn the_same_credential_produces_the_same_plan() {
         let nodes = set_of(vec![vless("a", "a.example")]);
-        let first = plan(&nodes, &AllFree, &options(), &[]).unwrap();
-        let second = plan(&nodes, &AllFree, &options(), &[]).unwrap();
+        let first = plan(&nodes, &AllFree, &options()).unwrap();
+        let second = plan(&nodes, &AllFree, &options()).unwrap();
         assert_eq!(first, second);
     }
 
@@ -533,7 +515,7 @@ mod tests {
     fn a_node_with_no_outbound_stays_native_even_though_its_protocol_is_supported() {
         // vless with no uuid: the protocol passes, the conversion does not.
         let nodes = set_of(vec![Node::new("broken", Protocol::Vless, "a.example", 443)]);
-        let plan = plan(&nodes, &AllFree, &options(), &[]).unwrap();
+        let plan = plan(&nodes, &AllFree, &options()).unwrap();
         let Disposition::Native { reason } = &plan.nodes[0].disposition else {
             panic!("expected the node to stay native");
         };
@@ -547,36 +529,9 @@ mod tests {
             vless("🇫🇮 Hysteria fast", "a.example"),
             vless("plain", "b.example"),
         ]);
-        let plan = plan(&nodes, &AllFree, &options(), &[]).unwrap();
+        let plan = plan(&nodes, &AllFree, &options()).unwrap();
         assert!(matches!(plan.nodes[0].disposition, Disposition::Native { .. }));
         assert!(plan.nodes[1].is_relayed());
-    }
-
-    #[test]
-    fn an_override_outranks_the_name_list_but_cannot_rescue_an_unconvertible_node() {
-        let nodes = set_of(vec![
-            vless("hysteria-named", "a.example"),
-            Node::new("real-hy", Protocol::Hysteria2, "b.example", 443),
-        ]);
-        let overrides = vec![
-            ("hysteria-named".to_owned(), Override::ForceRelay),
-            ("real-hy".to_owned(), Override::ForceRelay),
-        ];
-        let plan = plan(&nodes, &AllFree, &options(), &overrides).unwrap();
-        assert!(plan.nodes[0].is_relayed(), "the exclusion list is overridden");
-        assert!(
-            !plan.nodes[1].is_relayed(),
-            "an override cannot make xray speak a protocol it has no outbound for"
-        );
-    }
-
-    #[test]
-    fn forcing_a_node_native_keeps_it_out_of_the_relay() {
-        let nodes = set_of(vec![vless("a", "a.example")]);
-        let overrides = vec![("a".to_owned(), Override::ForceNative)];
-        let plan = plan(&nodes, &AllFree, &options(), &overrides).unwrap();
-        assert!(!plan.relays_anything());
-        assert_eq!(plan.xray_config["inbounds"].as_array().unwrap().len(), 0);
     }
 
     #[test]

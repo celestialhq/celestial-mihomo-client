@@ -6,7 +6,7 @@
 
 use super::{CmdResult, StringifyErr as _};
 use crate::{
-    config::{Config, PrfRelayOverride},
+    config::Config,
     constants::{self, files},
     core::{CoreManager, handle},
     utils::dirs,
@@ -25,8 +25,6 @@ pub struct RelayNodeStatus {
     pub port: Option<u16>,
     /// Why it is not, when it is not. Shown verbatim — these are written to be read.
     pub reason: Option<String>,
-    /// Whether the user pinned this node by hand, and to which side.
-    pub override_mode: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -65,7 +63,6 @@ pub async fn get_xray_relay_status() -> CmdResult<RelayStatus> {
     let forced = supported && constants::relay::is_forced();
     let suppressed = Config::relay_suppressed_for_session();
 
-    let overrides = current_overrides().await;
     let plan = Config::active_relay_plan().await;
 
     let nodes = plan
@@ -83,10 +80,6 @@ pub async fn get_xray_relay_status() -> CmdResult<RelayStatus> {
                         relayed,
                         port,
                         reason,
-                        override_mode: overrides
-                            .iter()
-                            .find(|it| it.name.as_str() == node.name)
-                            .map(|it| it.mode.clone()),
                     }
                 })
                 .collect()
@@ -135,45 +128,6 @@ pub async fn set_xray_relay_enabled(enabled: bool) -> CmdResult<()> {
     CoreManager::global().update_config_checked().await.stringify_err()
 }
 
-/// Pins one node to a side of the relay, or lets it be judged on its merits again.
-///
-/// `mode` is `relay`, `native`, or `auto` to drop the override.
-#[tauri::command]
-pub async fn set_relay_node_override(name: String, mode: String) -> CmdResult<()> {
-    if !matches!(mode.as_str(), "relay" | "native" | "auto") {
-        return Err(format!("unknown relay override `{mode}`").into());
-    }
-
-    let profiles = Config::profiles().await;
-    let current = profiles
-        .latest_arc()
-        .get_current()
-        .cloned()
-        .ok_or_else(|| String::from("no profile is selected"))?;
-
-    profiles.edit_draft(|draft| {
-        let Ok(item) = draft.get_item_mut(&current) else {
-            return;
-        };
-        let option = item.option.get_or_insert_with(Default::default);
-        let overrides = option.relay_overrides.get_or_insert_with(Vec::new);
-        overrides.retain(|it| it.name != name);
-        if mode.as_str() != "auto" {
-            overrides.push(PrfRelayOverride {
-                name: name.clone(),
-                mode: mode.clone(),
-            });
-        }
-        if overrides.is_empty() {
-            option.relay_overrides = None;
-        }
-    });
-    profiles.apply();
-    profiles.latest_arc().save_file().await.stringify_err()?;
-
-    CoreManager::global().update_config_checked().await.stringify_err()
-}
-
 /// The generated xray config, for diagnosis.
 ///
 /// Masked unless the caller asks otherwise, and asking otherwise is the interface's job to
@@ -216,20 +170,6 @@ pub async fn export_runtime_config(unmasked: bool) -> CmdResult<String> {
 pub async fn get_xray_config_path() -> CmdResult<String> {
     let path = dirs::app_home_dir().stringify_err()?.join(files::XRAY_CONFIG);
     Ok(path.to_string_lossy().to_string().into())
-}
-
-async fn current_overrides() -> Vec<PrfRelayOverride> {
-    let profiles = Config::profiles().await;
-    let profiles = profiles.latest_arc();
-    let Some(current) = profiles.get_current() else {
-        return Vec::new();
-    };
-    profiles
-        .get_item(current)
-        .ok()
-        .and_then(|item| item.option.as_ref())
-        .and_then(|option| option.relay_overrides.clone())
-        .unwrap_or_default()
 }
 
 async fn current_has_template() -> bool {

@@ -1073,11 +1073,6 @@ export interface TranslationResources {
             none: string
             viaPort: string
           }
-          override: {
-            auto: string
-            native: string
-            relay: string
-          }
           status: {
             active: string
             forced: string

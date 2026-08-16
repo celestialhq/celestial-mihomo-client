@@ -93,18 +93,6 @@ pub struct PrfExtra {
     pub expire: u64,
 }
 
-/// One node the user pinned to a side of the relay.
-///
-/// An override outranks the name-exclusion list, but it cannot make a node relayable that has
-/// no outbound — the eligibility check still has to pass. That asymmetry is deliberate: the
-/// list is a guess about names, whereas "xray has nothing to dial this with" is a fact.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-pub struct PrfRelayOverride {
-    pub name: String,
-    /// `relay` or `native`.
-    pub mode: String,
-}
-
 #[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PrfOption {
     /// for `remote` profile's http request
@@ -117,14 +105,6 @@ pub struct PrfOption {
     /// so it is the one knob that decides whether mode A is available at all.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub xray_user_agent: Option<String>,
-
-    /// Per-node decisions the user made by hand, by node name.
-    ///
-    /// Kept with the profile because that is what they are about, and because they have to
-    /// survive a subscription refresh: a node the user moved off the relay for a reason must
-    /// not quietly go back on it the next time the list is fetched.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub relay_overrides: Option<Vec<PrfRelayOverride>>,
 
     /// for `remote` profile
     /// use system proxy
@@ -173,7 +153,6 @@ impl PrfOption {
                 let mut result = a_ref.clone();
                 result.user_agent = b_ref.user_agent.clone().or(result.user_agent);
                 result.xray_user_agent = b_ref.xray_user_agent.clone().or(result.xray_user_agent);
-                result.relay_overrides = b_ref.relay_overrides.clone().or(result.relay_overrides);
                 result.with_proxy = b_ref.with_proxy.or(result.with_proxy);
                 result.self_proxy = b_ref.self_proxy.or(result.self_proxy);
                 result.danger_accept_invalid_certs =

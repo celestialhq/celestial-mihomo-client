@@ -27,8 +27,8 @@ pub use mask::{REDACTED, redact_json, redact_yaml};
 pub use node::{Credentials, Node, NodeSet, Protocol, Warning};
 pub use parse::{Payload, decode_base64, detect, parse_mihomo_proxies, parse_uri, parse_uri_list};
 pub use plan::{
-    Disposition, LOOPBACK_RULE, Override, PORT_SEARCH_START, PlanError, PlanOptions, PlannedNode, PortMap, PortProbe,
-    RelayPlan, SocksAuth, assign_ports, plan,
+    Disposition, LOOPBACK_RULE, PORT_SEARCH_START, PlanError, PlanOptions, PlannedNode, PortMap, PortProbe, RelayPlan,
+    SocksAuth, assign_ports, plan,
 };
 pub use substitute::{LoopbackRule, Substitution, apply_relay};
 pub use template::{Mismatch, nodes_from_template, pair_with_template};
@@ -81,7 +81,7 @@ mod tests {
         assert_eq!(set.len(), 3, "the broken line is skipped, the tuic node is kept");
         assert_eq!(set.warnings().len(), 1);
 
-        let plan = plan(&set, &AllFree, &PlanOptions::new(test_auth()), &[]).unwrap();
+        let plan = plan(&set, &AllFree, &PlanOptions::new(test_auth())).unwrap();
         assert_eq!(plan.nodes[0].name, "🇫🇮 finland");
         assert!(plan.nodes[0].is_relayed());
         assert!(plan.nodes[1].is_relayed());
@@ -111,7 +111,7 @@ mod tests {
         let (paired, mismatches) = pair_with_template(&mihomo_set, &nodes_from_template(&template));
         assert!(mismatches.is_empty());
 
-        let plan = plan(&paired, &AllFree, &PlanOptions::new(test_auth()), &[]).unwrap();
+        let plan = plan(&paired, &AllFree, &PlanOptions::new(test_auth())).unwrap();
         assert!(plan.nodes[0].is_relayed());
         assert_eq!(
             plan.xray_config["outbounds"][0]["streamSettings"]["realitySettings"]["publicKey"], "from-template",

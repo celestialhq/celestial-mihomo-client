@@ -444,7 +444,6 @@ mod tests {
                 user: "celestial".to_owned(),
                 pass: "test-secret".to_owned(),
             }),
-            &[],
         )
         .unwrap()
     }

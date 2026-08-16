@@ -246,7 +246,6 @@ mod app_init {
             cmd::get_runtime_yaml,
             cmd::get_xray_relay_status,
             cmd::set_xray_relay_enabled,
-            cmd::set_relay_node_override,
             cmd::export_xray_config,
             cmd::export_runtime_config,
             cmd::get_xray_config_path,

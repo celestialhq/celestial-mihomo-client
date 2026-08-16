@@ -77,8 +77,6 @@ struct ProfileItems {
     /// The xray template this profile's subscription served, when it served one. Read with
     /// the rest of the profile so a template and the nodes it describes come from one place.
     xray_template: Option<std::string::String>,
-    /// Per-node relay decisions the user made by hand.
-    relay_overrides: Vec<(std::string::String, celestial_xray_relay::Override)>,
 }
 
 impl Default for ProfileItems {
@@ -115,7 +113,6 @@ impl Default for ProfileItems {
                 data: ChainType::Script(tmpl::ITEM_SCRIPT.into()),
             },
             xray_template: None,
-            relay_overrides: Vec::new(),
         }
     }
 }
@@ -220,27 +217,6 @@ async fn collect_profile_items(profiles: &IProfiles) -> Result<ProfileItems> {
 
     let name = current_item.name.clone().unwrap_or_default();
     let xray_template = current_item.read_xray_template().await.map(Into::into);
-    let relay_overrides = current_item
-        .option
-        .as_ref()
-        .and_then(|option| option.relay_overrides.as_ref())
-        .map(|overrides| {
-            overrides
-                .iter()
-                .filter_map(|it| {
-                    let mode = match it.mode.as_str() {
-                        "relay" => celestial_xray_relay::Override::ForceRelay,
-                        "native" => celestial_xray_relay::Override::ForceNative,
-                        // Anything else means the record was written by a version that knew
-                        // a mode this one does not; letting the node be judged on its merits
-                        // is the safe reading.
-                        _ => return None,
-                    };
-                    Some((it.name.to_string(), mode))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
 
     let merge_item = {
         let item = profiles.get_item(&merge_uid).ok().cloned();
@@ -344,7 +320,6 @@ async fn collect_profile_items(profiles: &IProfiles) -> Result<ProfileItems> {
         global_script,
         profile_name: name,
         xray_template,
-        relay_overrides,
     })
 }
 
@@ -667,7 +642,6 @@ pub async fn enhance(profiles: &IProfiles) -> Result<Enhanced> {
     let global_script = profile.global_script;
     let profile_name = profile.profile_name;
     let xray_template = profile.xray_template;
-    let relay_overrides = profile.relay_overrides;
 
     // process globals
     let (config, exists_keys, result_map) =
@@ -715,7 +689,7 @@ pub async fn enhance(profiles: &IProfiles) -> Result<Enhanced> {
     // and a node added after the substitution would dial out past the relay; running earlier
     // would also let those stages overwrite the stand-ins that were already put in.
     let relay = if enable_xray_relay {
-        relay::use_relay(&mut config, xray_template.as_deref(), &relay_overrides)
+        relay::use_relay(&mut config, xray_template.as_deref())
     } else {
         None
     };

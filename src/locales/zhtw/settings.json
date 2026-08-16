@@ -639,11 +639,6 @@
         "native": "Native",
         "none": "No nodes have been planned yet."
       },
-      "override": {
-        "auto": "Automatic",
-        "relay": "Relay",
-        "native": "Native"
-      },
       "export": {
         "xray": "Export xray.json",
         "runtime": "Export config.yaml",

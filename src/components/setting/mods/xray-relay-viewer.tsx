@@ -5,8 +5,6 @@ import {
   List,
   ListItem,
   ListItemText,
-  MenuItem,
-  Select,
   Stack,
   TextField,
   Typography,
@@ -21,7 +19,6 @@ import {
   exportRuntimeConfig,
   exportXrayConfig,
   getXrayRelayStatus,
-  setRelayNodeOverride,
 } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 
@@ -36,7 +33,6 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<IXrayRelayStatus | null>(null)
-  const [busy, setBusy] = useState(false)
   const [exported, setExported] = useState('')
 
   const refresh = async () => {
@@ -55,20 +51,6 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
     },
     close: () => setOpen(false),
   }))
-
-  // Changing an override regenerates the configuration and restarts the core chain, so it is
-  // locked while it runs rather than letting a second change race the first.
-  const onOverride = useLockFn(async (name: string, mode: string) => {
-    setBusy(true)
-    try {
-      await setRelayNodeOverride(name, mode)
-      await refresh()
-    } catch (err) {
-      showNotice.error(err)
-    } finally {
-      setBusy(false)
-    }
-  })
 
   const onExport = useLockFn(async (which: 'xray' | 'runtime') => {
     try {
@@ -141,7 +123,7 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
 
       <List dense sx={{ maxHeight: 300, overflowY: 'auto' }}>
         {status?.nodes.map((node) => (
-          <ListItem key={node.name} sx={{ px: 0, gap: 1 }}>
+          <ListItem key={node.name} sx={{ px: 0 }}>
             <ListItemText
               primary={node.name}
               secondary={
@@ -156,23 +138,6 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
                 secondary: { sx: { fontSize: 12 } },
               }}
             />
-            <Select
-              size="small"
-              disabled={busy}
-              value={node.override_mode ?? 'auto'}
-              onChange={(event) => onOverride(node.name, event.target.value)}
-              sx={{ minWidth: 116 }}
-            >
-              <MenuItem value="auto">
-                {t('settings.modals.xrayRelay.override.auto')}
-              </MenuItem>
-              <MenuItem value="relay">
-                {t('settings.modals.xrayRelay.override.relay')}
-              </MenuItem>
-              <MenuItem value="native">
-                {t('settings.modals.xrayRelay.override.native')}
-              </MenuItem>
-            </Select>
           </ListItem>
         ))}
         {status?.nodes.length === 0 && (

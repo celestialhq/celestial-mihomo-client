@@ -336,8 +336,6 @@ interface IXrayRelayNode {
   port?: number
   /** Why the node is not relayed. Written to be shown as-is. */
   reason?: string
-  /** Set when the user pinned this node by hand: 'relay' or 'native'. */
-  override_mode?: string
 }
 
 interface IXrayRelayStatus {
@@ -358,7 +356,6 @@ interface IXrayRelayStatus {
 interface IProfileOption {
   user_agent?: string
   xray_user_agent?: string
-  relay_overrides?: { name: string; mode: string }[]
   with_proxy?: boolean
   self_proxy?: boolean
   update_interval?: number

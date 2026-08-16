@@ -639,11 +639,6 @@
         "native": "Нативно",
         "none": "Ноды ещё не распланированы."
       },
-      "override": {
-        "auto": "Автоматически",
-        "relay": "Через релей",
-        "native": "Нативно"
-      },
       "export": {
         "xray": "Выгрузить xray.json",
         "runtime": "Выгрузить config.yaml",
