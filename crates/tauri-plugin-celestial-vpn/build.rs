@@ -1,6 +1,10 @@
 const COMMANDS: &[&str] = &["startVpn", "stopVpn"];
 
 fn main() {
+    // Declared unconditionally, so a misspelling of it is a compile error rather than a
+    // silently inactive branch on every target.
+    println!("cargo::rustc-check-cfg=cfg(xray_linked)");
+
     tauri_plugin::Builder::new(COMMANDS).android_path("android").build();
 
     build_mihomo_wrapper();
@@ -10,12 +14,14 @@ fn main() {
 /// The ABIs the xray relay ships for.
 ///
 /// Not all of them, and the reason is weight rather than capability: the core builds cleanly
-/// for every Android ABI, but it adds ~31 MB per ABI to a universal APK that is already
+/// for every Android ABI, but it adds ~33 MB per ABI to a universal APK that is already
 /// 351 MB. arm64-v8a is every Android phone made in the last several years.
 ///
 /// Leaving an ABI out costs those devices the relay, not the app: the relay reports itself
 /// unsupported and the client dials nodes natively, which is the same path mobile took before
-/// any of this existed. Adding one back is a line here.
+/// any of this existed. Adding one back is a line here — and only here: what builds the
+/// library also sets the `xray_linked` cfg, and everything that has to know whether the core
+/// is linked reads that instead of repeating this list.
 const XRAY_ABIS: &[&str] = &["arm64-v8a"];
 
 /// Cross-compiles the mihomo cgo wrapper (golang/wrapper) for the Android
@@ -131,22 +137,29 @@ fn build_xray_wrapper() {
     let Some((go_arch, ndk_triple, android_abi)) = android_target_info(&target) else {
         return; // desktop host build — the desktop core is a downloaded sidecar instead
     };
-    if !XRAY_ABIS.contains(&android_abi) {
-        return;
-    }
 
     println!("cargo:rerun-if-changed=golang/xray-wrapper/main.go");
     println!("cargo:rerun-if-changed=golang/xray-wrapper/go.mod");
 
-    let cc = ndk_clang(ndk_triple);
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
-    let wrapper_dir = std::path::Path::new(&manifest_dir).join("golang/xray-wrapper");
-
     let jni_libs_dir = std::path::Path::new(&manifest_dir)
         .join("android/src/main/jniLibs")
         .join(android_abi);
-    std::fs::create_dir_all(&jni_libs_dir).expect("failed to create jniLibs output dir");
     let so_path = jni_libs_dir.join("libxray_wrapper.so");
+
+    if !XRAY_ABIS.contains(&android_abi) {
+        // Removed rather than merely not written. AGP packages this directory wholesale and
+        // nothing else prunes it, so a library from a build where the list said otherwise
+        // would still be shipped — 33 MB that the APK cannot even load, because `xray_linked`
+        // is unset in the build that packaged it. Editing the list above is invited; leaving
+        // its previous answer lying around in the output directory is not part of the offer.
+        let _ = std::fs::remove_file(&so_path);
+        return;
+    }
+
+    let cc = ndk_clang(ndk_triple);
+    let wrapper_dir = std::path::Path::new(&manifest_dir).join("golang/xray-wrapper");
+    std::fs::create_dir_all(&jni_libs_dir).expect("failed to create jniLibs output dir");
 
     // Same reasoning as the mihomo wrapper: the core is shipped, never debugged on-device,
     // and the symbols are most of the file.
@@ -169,6 +182,9 @@ fn build_xray_wrapper() {
 
     let _ = std::fs::remove_file(jni_libs_dir.join("libxray_wrapper.h"));
     println!("cargo:rustc-link-search=native={}", jni_libs_dir.display());
+    // Set only where the library was actually produced, which is the only honest answer to
+    // "is the core linked" — and the only one that cannot drift from the list above.
+    println!("cargo:rustc-cfg=xray_linked");
 }
 
 /// The NDK clang wrapper for an Android triple, which is what cgo needs as `CC`.

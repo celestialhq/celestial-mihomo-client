@@ -65,6 +65,10 @@ func StartXray(configJSON *C.char) *C.char {
 		instance = nil
 	}
 	if err := server.Start(); err != nil {
+		// A partly started instance still owns whatever it managed to bring up. Nothing else
+		// holds a reference to it once this returns, so closing it here is the only chance to
+		// release the inbound ports the caller is about to be told it does not have.
+		_ = server.Close()
 		return C.CString(err.Error())
 	}
 	instance = server

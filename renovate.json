@@ -3,7 +3,7 @@
 
   "baseBranchPatterns": ["dev"],
 
-  "enabledManagers": ["cargo", "npm", "github-actions"],
+  "enabledManagers": ["cargo", "npm", "github-actions", "gomod"],
 
   "labels": ["dependencies"],
   "dependencyDashboard": false,
@@ -107,10 +107,30 @@
       "matchManagers": ["cargo"],
       "groupName": "rust workspace dependencies",
       "groupSlug": "rust-workspace"
+    },
+
+    {
+      "description": "Follow the embedded xray core the Android build links in",
+      "matchManagers": ["gomod"],
+      "matchFileNames": [
+        "crates/tauri-plugin-celestial-vpn/golang/xray-wrapper/go.mod"
+      ],
+      "groupName": "embedded xray core",
+      "groupSlug": "embedded-xray",
+      "semanticCommitType": "build",
+      "semanticCommitScope": "android"
+    },
+    {
+      "description": "The mihomo wrapper's graph is the submodule's, and moves with it. sync-embedded-mihomo.yml is what follows that core; a dependency bump here would only desynchronise the two",
+      "matchManagers": ["gomod"],
+      "matchFileNames": [
+        "crates/tauri-plugin-celestial-vpn/golang/wrapper/go.mod"
+      ],
+      "enabled": false
     }
   ],
 
-  "postUpdateOptions": ["pnpmDedupe"],
+  "postUpdateOptions": ["pnpmDedupe", "gomodTidy"],
 
   "ignoreDeps": ["criterion", "node", "pnpm"],
 

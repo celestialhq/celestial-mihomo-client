@@ -6,8 +6,9 @@
 //! readiness here is waited for rather than assumed, and why every failure ends by putting
 //! the user back on a native configuration instead of leaving them on dead ones.
 //!
-//! Desktop only. On mobile the core runs in-process and there is no second process to
-//! spawn, so the relay is never planned there in the first place.
+//! Everything here is shared. Only the launch differs: desktop spawns the bundled sidecar,
+//! Android links the core in and hands it the same document. Where no core is shipped at all
+//! the relay is never planned, so nothing below is reached.
 
 use super::CoreManager;
 use crate::{config::Config, constants::files, core::handle, process::AsyncHandler, utils::dirs};
@@ -177,19 +178,29 @@ impl CoreManager {
     ///
     /// There is also no watcher. A linked core does not terminate the way a process does —
     /// there is no exit to observe — so an unexpected stop is not a state this can reach.
-    #[cfg(all(target_os = "android", target_arch = "aarch64"))]
+    ///
+    /// On an ABI the core is not shipped for this reports that and nothing else happens,
+    /// which is a path the relay should never have taken: it is not planned where it is not
+    /// supported, and the same plugin answers both questions.
+    #[cfg(target_os = "android")]
     async fn launch_core(&self, config_path: &std::path::PathBuf) -> Result<()> {
         let config = tokio::fs::read_to_string(config_path).await?;
         tauri_plugin_celestial_vpn::start_xray(&config).map_err(|error| anyhow::anyhow!("{error}"))?;
 
         self.xray_generation.fetch_add(1, Ordering::AcqRel);
-        logging!(info, Type::Core, "embedded xray core started");
+        // Named rather than assumed: the desktop sidecar follows `releases/latest` while this
+        // one is pinned in the wrapper's go.mod, and a device log is the only place the two
+        // can be compared.
+        match tauri_plugin_celestial_vpn::xray_version() {
+            Some(version) => logging!(info, Type::Core, "embedded xray core started ({version})"),
+            None => logging!(info, Type::Core, "embedded xray core started"),
+        }
         Ok(())
     }
 
     /// Unreachable: the relay is never planned where the core is not linked, so this exists
     /// only so the shared pipeline above compiles for every target.
-    #[cfg(any(target_os = "ios", all(target_os = "android", not(target_arch = "aarch64"))))]
+    #[cfg(target_os = "ios")]
     #[allow(clippy::unused_async, reason = "matches the real implementations' signature")]
     async fn launch_core(&self, _config_path: &std::path::PathBuf) -> Result<()> {
         bail!("this build does not ship the xray core")
@@ -221,7 +232,7 @@ impl CoreManager {
         logging!(info, Type::Core, "xray stopped (PID: {pid}, Result: {result:?})");
     }
 
-    #[cfg(all(target_os = "android", target_arch = "aarch64"))]
+    #[cfg(target_os = "android")]
     fn shutdown_core(&self) {
         // Safe to call with nothing running: the stop paths run on shutdown and on failure
         // alike, and the library treats it as a no-op.
@@ -229,7 +240,7 @@ impl CoreManager {
         logging!(info, Type::Core, "embedded xray core stopped");
     }
 
-    #[cfg(any(target_os = "ios", all(target_os = "android", not(target_arch = "aarch64"))))]
+    #[cfg(target_os = "ios")]
     const fn shutdown_core(&self) {}
 
     /// xray went away without being asked to.

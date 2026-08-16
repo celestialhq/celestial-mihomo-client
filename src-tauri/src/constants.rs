@@ -75,13 +75,20 @@ pub mod relay {
 
     /// Whether this build can relay at all.
     ///
-    /// Desktop spawns the core as a sidecar; Android links it in, but only for the ABIs it
-    /// is shipped for (see `XRAY_ABIS` in the vpn plugin's build.rs) — elsewhere the nodes
-    /// are dialled natively, which is what mobile did before any of this existed. Everything
-    /// above this line in the pipeline is platform-independent: only starting differs.
+    /// Desktop spawns the core as a sidecar and so always can. Mobile links it in, and only
+    /// for the ABIs it is shipped for — which is not restated here but asked of the plugin
+    /// that does the linking, so this answer cannot disagree with what the build produced.
+    /// Everything above this line in the pipeline is platform-independent: only starting
+    /// differs.
     pub const fn is_supported() -> bool {
-        cfg!(not(any(target_os = "android", target_os = "ios")))
-            || cfg!(all(target_os = "android", target_arch = "aarch64"))
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        {
+            tauri_plugin_celestial_vpn::xray_available()
+        }
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        {
+            true
+        }
     }
 
     /// Whether this build has the relay pinned on and its switch locked.
