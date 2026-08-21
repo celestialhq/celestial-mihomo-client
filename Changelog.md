@@ -1,3 +1,20 @@
+## v4.1.0
+
+### New
+
+- **The relay works on Android.** The xray core is linked into the app the same way mihomo already is, and reads the same generated `xray.json` the desktop build writes — so the TLS fingerprint and the REALITY / Vision / XHTTP implementations come from xray on a phone exactly as they do on a desktop. The v4.0.0 note that called the relay desktop-only no longer holds: there is no second process to spawn on Android, which was a fact about how the core was shipped rather than about the platform.
+- **Shipped for arm64-v8a.** Every Android phone of the last several years is arm64; the core builds cleanly for the other ABIs but adds about 33 MB each to an already large universal APK. A device it is not shipped for loses the relay, not the app — the nodes are dialled natively, which is what mobile did before this existed, and the settings say so rather than showing a control that does nothing.
+
+### Changed
+
+- **The per-node relay/native switch is gone.** Whether a node is relayed was never a preference: it is relayed when xray can carry it and an outbound exists for it, and it stays native when one of those is false — conclusions that asking cannot change, because asking does not give xray a protocol it lacks. Offering the choice also put the one escape hatch from a pinned-on mode in the hands of whoever clicked it, when going native is meant to be the client's answer to something being wrong. The node list and the reason each node is where it is both stay: losing the control does not mean losing the explanation.
+- **The embedded mihomo core moves to v1.19.29**, matching what desktop has downloaded since 18 July. Android compiles the core from a pinned submodule while desktop resolves `releases/latest` on every build, so the two only agreed when someone moved the pin by hand — and nobody had since June, leaving six weeks of upstream fixes on one platform and not the other, including an unbounded allocation in the socks4 reader. A weekly job now reads the same version the prebuild script reads and opens a pull request when they differ, rather than leaving it to be noticed.
+
+### Fixed
+
+- An xray core that fails to start on Android now releases what it managed to bring up. The core was built and partly started before the failure, nothing held a reference to it afterwards, and its inbound ports stayed taken — so the retry that follows a failed start could find its own ports occupied.
+- The set of Android ABIs the core ships for is decided in one place and the build enforces it. It had been written down three times and only one of them built anything, so adding an ABI would have shipped 31 MB of core that nothing linked against while the client still reported the relay unsupported — and nothing would have failed to say so.
+
 ## v4.0.1
 
 ### Fixed
