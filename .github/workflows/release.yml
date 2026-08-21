@@ -144,6 +144,13 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies and sidecars
+        # The sidecar resolution asks the GitHub API which xray release is current — xray
+        # publishes no `version.txt` the way mihomo does. Unauthenticated that is 60 calls an
+        # hour shared across every runner on the same address, which six parallel jobs times
+        # five retries exhausts on its own; `GITHUB_TOKEN` raises it to a per-repository
+        # budget. prebuild.mjs has read this variable all along and nothing was setting it.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           pnpm install --frozen-lockfile
@@ -239,6 +246,13 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies and sidecars
+        # The sidecar resolution asks the GitHub API which xray release is current — xray
+        # publishes no `version.txt` the way mihomo does. Unauthenticated that is 60 calls an
+        # hour shared across every runner on the same address, which six parallel jobs times
+        # five retries exhausts on its own; `GITHUB_TOKEN` raises it to a per-repository
+        # budget. prebuild.mjs has read this variable all along and nothing was setting it.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           pnpm install --frozen-lockfile
@@ -341,6 +355,13 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies and sidecars
+        # The sidecar resolution asks the GitHub API which xray release is current — xray
+        # publishes no `version.txt` the way mihomo does. Unauthenticated that is 60 calls an
+        # hour shared across every runner on the same address, which six parallel jobs times
+        # five retries exhausts on its own; `GITHUB_TOKEN` raises it to a per-repository
+        # budget. prebuild.mjs has read this variable all along and nothing was setting it.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           pnpm install --frozen-lockfile
           pnpm run prebuild x86_64-unknown-linux-gnu
