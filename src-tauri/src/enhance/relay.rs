@@ -9,7 +9,7 @@
 //! the user goes out natively with a note in the log, never that they go nowhere.
 
 use celestial_xray_relay::{
-    Disposition, LoopbackRule, NodeSet, PlanOptions, PortProbe, RelayPlan, SocksAuth, Substitution, apply_relay,
+    Disposition, NodeSet, PlanOptions, PortProbe, RelayPlan, SocksAuth, Substitution, apply_relay,
     node_set_from_body, pair_with_template, parse_mihomo_proxies, plan,
 };
 use clash_verge_logging::{Type, logging};
@@ -61,10 +61,7 @@ pub fn use_relay(config: &mut Mapping, xray_template: Option<&str>) -> Option<Re
     // would be replaced to serve a configuration that changed nothing else.
     let running = running_relay();
     let options = PlanOptions {
-        ports_in_use: running
-            .as_ref()
-            .map(|plan| plan.ports.entries().to_vec())
-            .unwrap_or_default(),
+        ports_in_use: running.as_ref().map(|plan| plan.ports_in_use()).unwrap_or_default(),
         ..PlanOptions::new(running.map_or_else(fresh_socks_auth, |plan| plan.auth.clone()))
     };
 
@@ -87,15 +84,7 @@ pub fn use_relay(config: &mut Mapping, xray_template: Option<&str>) -> Option<Re
         return None;
     }
 
-    // The rule identifies the core by process name, which only exists where the core is its
-    // own process. Where it is linked in, the platform keeps this application's sockets out
-    // of the tunnel instead.
-    let loopback = if cfg!(any(target_os = "android", target_os = "ios")) {
-        LoopbackRule::Skip
-    } else {
-        LoopbackRule::Insert
-    };
-    let substitution = apply_relay(config, &plan, loopback);
+    let substitution = apply_relay(config, &plan);
     log_dispositions(&plan);
     log_substitution(&substitution);
     Some(plan)
@@ -193,13 +182,13 @@ fn log_substitution(substitution: &Substitution) {
     logging!(
         info,
         Type::Config,
-        "xray relay: {} node(s) relayed, {} left native, loopback rule {}",
+        "xray relay: {} node(s) relayed, {} left native, egress listener {}",
         substitution.replaced.len(),
         substitution.untouched.len(),
-        if substitution.rule_inserted {
-            "inserted"
+        if substitution.egress_added {
+            "added"
         } else {
-            "already present"
+            "already declared"
         }
     );
 }
@@ -262,7 +251,7 @@ proxies:
     }
 
     #[test]
-    fn a_relayable_node_is_replaced_and_the_loopback_rule_added() {
+    fn a_relayable_node_is_replaced_and_the_egress_listener_declared() {
         let mut config = config(
             r#"
 proxies:
@@ -285,12 +274,16 @@ rules:
         assert_eq!(proxy["server"].as_str(), Some("127.0.0.1"));
         assert_eq!(proxy["port"].as_u64(), Some(u64::from(port)));
 
-        let rules = config["rules"].as_sequence().unwrap();
+        // The rules are the user's; what keeps xray's own traffic out of the tunnel is a
+        // listener mihomo answers before it consults the mode, not a rule the mode can skip.
         assert_eq!(
-            rules[0].as_str(),
-            Some(celestial_xray_relay::LOOPBACK_RULE),
-            "without it xray's own traffic goes back into the tunnel"
+            config["rules"].as_sequence().unwrap().len(),
+            1,
+            "the profile's own rule and nothing else"
         );
+        let listener = &config["listeners"].as_sequence().unwrap()[0];
+        assert_eq!(listener["proxy"].as_str(), Some("DIRECT"));
+        assert_eq!(listener["port"].as_u64(), Some(u64::from(plan.egress_port)));
     }
 
     #[test]

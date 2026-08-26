@@ -12,7 +12,7 @@
 
 use serde_yaml_ng::{Mapping, Value};
 
-use crate::plan::{LOOPBACK_RULE, RelayPlan, SocksAuth};
+use crate::plan::{EGRESS_TAG, RelayPlan, SocksAuth};
 
 /// What a substitution pass changed, for the log and the UI.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -21,28 +21,15 @@ pub struct Substitution {
     pub replaced: Vec<String>,
     /// Nodes left exactly as they were, and why.
     pub untouched: Vec<(String, String)>,
-    /// Whether the anti-loop rule had to be added.
-    pub rule_inserted: bool,
-}
-
-/// Whether mihomo needs a rule to keep the relay's own traffic out of the tunnel.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LoopbackRule {
-    /// The core runs as its own process, which mihomo can recognise by name.
-    Insert,
-    /// The core is linked into this one. There is no separate process for a process rule to
-    /// match, so the rule could never fire — and carrying it would still make mihomo resolve
-    /// the owning process of every connection to decide that, which on Android is both
-    /// restricted and expensive. The tunnel is left instead by the platform excluding this
-    /// application's own sockets from it.
-    Skip,
+    /// Whether the egress listener had to be added; false when one was already there.
+    pub egress_added: bool,
 }
 
 /// Replaces every relayed node in `config` with its socks5 stand-in.
 ///
 /// Service entries such as `type: dns` are left alone: they have no address to relay and
 /// mihomo needs them for its own routing. So is anything the plan marked native.
-pub fn apply_relay(config: &mut Mapping, plan: &RelayPlan, loopback: LoopbackRule) -> Substitution {
+pub fn apply_relay(config: &mut Mapping, plan: &RelayPlan) -> Substitution {
     let mut result = Substitution::default();
 
     // Which provider payloads may be rewritten is decided before the config is borrowed
@@ -69,7 +56,7 @@ pub fn apply_relay(config: &mut Mapping, plan: &RelayPlan, loopback: LoopbackRul
         }
     }
 
-    result.rule_inserted = matches!(loopback, LoopbackRule::Insert) && ensure_loopback_rule(config);
+    result.egress_added = ensure_egress_listener(config, plan);
     result
 }
 
@@ -125,32 +112,53 @@ fn stand_in(name: &str, port: u16, auth: &SocksAuth) -> Mapping {
     entry
 }
 
-/// Puts the anti-loop rule at the front of `rules`, if it is not already there.
+/// Declares the listener everything xray dials leaves through.
 ///
-/// Without it xray's own outbound connections match the ordinary rules and are sent back
-/// into the tunnel they are supposed to be leaving through.
-fn ensure_loopback_rule(config: &mut Mapping) -> bool {
-    let rules = config
-        .entry("rules".into())
+/// `proxy: DIRECT` is the whole trick: mihomo answers a listener's own proxy before it looks
+/// at the mode, so this holds in global mode, where rules are never consulted at all. It is
+/// authenticated for the same reason the inbounds are, only more so — an open listener here
+/// is a way *out* of the tunnel, which any local program could take while the user believes
+/// everything is going through the VPN.
+fn ensure_egress_listener(config: &mut Mapping, plan: &RelayPlan) -> bool {
+    let listeners = config
+        .entry("listeners".into())
         .or_insert_with(|| Value::Sequence(Vec::new()));
-    let Value::Sequence(rules) = rules else {
+    let Value::Sequence(listeners) = listeners else {
         return false;
     };
-    if rules
+
+    let existing = listeners
         .iter()
-        .any(|it| it.as_str().is_some_and(|it| it.trim() == LOOPBACK_RULE))
-    {
-        return false;
+        .position(|it| it.get("name").and_then(Value::as_str) == Some(EGRESS_TAG));
+    let mut entry = Mapping::new();
+    entry.insert("name".into(), EGRESS_TAG.into());
+    entry.insert("type".into(), "socks".into());
+    entry.insert("listen".into(), "127.0.0.1".into());
+    entry.insert("port".into(), plan.egress_port.into());
+    entry.insert("udp".into(), true.into());
+    let mut user = Mapping::new();
+    user.insert("username".into(), plan.auth.user.as_str().into());
+    user.insert("password".into(), plan.auth.pass.as_str().into());
+    entry.insert("users".into(), Value::Sequence(vec![Value::Mapping(user)]));
+    entry.insert("proxy".into(), "DIRECT".into());
+
+    match existing {
+        Some(index) => {
+            listeners[index] = Value::Mapping(entry);
+            false
+        }
+        None => {
+            listeners.push(Value::Mapping(entry));
+            true
+        }
     }
-    rules.insert(0, Value::String(LOOPBACK_RULE.to_owned()));
-    true
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic, reason = "a failed assertion is a failed test")]
 mod tests {
-    use super::{LoopbackRule, apply_relay, ensure_loopback_rule};
-    use crate::plan::{LOOPBACK_RULE, PlanOptions, PortProbe, SocksAuth, plan};
+    use super::apply_relay;
+    use crate::plan::{EGRESS_TAG, PlanOptions, PortProbe, SocksAuth, plan};
 
     struct AllFree;
     impl PortProbe for AllFree {
@@ -189,22 +197,18 @@ rules:
         plan(&set, &AllFree, &PlanOptions::new(auth())).unwrap()
     }
 
-    /// Where the core is linked in rather than spawned, the rule identifies nothing: there
-    /// is no second process to name. Carrying it anyway would still make mihomo resolve the
-    /// owning process of every connection before deciding that.
+    /// The rules are left alone now. The relay's own traffic leaves through a listener that
+    /// mihomo answers before it consults the mode, which is what the old process-name rule
+    /// could never do — global mode never reaches the rules at all.
     #[test]
-    fn the_loopback_rule_is_left_out_where_no_process_could_match_it() {
+    fn the_rules_are_not_touched() {
         let mut config = config();
+        let before = config["rules"].clone();
         let plan = planned(&config);
-        let result = apply_relay(&mut config, &plan, LoopbackRule::Skip);
+        let result = apply_relay(&mut config, &plan);
 
-        assert!(!result.rule_inserted);
-        let rules = config["rules"].as_sequence().unwrap();
-        assert!(
-            !rules.iter().any(|it| it.as_str() == Some(LOOPBACK_RULE)),
-            "the rule must not be added where it cannot fire"
-        );
-        assert_eq!(result.replaced, ["🇫🇮 finland"], "the substitution itself is unaffected");
+        assert_eq!(config["rules"], before);
+        assert_eq!(result.replaced, ["🇫🇮 finland"]);
     }
 
     /// The shape the panel produces when a template asks for `include-proxies`: the whole
@@ -246,7 +250,7 @@ rules:
     fn nodes_inlined_into_a_provider_are_relayed_too() {
         let mut config = config_with_providers();
         let plan = planned(&config);
-        apply_relay(&mut config, &plan, LoopbackRule::Insert);
+        apply_relay(&mut config, &plan);
 
         let payload = config["proxy-providers"]["main-provider"]["payload"]
             .as_sequence()
@@ -268,7 +272,7 @@ rules:
         assert_eq!(plan.ports.entries().len(), 1, "three listings of one node, one port");
         let port = plan.ports.get("🇫🇮 finland").unwrap();
 
-        apply_relay(&mut config, &plan, LoopbackRule::Insert);
+        apply_relay(&mut config, &plan);
         assert_eq!(config["proxies"][0]["port"].as_u64(), Some(u64::from(port)));
         assert_eq!(
             config["proxy-providers"]["main-provider"]["payload"][0]["port"].as_u64(),
@@ -284,7 +288,7 @@ rules:
     fn a_provider_that_dials_through_another_proxy_is_left_alone() {
         let mut config = config_with_providers();
         let plan = planned(&config);
-        apply_relay(&mut config, &plan, LoopbackRule::Insert);
+        apply_relay(&mut config, &plan);
 
         let payload = config["proxy-providers"]["bridge-dialer"]["payload"]
             .as_sequence()
@@ -300,7 +304,7 @@ rules:
         let mut config = config_with_providers();
         let before = config["proxy-providers"]["remote-provider"].clone();
         let plan = planned(&config);
-        apply_relay(&mut config, &plan, LoopbackRule::Insert);
+        apply_relay(&mut config, &plan);
         assert_eq!(config["proxy-providers"]["remote-provider"], before);
     }
 
@@ -312,7 +316,7 @@ proxies:
 ";
         let mut config: serde_yaml_ng::Mapping = serde_yaml_ng::from_str(yaml).unwrap();
         let plan = planned(&config);
-        let result = apply_relay(&mut config, &plan, LoopbackRule::Insert);
+        let result = apply_relay(&mut config, &plan);
 
         assert!(result.replaced.is_empty());
         assert_eq!(config["proxies"][0]["type"], "vless");
@@ -323,7 +327,7 @@ proxies:
     fn a_relayed_node_becomes_a_socks5_stand_in_keeping_its_name() {
         let mut config = config();
         let plan = planned(&config);
-        let result = apply_relay(&mut config, &plan, LoopbackRule::Insert);
+        let result = apply_relay(&mut config, &plan);
 
         assert_eq!(result.replaced, ["🇫🇮 finland"]);
         let proxies = config["proxies"].as_sequence().unwrap();
@@ -346,7 +350,7 @@ proxies:
         let mut config = config();
         let before = config["proxies"].as_sequence().unwrap().clone();
         let plan = planned(&config);
-        apply_relay(&mut config, &plan, LoopbackRule::Insert);
+        apply_relay(&mut config, &plan);
 
         let after = config["proxies"].as_sequence().unwrap();
         assert_eq!(after[0], before[0], "the DNS entry is mihomo's own routing");
@@ -358,33 +362,45 @@ proxies:
         let mut config = config();
         let groups_before = config["proxy-groups"].clone();
         let plan = planned(&config);
-        apply_relay(&mut config, &plan, LoopbackRule::Insert);
+        apply_relay(&mut config, &plan);
 
         assert_eq!(config["proxy-groups"], groups_before);
         let rules = config["rules"].as_sequence().unwrap();
         assert_eq!(rules.last().unwrap().as_str(), Some("MATCH,💭 CELESTIAL VPN"));
     }
 
+    /// `proxy: DIRECT` is the load-bearing line: mihomo resolves a listener's own proxy
+    /// before it looks at the mode, so this survives a user switching to global mode, which
+    /// is exactly where the rule it replaces stopped working.
     #[test]
-    fn the_anti_loop_rule_goes_first_and_is_added_only_once() {
+    fn the_egress_listener_is_declared_once_and_forced_direct() {
         let mut config = config();
         let plan = planned(&config);
 
-        let first = apply_relay(&mut config, &plan, LoopbackRule::Insert);
-        assert!(first.rule_inserted);
-        assert_eq!(config["rules"].as_sequence().unwrap()[0].as_str(), Some(LOOPBACK_RULE));
+        let first = apply_relay(&mut config, &plan);
+        assert!(first.egress_added);
 
-        assert!(
-            !ensure_loopback_rule(&mut config),
-            "a second pass must not duplicate it"
+        let listener = &config["listeners"].as_sequence().unwrap()[0];
+        assert_eq!(listener["name"].as_str(), Some(EGRESS_TAG));
+        assert_eq!(listener["type"].as_str(), Some("socks"));
+        assert_eq!(listener["listen"].as_str(), Some("127.0.0.1"));
+        assert_eq!(listener["port"].as_u64(), Some(u64::from(plan.egress_port)));
+        assert_eq!(listener["proxy"].as_str(), Some("DIRECT"));
+        assert_eq!(
+            listener["udp"].as_bool(),
+            Some(true),
+            "hysteria and every QUIC transport dial UDP through here"
         );
-        let matches = config["rules"]
-            .as_sequence()
-            .unwrap()
-            .iter()
-            .filter(|it| it.as_str() == Some(LOOPBACK_RULE))
-            .count();
-        assert_eq!(matches, 1);
+        assert!(
+            listener["users"][0]["password"].as_str().is_some_and(|it| !it.is_empty()),
+            "an open listener here is a way out of the tunnel, not merely into a proxy"
+        );
+
+        // A second pass rewrites the entry rather than adding another: two listeners on one
+        // port is a config mihomo refuses outright.
+        let second = apply_relay(&mut config, &plan);
+        assert!(!second.egress_added);
+        assert_eq!(config["listeners"].as_sequence().unwrap().len(), 1);
     }
 
     /// The reason substitution runs last: a node introduced by a merge profile reaches the
@@ -401,7 +417,7 @@ proxies:
         // Planning happens on the config as it stands at substitution time, which is the
         // whole point — plan earlier and this node would not be in it.
         let plan = planned(&config);
-        let result = apply_relay(&mut config, &plan, LoopbackRule::Insert);
+        let result = apply_relay(&mut config, &plan);
 
         assert!(
             result.replaced.contains(&"🇩🇪 merged".to_owned()),

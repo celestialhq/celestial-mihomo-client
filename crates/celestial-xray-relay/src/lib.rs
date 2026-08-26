@@ -27,10 +27,10 @@ pub use mask::{REDACTED, redact_json, redact_yaml};
 pub use node::{Credentials, Node, NodeSet, Protocol, Warning};
 pub use parse::{Payload, decode_base64, detect, parse_mihomo_proxies, parse_uri, parse_uri_list};
 pub use plan::{
-    Disposition, LOOPBACK_RULE, PORT_SEARCH_START, PlanError, PlanOptions, PlannedNode, PortMap, PortProbe, RelayPlan,
+    Disposition, EGRESS_TAG, PORT_SEARCH_START, PlanError, PlanOptions, PlannedNode, PortMap, PortProbe, RelayPlan,
     SocksAuth, assign_ports, plan,
 };
-pub use substitute::{LoopbackRule, Substitution, apply_relay};
+pub use substitute::{Substitution, apply_relay};
 pub use template::{Mismatch, nodes_from_template, pair_with_template};
 
 /// Builds a [`NodeSet`] from a response body, whatever shape it turned out to have.

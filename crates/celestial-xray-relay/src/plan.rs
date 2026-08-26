@@ -12,20 +12,23 @@ use crate::node::{Node, NodeSet};
 /// The first port tried. Not a fixed base: ports are searched upward from here.
 pub const PORT_SEARCH_START: u16 = 20000;
 
-/// The rule that keeps our xray's own outbound traffic from being routed back into the
-/// tunnel.
+/// The xray outbound every relayed node dials through, and the mihomo listener it lands on.
 ///
-/// Matches `celestial-xray` rather than plain `xray` so it identifies *our* core. A bare
-/// `^xray$` would also match an xray belonging to some other client the user happens to be
-/// running, and quietly divert its traffic to DIRECT — deciding the routing of a program
-/// that is none of our business.
+/// Everything xray sends leaves this machine through mihomo rather than past it. The listener
+/// is declared with `proxy: DIRECT`, which mihomo answers before it consults the mode at all —
+/// so the core's own traffic goes out directly whether the user is in rule mode, global mode
+/// or direct mode. A routing rule could not do that: global mode never reaches the rules.
+pub const EGRESS_TAG: &str = "celestial-relay-egress";
+
+/// The name the egress port is filed under while ports are being assigned.
 ///
-/// The match is on the process name, not a path, so the same rule covers both release
-/// channels however they are laid out on disk.
-///
-/// Written as a raw string on purpose. In an ordinary literal the `\.` collapses to `.`,
-/// which turns the escaped dot into "any character" and widens the rule past what was meant.
-pub const LOOPBACK_RULE: &str = r"PROCESS-NAME-REGEX,(?i)^celestial-xray(?:\.exe)?$,DIRECT";
+/// Carries a control character so nothing a subscription can name collides with it, and it is
+/// taken back out before the map reaches anyone.
+const EGRESS_SLOT: &str = "\u{1}egress";
+
+/// What the core's own resolver traffic is labelled with, so routing can send it out the
+/// same way as everything else.
+const DNS_TAG: &str = "celestial-relay-dns";
 
 /// Decides whether a port can be taken.
 ///
@@ -122,6 +125,13 @@ impl PortMap {
     pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+
+    /// Removes one entry and returns its port. Used for the egress slot, which shares the
+    /// search but is not one of the inbounds anyone waits on.
+    fn take(&mut self, name: &str) -> Option<u16> {
+        let index = self.entries.iter().position(|(it, _)| it == name)?;
+        Some(self.entries.remove(index).1)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -158,6 +168,11 @@ pub struct RelayPlan {
     pub nodes: Vec<PlannedNode>,
     pub xray_config: Value,
     pub ports: PortMap,
+    /// Where mihomo listens for everything xray sends out; see [`EGRESS_TAG`].
+    ///
+    /// Kept out of `ports` on purpose: that map is what readiness waits on, and this port
+    /// belongs to mihomo, which starts after xray and would never be open in time.
+    pub egress_port: u16,
     /// What mihomo's stand-ins must present to reach the inbounds; see [`SocksAuth`].
     pub auth: SocksAuth,
 }
@@ -167,6 +182,18 @@ impl RelayPlan {
     /// natively rather than starting an xray with no inbounds.
     pub fn relays_anything(&self) -> bool {
         self.nodes.iter().any(PlannedNode::is_relayed)
+    }
+
+    /// Everything the running relay is holding, in the shape the next plan needs in order to
+    /// keep it there.
+    ///
+    /// The egress is in here for the same reason the inbounds are: a port that moved would
+    /// make the next plan a different plan, and a different plan replaces the running core —
+    /// dropping every live connection to serve a configuration that changed nothing else.
+    pub fn ports_in_use(&self) -> Vec<(String, u16)> {
+        let mut entries = self.ports.entries().to_vec();
+        entries.push((EGRESS_SLOT.to_owned(), self.egress_port));
+        entries
     }
 }
 
@@ -216,17 +243,22 @@ pub fn plan<P: PortProbe>(nodes: &NodeSet, probe: &P, options: &PlanOptions) -> 
             continue;
         }
 
-        match to_outbound(node) {
+        match to_outbound(node).map_err(|it| it.reason).and_then(dial_through_egress) {
             Ok(outbound) => {
                 eligible.push((node, outbound));
                 decided.push((node.name.clone(), None));
             }
-            Err(refused) => decided.push((node.name.clone(), Some(refused.reason))),
+            Err(reason) => decided.push((node.name.clone(), Some(reason))),
         }
     }
 
-    let names: Vec<String> = eligible.iter().map(|(node, _)| node.name.clone()).collect();
-    let ports = assign_ports(&names, probe, &options.ports_in_use)?;
+    // The egress takes a port from the same search, which is what keeps it as stable across
+    // regenerations as the inbounds are: a port that moved would change the plan, and a
+    // changed plan replaces the running core.
+    let mut names: Vec<String> = eligible.iter().map(|(node, _)| node.name.clone()).collect();
+    names.push(EGRESS_SLOT.to_owned());
+    let mut ports = assign_ports(&names, probe, &options.ports_in_use)?;
+    let egress_port = ports.take(EGRESS_SLOT).ok_or(PlanError::NoFreePort)?;
 
     let planned = decided
         .into_iter()
@@ -245,18 +277,52 @@ pub fn plan<P: PortProbe>(nodes: &NodeSet, probe: &P, options: &PlanOptions) -> 
         })
         .collect();
 
-    let xray_config = build_xray_config(&eligible, &ports, &options.auth);
+    let xray_config = build_xray_config(&eligible, &ports, &options.auth, egress_port);
     Ok(RelayPlan {
         nodes: planned,
         xray_config,
         ports,
+        egress_port,
         auth: options.auth.clone(),
     })
 }
 
 /// Assembles the `xray.json`: one socks inbound per relayed node, the matching outbound, and
 /// a 1:1 route between them.
-fn build_xray_config(eligible: &[(&Node, Value)], ports: &PortMap, auth: &SocksAuth) -> Value {
+/// Points one outbound's dialer at the egress.
+///
+/// An outbound has one dialer and xray refuses a config that names two — `proxySettings.tag`
+/// and `sockopt.dialerProxy` conflict by construction. So an outbound that already chains
+/// somewhere is left alone and its node stays native: relaying it would mean either losing
+/// the chain the subscription asked for or producing a config the core rejects outright, and
+/// a node dialled natively is neither.
+fn dial_through_egress(outbound: Value) -> Result<Value, String> {
+    let mut outbound = outbound;
+    let Some(map) = outbound.as_object_mut() else {
+        return Err("the outbound is not an object".to_owned());
+    };
+    if map.contains_key("proxySettings") {
+        return Err("the outbound already chains through another one".to_owned());
+    }
+
+    let stream = map
+        .entry("streamSettings")
+        .or_insert_with(|| Value::Object(Map::new()))
+        .as_object_mut()
+        .ok_or_else(|| "the outbound's streamSettings is not an object".to_owned())?;
+    let sockopt = stream
+        .entry("sockopt")
+        .or_insert_with(|| Value::Object(Map::new()))
+        .as_object_mut()
+        .ok_or_else(|| "the outbound's sockopt is not an object".to_owned())?;
+    if sockopt.contains_key("dialerProxy") {
+        return Err("the outbound already dials through another one".to_owned());
+    }
+    sockopt.insert("dialerProxy".to_owned(), Value::String(EGRESS_TAG.to_owned()));
+    Ok(outbound)
+}
+
+fn build_xray_config(eligible: &[(&Node, Value)], ports: &PortMap, auth: &SocksAuth, egress_port: u16) -> Value {
     let mut inbounds = Vec::with_capacity(eligible.len());
     let mut outbounds = Vec::with_capacity(eligible.len());
     let mut rules = Vec::with_capacity(eligible.len());
@@ -286,13 +352,29 @@ fn build_xray_config(eligible: &[(&Node, Value)], ports: &PortMap, auth: &SocksA
         rules.push(json!({ "type": "field", "inboundTag": [tag], "outboundTag": node.name }));
     }
 
+    // Everything the core dials leaves through here, which is a mihomo listener that answers
+    // before mihomo looks at its mode. See [`EGRESS_TAG`].
+    outbounds.push(json!({
+        "tag": EGRESS_TAG,
+        "protocol": "socks",
+        "settings": {
+            "servers": [{
+                "address": "127.0.0.1",
+                "port": egress_port,
+                "users": [{ "user": auth.user, "pass": auth.pass }]
+            }]
+        }
+    }));
+    // The resolver has to leave the same way. xray resolves node addresses itself, and a
+    // query sent past the egress would go out through the tunnel that depends on the node
+    // being resolved — which does not merely loop, it deadlocks.
+    rules.push(json!({ "type": "field", "inboundTag": [DNS_TAG], "outboundTag": EGRESS_TAG }));
+
     let mut root = Map::new();
     root.insert("log".to_owned(), json!({ "loglevel": "warning" }));
-    // xray resolves node addresses itself. Left to the system resolver the query would go out
-    // through the tunnel that depends on this node, which is a loop.
     root.insert(
         "dns".to_owned(),
-        json!({ "servers": ["1.1.1.1", "8.8.8.8"], "queryStrategy": "UseIP" }),
+        json!({ "servers": ["1.1.1.1", "8.8.8.8"], "queryStrategy": "UseIP", "tag": DNS_TAG }),
     );
     root.insert("inbounds".to_owned(), Value::Array(inbounds));
     root.insert("outbounds".to_owned(), Value::Array(outbounds));
@@ -306,7 +388,7 @@ fn build_xray_config(eligible: &[(&Node, Value)], ports: &PortMap, auth: &SocksA
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic, reason = "a failed assertion is a failed test")]
 mod tests {
-    use super::{Disposition, PlanOptions, PortProbe, SocksAuth, assign_ports, plan};
+    use super::{Disposition, EGRESS_TAG, PlanOptions, PortProbe, SocksAuth, assign_ports, plan};
     use crate::node::{Node, NodeSet, Protocol};
 
     struct AllFree;
@@ -448,8 +530,16 @@ mod tests {
 
         let config = &plan.xray_config;
         assert_eq!(config["inbounds"].as_array().unwrap().len(), 2);
-        assert_eq!(config["outbounds"].as_array().unwrap().len(), 2);
-        assert_eq!(config["routing"]["rules"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            config["outbounds"].as_array().unwrap().len(),
+            3,
+            "one per node, plus the egress they all share"
+        );
+        assert_eq!(
+            config["routing"]["rules"].as_array().unwrap().len(),
+            3,
+            "one per node, plus the one carrying the resolver out"
+        );
         assert_eq!(config["routing"]["domainStrategy"], "AsIs");
         assert_eq!(config["inbounds"][0]["listen"], "127.0.0.1");
         assert_eq!(config["inbounds"][0]["settings"]["udp"], true);
@@ -507,15 +597,72 @@ mod tests {
         assert!(!plan.relays_anything());
     }
 
+    /// The one thing that has to hold for every relayed node, because a node that dials past
+    /// the egress is a node whose traffic re-enters the tunnel it is supposed to be leaving.
     #[test]
-    fn the_loopback_rule_keeps_its_escaped_dot() {
+    fn every_relayed_outbound_dials_through_the_egress() {
+        let nodes = set_of(vec![vless("a", "a.example"), vless("b", "b.example")]);
+        let plan = plan(&nodes, &AllFree, &options()).unwrap();
+        let outbounds = plan.xray_config["outbounds"].as_array().unwrap();
+
+        let egress: Vec<_> = outbounds.iter().filter(|it| it["tag"] == EGRESS_TAG).collect();
+        assert_eq!(egress.len(), 1, "one egress, shared by every node");
+        assert_eq!(egress[0]["protocol"], "socks");
+        assert_eq!(egress[0]["settings"]["servers"][0]["address"], "127.0.0.1");
+        assert_eq!(egress[0]["settings"]["servers"][0]["port"], plan.egress_port);
         assert!(
-            super::LOOPBACK_RULE.contains(r"\."),
-            "the escape must survive into the emitted rule, or it matches any character"
+            egress[0]["settings"]["servers"][0]["users"][0]["user"].is_string(),
+            "an unauthenticated egress is a way out of the tunnel for anything on this machine"
         );
-        assert!(
-            super::LOOPBACK_RULE.contains("celestial-xray"),
-            "a bare `xray` would also match another client's core and divert its traffic"
-        );
+
+        for outbound in outbounds.iter().filter(|it| it["tag"] != EGRESS_TAG) {
+            assert_eq!(
+                outbound["streamSettings"]["sockopt"]["dialerProxy"], EGRESS_TAG,
+                "`{}` would dial past the egress",
+                outbound["tag"]
+            );
+        }
+    }
+
+    /// The resolver is the half that deadlocks rather than merely looping: reaching the node
+    /// needs its address, and resolving its address would go out through that same node.
+    #[test]
+    fn the_resolver_leaves_through_the_egress_too() {
+        let nodes = set_of(vec![vless("a", "a.example")]);
+        let plan = plan(&nodes, &AllFree, &options()).unwrap();
+        let dns_tag = plan.xray_config["dns"]["tag"].as_str().unwrap();
+        let routed = plan.xray_config["routing"]["rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|it| it["inboundTag"][0] == dns_tag && it["outboundTag"] == EGRESS_TAG);
+        assert!(routed, "the core's own resolver has to leave the same way");
+    }
+
+    /// The egress port shares the search but not the map: `ports` is what readiness waits on,
+    /// and this port belongs to mihomo, which is not up yet when that wait runs.
+    #[test]
+    fn the_egress_port_is_free_of_the_inbounds_and_absent_from_their_map() {
+        let nodes = set_of(vec![vless("a", "a.example"), vless("b", "b.example")]);
+        let plan = plan(&nodes, &AllFree, &options()).unwrap();
+        let inbound_ports: Vec<u16> = plan.ports.entries().iter().map(|(_, it)| *it).collect();
+        assert_eq!(inbound_ports.len(), 2, "the egress is not one of the inbounds");
+        assert!(!inbound_ports.contains(&plan.egress_port));
+    }
+
+    /// An outbound has one dialer, and xray refuses a config naming two. Relaying such a node
+    /// would either drop the chain the subscription asked for or produce a config the core
+    /// rejects outright — so it is left where it already works.
+    #[test]
+    fn an_outbound_that_already_chains_is_left_native() {
+        use super::dial_through_egress;
+        let chained = serde_json::json!({ "tag": "x", "proxySettings": { "tag": "entry" } });
+        assert!(dial_through_egress(chained).is_err());
+
+        let dialing = serde_json::json!({
+            "tag": "x",
+            "streamSettings": { "sockopt": { "dialerProxy": "fragment" } }
+        });
+        assert!(dial_through_egress(dialing).is_err());
     }
 }
