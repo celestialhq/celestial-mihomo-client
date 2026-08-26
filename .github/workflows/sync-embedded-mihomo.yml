@@ -101,7 +101,7 @@ jobs:
 
       - name: Install Android SDK
         if: steps.target.outputs.changed == 'true'
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Install Android NDK
         if: steps.target.outputs.changed == 'true'
