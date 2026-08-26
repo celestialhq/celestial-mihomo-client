@@ -4,6 +4,7 @@
 
 - **The relay works on Android.** The xray core is linked into the app the same way mihomo already is, and reads the same generated `xray.json` the desktop build writes — so the TLS fingerprint and the REALITY / Vision / XHTTP implementations come from xray on a phone exactly as they do on a desktop. The v4.0.0 note that called the relay desktop-only no longer holds: there is no second process to spawn on Android, which was a fact about how the core was shipped rather than about the platform.
 - **Shipped for arm64-v8a.** Every Android phone of the last several years is arm64; the core builds cleanly for the other ABIs but adds about 33 MB each to an already large universal APK. A device it is not shipped for loses the relay, not the app — the nodes are dialled natively, which is what mobile did before this existed, and the settings say so rather than showing a control that does nothing.
+- **Hysteria2 nodes go through the relay now.** They were held back on the grounds that xray's implementation was unproven; the core we ship carries them, and on a real subscription that was two nodes in eleven dialled natively for no reason the user could see. Nodes using salamander obfuscation stay native — xray has no counterpart for it, and relaying one with its obfuscation quietly gone is worse than not relaying it.
 
 ### Changed
 
@@ -12,6 +13,8 @@
 
 ### Fixed
 
+- **Turning on global mode killed the connection.** mihomo decides that mode before it reaches the rule engine, so the rule that kept the relay's own traffic out of the tunnel was never consulted: xray dialled its node, the tunnel caught it, and global mode sent it straight back to xray. Every connection became a loop. The relay's traffic now leaves through a dedicated mihomo listener that is answered before the mode is looked at, so it holds in every mode — and the core's own DNS goes the same way, which is the half that deadlocked rather than merely circling. Anyone who has tried global mode since 4.0.0 was hitting this.
+- A node whose certificate mihomo was told not to check was verified strictly through the relay. `skip-cert-verify` was being dropped for every protocol, so a node with a self-signed certificate worked natively and failed the moment it was relayed.
 - **The Android build carried a TLS vulnerability the desktop builds did not.** The embedded core is compiled from a pinned submodule, and the pin predated the fix — CVE-2026-56862 in the crypto/tls fork mihomo vendors, addressed upstream in v1.19.30. Desktop was never affected: it downloads whatever `releases/latest` offers at build time, so it picked the fix up on its own. That asymmetry is the whole reason the pin is now followed rather than remembered.
 - An xray core that fails to start on Android now releases what it managed to bring up. The core was built and partly started before the failure, nothing held a reference to it afterwards, and its inbound ports stayed taken — so the retry that follows a failed start could find its own ports occupied.
 - The set of Android ABIs the core ships for is decided in one place and the build enforces it. It had been written down three times and only one of them built anything, so adding an ABI would have shipped 31 MB of core that nothing linked against while the client still reported the relay unsupported — and nothing would have failed to say so.
