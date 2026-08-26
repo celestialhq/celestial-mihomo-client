@@ -44,6 +44,7 @@ pub fn to_outbound(node: &Node) -> Result<Value, ConversionRefused> {
         Protocol::Vmess => vmess_settings(node)?,
         Protocol::Trojan => trojan_settings(node)?,
         Protocol::Shadowsocks => shadowsocks_settings(node)?,
+        Protocol::Hysteria2 => hysteria2_settings(node),
         ref other => {
             return Err(ConversionRefused::new(format!("xray has no outbound for `{other}`")));
         }
@@ -51,7 +52,10 @@ pub fn to_outbound(node: &Node) -> Result<Value, ConversionRefused> {
 
     let mut outbound = Map::new();
     outbound.insert("tag".to_owned(), Value::String(node.name.clone()));
-    outbound.insert("protocol".to_owned(), Value::String(node.protocol.as_str().to_owned()));
+    outbound.insert(
+        "protocol".to_owned(),
+        Value::String(node.protocol.as_xray_protocol().to_owned()),
+    );
     outbound.insert("settings".to_owned(), settings);
     outbound.insert("streamSettings".to_owned(), stream_settings(node)?);
     Ok(Value::Object(outbound))
@@ -146,6 +150,13 @@ fn shadowsocks_settings(node: &Node) -> Result<Value, ConversionRefused> {
 
 /// Transport and TLS. Anything unrecognised refuses rather than falling back to plain TCP.
 fn stream_settings(node: &Node) -> Result<Value, ConversionRefused> {
+    // Nothing below applies to hysteria2: it brings its own QUIC transport rather than
+    // riding one, its credential travels in the stream settings rather than in `settings`,
+    // and TLS is inherent rather than switched on by `security`.
+    if node.protocol == Protocol::Hysteria2 {
+        return hysteria2_stream(node);
+    }
+
     let network = node.param("type").unwrap_or("tcp");
     let mut stream = Map::new();
     stream.insert(
@@ -268,8 +279,61 @@ fn stream_settings(node: &Node) -> Result<Value, ConversionRefused> {
     Ok(Value::Object(stream))
 }
 
+/// The endpoint half of a hysteria2 node.
+///
+/// xray splits what mihomo keeps together: the address and port live here, the credential
+/// lives in the stream settings. `version` is mandatory and must be 2 — the core refuses
+/// anything else, which is why hysteria v1 is not relayable at all.
+fn hysteria2_settings(node: &Node) -> Value {
+    json!({ "version": 2, "address": node.server, "port": node.port })
+}
+
+/// The transport half of a hysteria2 node.
+fn hysteria2_stream(node: &Node) -> Result<Value, ConversionRefused> {
+    let auth = node
+        .creds
+        .password
+        .as_deref()
+        .ok_or_else(|| ConversionRefused::new("a hysteria2 node needs a password"))?;
+
+    let mut hysteria = Map::new();
+    hysteria.insert("version".to_owned(), json!(2));
+    hysteria.insert("auth".to_owned(), Value::String(auth.to_owned()));
+    for (from, to) in [("up", "up"), ("down", "down")] {
+        if let Some(value) = node.param(from) {
+            hysteria.insert(to.to_owned(), Value::String(bandwidth(value)));
+        }
+    }
+
+    let mut stream = Map::new();
+    stream.insert("network".to_owned(), Value::String("hysteria".to_owned()));
+    stream.insert("hysteriaSettings".to_owned(), Value::Object(hysteria));
+    stream.insert("security".to_owned(), Value::String("tls".to_owned()));
+    stream.insert("tlsSettings".to_owned(), tls_settings(node));
+    Ok(Value::Object(stream))
+}
+
+/// Spells out the unit mihomo leaves implicit.
+///
+/// Both sides read "number then unit", but a bare number means megabits to mihomo and is
+/// read off the front by xray with whatever unit follows — which is none. Naming the unit is
+/// the only way the two agree about the same string.
+fn bandwidth(value: &str) -> String {
+    let trimmed = value.trim();
+    if !trimmed.is_empty() && trimmed.bytes().all(|it| it.is_ascii_digit()) {
+        return format!("{trimmed} mbps");
+    }
+    trimmed.to_owned()
+}
+
 fn tls_settings(node: &Node) -> Value {
     let mut tls = Map::new();
+    // Carried rather than dropped, and it is not a preference we are honouring: a node whose
+    // certificate mihomo was told not to check is usually one with a self-signed
+    // certificate, and verifying it strictly here would break a node that works natively.
+    if node.param("skip-cert-verify") == Some("true") {
+        tls.insert("allowInsecure".to_owned(), Value::Bool(true));
+    }
     if let Some(sni) = node.param("sni") {
         tls.insert("serverName".to_owned(), Value::String(sni.to_owned()));
     }
@@ -555,11 +619,75 @@ proxies:
         }
     }
 
+    /// The shape xray wants is not the shape mihomo writes: the endpoint goes in `settings`
+    /// while the credential goes in the stream, and both the transport and the protocol are
+    /// named `hysteria` with the version carried in a field.
+    #[test]
+    fn a_hysteria2_node_becomes_an_xray_hysteria_outbound() {
+        let mut node = Node::new("hy", Protocol::Hysteria2, "a.example", 22443);
+        node.creds.password = Some("secret".to_owned());
+        node.set_param("sni", "a.example");
+        node.set_param("alpn", "h3");
+
+        let outbound = to_outbound(&node).unwrap();
+        assert_eq!(
+            outbound["protocol"], "hysteria",
+            "mihomo's spelling would be an unknown protocol to xray"
+        );
+        assert_eq!(outbound["settings"]["version"], 2);
+        assert_eq!(outbound["settings"]["address"], "a.example");
+        assert_eq!(outbound["settings"]["port"], 22443);
+
+        let stream = &outbound["streamSettings"];
+        assert_eq!(stream["network"], "hysteria");
+        assert_eq!(stream["hysteriaSettings"]["version"], 2);
+        assert_eq!(stream["hysteriaSettings"]["auth"], "secret");
+        assert_eq!(stream["security"], "tls", "hysteria2 is always over TLS");
+        assert_eq!(stream["tlsSettings"]["serverName"], "a.example");
+        assert_eq!(stream["tlsSettings"]["alpn"][0], "h3");
+    }
+
+    /// A bare number means megabits to mihomo. xray reads the unit off the end of the string
+    /// and finds none, so it has to be spelled out or the two disagree about the same node.
+    #[test]
+    fn a_bandwidth_without_a_unit_is_given_the_one_mihomo_meant() {
+        let mut node = Node::new("hy", Protocol::Hysteria2, "a.example", 22443);
+        node.creds.password = Some("secret".to_owned());
+        node.set_param("up", "100");
+        node.set_param("down", "50 mbps");
+
+        let outbound = to_outbound(&node).unwrap();
+        let hysteria = &outbound["streamSettings"]["hysteriaSettings"];
+        assert_eq!(hysteria["up"], "100 mbps");
+        assert_eq!(hysteria["down"], "50 mbps", "a stated unit is left alone");
+    }
+
+    /// Without a password there is nothing to authenticate with, and an outbound that cannot
+    /// connect is worse than a node left native.
+    #[test]
+    fn a_hysteria2_node_without_a_password_is_refused() {
+        let node = Node::new("hy", Protocol::Hysteria2, "a.example", 22443);
+        assert!(to_outbound(&node).is_err());
+    }
+
+    /// mihomo was told not to check the certificate, which usually means the node has a
+    /// self-signed one. Verifying it strictly here would break a node that works natively.
+    #[test]
+    fn skipping_certificate_checks_is_carried_across() {
+        let mut node = Node::new("n", Protocol::Vless, "a.example", 443);
+        node.creds.uuid = Some("u".to_owned());
+        node.set_param("security", "tls");
+        node.set_param("skip-cert-verify", "true");
+
+        let outbound = to_outbound(&node).unwrap();
+        assert_eq!(outbound["streamSettings"]["tlsSettings"]["allowInsecure"], true);
+    }
+
     #[test]
     fn a_protocol_xray_cannot_speak_refuses() {
-        let node = Node::new("hy", Protocol::Hysteria2, "a.example", 443);
+        let node = Node::new("t", Protocol::Tuic, "a.example", 443);
         let refused = to_outbound(&node).unwrap_err();
-        assert!(refused.reason.contains("hysteria2"), "{}", refused.reason);
+        assert!(refused.reason.contains("tuic"), "{}", refused.reason);
     }
 
     #[test]

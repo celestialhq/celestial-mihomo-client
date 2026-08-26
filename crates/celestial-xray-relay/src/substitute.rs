@@ -166,11 +166,11 @@ mod tests {
 proxies:
   - {name: DNS-OUT, type: dns}
   - {name: "🇫🇮 finland", type: vless, server: a.example, port: 443, uuid: u, tls: true, servername: a.example}
-  - {name: "🇫🇮 hy2", type: hysteria2, server: a.example, port: 22443, password: p}
+  - {name: "🇫🇮 tuic", type: tuic, server: a.example, port: 22443, password: p}
 proxy-groups:
   - name: "💭 CELESTIAL VPN"
     type: select
-    proxies: ["🇫🇮 finland", "🇫🇮 hy2"]
+    proxies: ["🇫🇮 finland", "🇫🇮 tuic"]
 rules:
   - MATCH,💭 CELESTIAL VPN
 "#;
@@ -214,7 +214,7 @@ rules:
         let yaml = r#"
 proxies:
   - &node {name: "🇫🇮 finland", type: vless, server: a.example, port: 443, uuid: u, tls: true, servername: a.example}
-  - &hy {name: "🇫🇮 hy2", type: hysteria2, server: a.example, port: 22443, password: p}
+  - &hy {name: "🇫🇮 tuic", type: tuic, server: a.example, port: 22443, password: p}
 proxy-providers:
   main-provider:
     type: inline
@@ -256,7 +256,7 @@ rules:
             payload[0]["name"], "🇫🇮 finland",
             "the name is what the group filters on"
         );
-        assert_eq!(payload[1]["type"], "hysteria2", "and an unrelayable one still is not");
+        assert_eq!(payload[1]["type"], "tuic", "and an unrelayable one still is not");
     }
 
     /// One node, however many places it is listed in.
@@ -350,7 +350,7 @@ proxies:
 
         let after = config["proxies"].as_sequence().unwrap();
         assert_eq!(after[0], before[0], "the DNS entry is mihomo's own routing");
-        assert_eq!(after[2], before[2], "hysteria2 keeps working natively");
+        assert_eq!(after[2], before[2], "tuic keeps working natively");
     }
 
     #[test]

@@ -298,9 +298,9 @@ rules:
         let yaml = r#"
 proxies:
   - {name: DNS-OUT, type: dns}
-  - {name: "hy2", type: hysteria2, server: a.example, port: 22443, password: p}
+  - {name: "tuic", type: tuic, server: a.example, port: 22443, password: p}
 rules:
-  - "MATCH,hy2"
+  - "MATCH,tuic"
 "#;
         let untouched = config(yaml);
         let mut config = config(yaml);

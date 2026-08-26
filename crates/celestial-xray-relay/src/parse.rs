@@ -390,6 +390,9 @@ pub fn node_from_mihomo_proxy(proxy: &serde_yaml_ng::Value) -> Result<Node, Stri
     if let Some(value) = get_str("client-fingerprint") {
         node.set_param("fp", value);
     }
+    if proxy.get("skip-cert-verify").and_then(serde_yaml_ng::Value::as_bool) == Some(true) {
+        node.set_param("skip-cert-verify", "true");
+    }
     if let Some(value) = get_str("flow") {
         node.set_param("flow", value);
     }
@@ -409,6 +412,10 @@ pub fn node_from_mihomo_proxy(proxy: &serde_yaml_ng::Value) -> Result<Node, Stri
         let joined: Vec<&str> = alpn.iter().filter_map(|it| it.as_str()).collect();
         node.set_param("alpn", joined.join(","));
     }
+    if node.protocol == Protocol::Hysteria2 {
+        read_hysteria2_options(&mut node, proxy);
+    }
+
     // Two of mihomo's network names do not mean in xray what they say. `http` is TCP with an
     // HTTP header disguise, not HTTP/2; and httpupgrade has no name of its own, arriving as
     // `ws` with a marker inside `ws-opts`. Translate both back before the converter sees them.
@@ -425,6 +432,16 @@ pub fn node_from_mihomo_proxy(proxy: &serde_yaml_ng::Value) -> Result<Node, Stri
     };
     node.set_param("type", network);
 
+    read_transport_options(&mut node, proxy);
+    Ok(node)
+}
+
+/// The per-transport option blocks, each written in mihomo's own vocabulary.
+///
+/// Kept apart from the node's own fields because they are the part that grows: every
+/// transport mihomo gains arrives as another `*-opts` mapping, and the mapping is the only
+/// place a masking option can hide.
+fn read_transport_options(node: &mut Node, proxy: &serde_yaml_ng::Value) {
     if let Some(reality) = proxy.get("reality-opts") {
         node.set_param("security", "reality");
         if let Some(value) = reality.get("public-key").and_then(|it| it.as_str()) {
@@ -471,8 +488,49 @@ pub fn node_from_mihomo_proxy(proxy: &serde_yaml_ng::Value) -> Result<Node, Stri
             node.set_param("__unmapped", unknown.join(","));
         }
     }
+}
 
-    Ok(node)
+/// hysteria2 keeps its options at the top level rather than under a transport block, and the
+/// ones with no xray counterpart are the ones that matter most — salamander obfuscation
+/// above all. So the understood keys are listed and anything else refuses the node, which
+/// means a mihomo release that adds an option leaves it native rather than relaying it with
+/// that option quietly gone.
+fn read_hysteria2_options(node: &mut Node, proxy: &serde_yaml_ng::Value) {
+    const UNDERSTOOD: &[&str] = &[
+        "name",
+        "type",
+        "server",
+        "port",
+        "password",
+        "sni",
+        "alpn",
+        "client-fingerprint",
+        "skip-cert-verify",
+        "up",
+        "down",
+        "udp",
+    ];
+    let unknown: Vec<String> = proxy
+        .as_mapping()
+        .into_iter()
+        .flat_map(serde_yaml_ng::Mapping::keys)
+        .filter_map(|it| it.as_str())
+        .filter(|it| !UNDERSTOOD.contains(it))
+        .map(ToOwned::to_owned)
+        .collect();
+    if !unknown.is_empty() {
+        node.set_param("__unmapped", unknown.join(","));
+    }
+    // Either side may write these as a bare number or as a number with a unit.
+    for key in ["up", "down"] {
+        if let Some(value) = proxy.get(key) {
+            if let Some(text) = value.as_str() {
+                node.set_param(key, text);
+            } else if let Some(number) = value.as_u64() {
+                node.set_param(key, number.to_string());
+            }
+        }
+    }
 }
 
 /// mihomo's `xhttp-opts` are xray's `xhttpSettings.extra` rendered in kebab-case.

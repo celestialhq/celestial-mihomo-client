@@ -39,18 +39,31 @@ impl Protocol {
 
     /// Whether xray can carry this protocol at all.
     ///
-    /// Hysteria and Hysteria2 exist in xray but the implementation is young and unproven,
-    /// so they are treated as unavailable rather than relayed onto an untested path. The
-    /// rest are protocols xray has no outbound for.
+    /// Hysteria2 is what xray calls `hysteria` with `version: 2`; the core rejects any other
+    /// version outright, so v1 has nowhere to go however it is spelled. The rest are
+    /// protocols xray has no outbound for.
     pub const fn relayable(&self) -> bool {
         match self {
-            Self::Vless | Self::Vmess | Self::Trojan | Self::Shadowsocks => true,
+            Self::Vless | Self::Vmess | Self::Trojan | Self::Shadowsocks | Self::Hysteria2 => true,
             // Unknown protocols land here too: there is no converter for them, so there is
             // nothing to relay onto even when xray might in principle speak them.
-            Self::Hysteria | Self::Hysteria2 | Self::Tuic | Self::Other(_) => false,
+            Self::Hysteria | Self::Tuic | Self::Other(_) => false,
         }
     }
 
+    /// The name xray's `protocol` field wants, which is not always the name mihomo uses.
+    ///
+    /// hysteria2 is the whole reason this is separate: xray calls it `hysteria` and decides
+    /// the version from a field, so emitting mihomo's spelling produces an outbound the core
+    /// rejects as an unknown protocol.
+    pub fn as_xray_protocol(&self) -> &str {
+        match self {
+            Self::Hysteria2 => "hysteria",
+            other => other.as_str(),
+        }
+    }
+
+    /// The name mihomo uses, which is also what the user is shown.
     pub fn as_str(&self) -> &str {
         match self {
             Self::Vless => "vless",
@@ -302,8 +315,10 @@ mod tests {
         assert!(Protocol::Vmess.relayable());
         assert!(Protocol::Trojan.relayable());
         assert!(Protocol::Shadowsocks.relayable());
-        // Present in xray but unproven, so deliberately excluded.
-        assert!(!Protocol::Hysteria2.relayable());
+        // What xray calls `hysteria`, and the only version it accepts.
+        assert!(Protocol::Hysteria2.relayable());
+        // v1 has no home: xray refuses any version but 2.
+        assert!(!Protocol::Hysteria.relayable());
         assert!(!Protocol::Tuic.relayable());
         assert!(!Protocol::parse("ssh").relayable());
     }

@@ -173,8 +173,6 @@ impl RelayPlan {
 /// Inputs that are settings rather than data.
 #[derive(Debug, Clone)]
 pub struct PlanOptions {
-    /// Substring matches against a node's name that keep it native. Defaults to `hysteria`.
-    pub name_exclusions: Vec<String>,
     /// The mapping a running relay is already serving; see [`assign_ports`]. Empty when
     /// nothing is running, which is the only time ports are free to move.
     pub ports_in_use: Vec<(String, u16)>,
@@ -186,9 +184,8 @@ impl PlanOptions {
     /// There is deliberately no `Default`: a relay cannot be planned without deciding what
     /// its inbounds accept, and a default would have to invent a credential — which is
     /// exactly how an open proxy ships by accident.
-    pub fn new(auth: SocksAuth) -> Self {
+    pub const fn new(auth: SocksAuth) -> Self {
         Self {
-            name_exclusions: vec!["hysteria".to_owned()],
             ports_in_use: Vec::new(),
             auth,
         }
@@ -197,10 +194,10 @@ impl PlanOptions {
 
 /// Works out the disposition of every node and builds the matching `xray.json`.
 ///
-/// Eligibility is all three of: a protocol xray carries, a name not excluded, and an outbound
-/// that actually exists — taken from a template or built by the converter. The third is
-/// checked last and decides: a supported protocol still stays native when no outbound could
-/// be produced for it.
+/// Eligibility is both of: a protocol xray carries, and an outbound that actually exists —
+/// taken from a template or built by the converter. The second is checked last and decides:
+/// a supported protocol still stays native when no outbound could be produced for it, which
+/// is how a node whose masking options have no xray equivalent ends up left alone.
 ///
 /// Nothing here can be overruled from outside. A node stays native because xray cannot carry
 /// it, or because no outbound could be built for it — reasons the caller cannot change by
@@ -215,19 +212,6 @@ pub fn plan<P: PortProbe>(nodes: &NodeSet, probe: &P, options: &PlanOptions) -> 
             decided.push((
                 node.name.clone(),
                 Some(format!("xray cannot carry `{}`", node.protocol)),
-            ));
-            continue;
-        }
-
-        let lowered = node.name.to_lowercase();
-        if let Some(hit) = options
-            .name_exclusions
-            .iter()
-            .find(|it| lowered.contains(&it.to_lowercase()))
-        {
-            decided.push((
-                node.name.clone(),
-                Some(format!("the name matches the exclusion `{hit}`")),
             ));
             continue;
         }
@@ -521,17 +505,6 @@ mod tests {
         };
         assert!(reason.contains("uuid"), "{reason}");
         assert!(!plan.relays_anything());
-    }
-
-    #[test]
-    fn the_name_exclusion_list_keeps_a_node_native() {
-        let nodes = set_of(vec![
-            vless("🇫🇮 Hysteria fast", "a.example"),
-            vless("plain", "b.example"),
-        ]);
-        let plan = plan(&nodes, &AllFree, &options()).unwrap();
-        assert!(matches!(plan.nodes[0].disposition, Disposition::Native { .. }));
-        assert!(plan.nodes[1].is_relayed());
     }
 
     #[test]
