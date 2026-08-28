@@ -9,8 +9,8 @@
 //! the user goes out natively with a note in the log, never that they go nowhere.
 
 use celestial_xray_relay::{
-    Disposition, NodeSet, PlanOptions, PortProbe, RelayPlan, SocksAuth, Substitution, apply_relay,
-    node_set_from_body, pair_with_template, parse_mihomo_proxies, plan,
+    Disposition, NodeSet, PlanOptions, PortProbe, RelayPlan, SocksAuth, Substitution, apply_relay, node_set_from_body,
+    pair_with_template, parse_mihomo_proxies, plan,
 };
 use clash_verge_logging::{Type, logging};
 use serde_yaml_ng::{Mapping, Value};

@@ -392,7 +392,9 @@ proxies:
             "hysteria and every QUIC transport dial UDP through here"
         );
         assert!(
-            listener["users"][0]["password"].as_str().is_some_and(|it| !it.is_empty()),
+            listener["users"][0]["password"]
+                .as_str()
+                .is_some_and(|it| !it.is_empty()),
             "an open listener here is a way out of the tunnel, not merely into a proxy"
         );
 
