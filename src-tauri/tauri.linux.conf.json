@@ -28,7 +28,8 @@
       "./sidecar/celestial-service-install",
       "./sidecar/celestial-service-uninstall",
       "./sidecar/celestial-mihomo",
-      "./sidecar/celestial-mihomo-alpha"
+      "./sidecar/celestial-mihomo-alpha",
+      "./sidecar/celestial-xray"
     ]
   }
 }

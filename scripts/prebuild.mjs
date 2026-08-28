@@ -313,6 +313,55 @@ function xrayCore() {
   }
 }
 
+/// Fails the build if a platform config drops a sidecar the base config declares.
+///
+/// Tauri's per-platform config files *replace* arrays rather than merging them, so a
+/// platform that overrides `externalBin` to add its own binaries silently takes ownership
+/// of the whole list — and anything added to the base list afterwards never reaches it.
+///
+/// That is not hypothetical. `tauri.linux.conf.json` overrode the list to add the service
+/// binaries, `celestial-xray` was added to the base list later, and Linux shipped without
+/// a relay core for two releases: the app validated every generated config by running a
+/// binary that was not in the package, so adding or refreshing a subscription failed with
+/// nothing but "No such file or directory".
+async function checkPlatformSidecarsAgree() {
+  const appDir = path.join(cwd, 'src-tauri')
+  const base = path.join(appDir, 'tauri.conf.json')
+  const declared = JSON.parse(await fsp.readFile(base, 'utf8'))
+  const wanted = (declared.bundle?.externalBin ?? []).map((it) =>
+    it.replace(/^\.\//, ''),
+  )
+
+  for (const file of [
+    'tauri.linux.conf.json',
+    'tauri.macos.conf.json',
+    'tauri.windows.conf.json',
+  ]) {
+    const full = path.join(appDir, file)
+    let config
+    try {
+      config = JSON.parse(await fsp.readFile(full, 'utf8'))
+    } catch {
+      continue
+    }
+    const override = config.bundle?.externalBin
+    if (!override) continue
+
+    const have = new Set(override.map((it) => it.replace(/^\.\//, '')))
+    const missing = wanted.filter((it) => !have.has(it))
+    if (missing.length > 0) {
+      throw new Error(
+        `${file} overrides externalBin and drops ${missing.join(', ')}. ` +
+          'A platform override replaces the base list rather than extending it, so every ' +
+          'entry in tauri.conf.json has to be repeated there. Without it the binary is ' +
+          'simply absent from the package for that platform, and the first thing to ' +
+          'notice it is a spawn failing at run time.',
+      )
+    }
+    log_success(`${file} carries every sidecar the base config declares`)
+  }
+}
+
 /// Fails the build if the downloaded xray renames the XHTTP masking fields.
 ///
 /// `crates/celestial-xray-relay` converts mihomo's `xhttp-opts` onto these names, and xray
@@ -910,6 +959,7 @@ const tasks = [
         .then(() => checkXrayXhttpFieldNames()),
     retry: 5,
   },
+  { name: 'sidecar-manifests', func: checkPlatformSidecarsAgree, retry: 1 },
   { name: 'plugin', func: resolvePlugin, retry: 5, winOnly: true },
   { name: 'service', func: resolveServiceBundle, retry: 5 },
   { name: 'mmdb', func: resolveMmdb, retry: 5 },
