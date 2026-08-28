@@ -8,8 +8,8 @@ use crate::{
     },
 };
 use anyhow::{Result, anyhow};
+use celestial_logging::{Type, logging};
 use chrono::Utc;
-use clash_verge_logging::{Type, logging};
 use reqwest_dav::list_cmd::ListFile;
 use serde::Serialize;
 use smartstring::alias::String;

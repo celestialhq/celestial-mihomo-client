@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use clash_verge_logging::{Type, logging};
-use tokio::signal::windows;
+use celestial_logging::{Type, logging};
+use tokio::signal::unix::{SignalKind, signal};
 
 use crate::RUNTIME;
 
@@ -14,34 +14,24 @@ where
 {
     if let Some(Some(rt)) = RUNTIME.get() {
         rt.spawn(async move {
-            let mut ctrl_c = match windows::ctrl_c() {
+            let mut sigterm = match signal(SignalKind::terminate()) {
                 Ok(s) => s,
                 Err(e) => {
-                    logging!(error, Type::SystemSignal, "Failed to register Ctrl+C: {}", e);
+                    logging!(error, Type::SystemSignal, "Failed to register SIGTERM: {}", e);
                     return;
                 }
             };
-
-            let mut ctrl_close = match windows::ctrl_close() {
+            let mut sigint = match signal(SignalKind::interrupt()) {
                 Ok(s) => s,
                 Err(e) => {
-                    logging!(error, Type::SystemSignal, "Failed to register Ctrl+Close: {}", e);
+                    logging!(error, Type::SystemSignal, "Failed to register SIGINT: {}", e);
                     return;
                 }
             };
-
-            let mut ctrl_shutdown = match windows::ctrl_shutdown() {
+            let mut sighup = match signal(SignalKind::hangup()) {
                 Ok(s) => s,
                 Err(e) => {
-                    logging!(error, Type::SystemSignal, "Failed to register Ctrl+Shutdown: {}", e);
-                    return;
-                }
-            };
-
-            let mut ctrl_logoff = match windows::ctrl_logoff() {
-                Ok(s) => s,
-                Err(e) => {
-                    logging!(error, Type::SystemSignal, "Failed to register Ctrl+Logoff: {}", e);
+                    logging!(error, Type::SystemSignal, "Failed to register SIGHUP: {}", e);
                     return;
                 }
             };
@@ -49,17 +39,17 @@ where
             loop {
                 let signal_name;
                 tokio::select! {
-                    _ = ctrl_c.recv() => {
-                        signal_name = "Ctrl+C";
+                    _ = sigterm.recv() => {
+                        signal_name = "SIGTERM";
                     }
-                    _ = ctrl_close.recv() => {
-                        signal_name = "Ctrl+Close";
+                    _ = sigint.recv() => {
+                        signal_name = "SIGINT";
                     }
-                    _ = ctrl_shutdown.recv() => {
-                        signal_name = "Ctrl+Shutdown";
+                    _ = sighup.recv() => {
+                        signal_name = "SIGHUP";
                     }
-                    _ = ctrl_logoff.recv() => {
-                        signal_name = "Ctrl+Logoff";
+                    else => {
+                        break;
                     }
                 }
 
@@ -74,7 +64,7 @@ where
                 }
                 IS_CLEANING_UP.store(true, Ordering::SeqCst);
 
-                logging!(info, Type::SystemSignal, "Caught Windows signal: {}", signal_name);
+                logging!(info, Type::SystemSignal, "Caught signal {}", signal_name);
 
                 f().await;
             }

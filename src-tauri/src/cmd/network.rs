@@ -2,12 +2,12 @@ use super::CmdResult;
 use crate::cmd::StringifyErr as _;
 use crate::core::sysopt::Sysopt;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use gethostname::gethostname;
 use network_interface::NetworkInterface;
 use serde_yaml_ng::Mapping;
 use std::net::TcpListener;
-use tauri_plugin_clash_verge_sysinfo;
+use tauri_plugin_celestial_sysinfo;
 
 /// get the system proxy — not a concept on mobile, only VPN/TUN mode exists there.
 // `return` is needed to split the desktop path from the cfg'd-out mobile block;
@@ -107,7 +107,7 @@ pub fn get_system_hostname() -> String {
 /// 获取网络接口列表
 #[tauri::command]
 pub fn get_network_interfaces() -> Vec<String> {
-    tauri_plugin_clash_verge_sysinfo::list_network_interfaces()
+    tauri_plugin_celestial_sysinfo::list_network_interfaces()
 }
 
 /// 获取网络接口详细信息

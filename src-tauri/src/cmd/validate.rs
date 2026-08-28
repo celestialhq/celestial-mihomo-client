@@ -3,7 +3,7 @@ use crate::core::{
     handle,
     validate::{CoreConfigValidator, ValidationErrorKind, ValidationOutcome},
 };
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use smartstring::alias::String;
 
 /// 通知的目标语境。同一种错误在运行时配置、Merge 文件和脚本里

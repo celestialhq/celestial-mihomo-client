@@ -13,8 +13,8 @@
 use super::CoreManager;
 use crate::{config::Config, constants::files, core::handle, process::AsyncHandler, utils::dirs};
 use anyhow::{Result, bail};
+use celestial_logging::{Type, logging};
 use celestial_xray_relay::RelayPlan;
-use clash_verge_logging::{Type, logging};
 use std::{
     net::Ipv4Addr,
     sync::{Arc, atomic::Ordering},

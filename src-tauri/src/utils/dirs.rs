@@ -2,7 +2,7 @@ use crate::core::{CoreManager, handle, manager::RunningMode};
 use anyhow::Result;
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use once_cell::sync::OnceCell;
 use sha2::{Digest as _, Sha256};
 #[cfg(unix)]
@@ -175,7 +175,7 @@ pub fn subscription_hwid() -> Result<&'static str> {
         .get_or_try_init(|| {
             let app_dir = app_home_dir()?;
             let hwid_path = app_dir.join(".hwid");
-            let components = tauri_plugin_clash_verge_sysinfo::hardware_fingerprint_components();
+            let components = tauri_plugin_celestial_sysinfo::hardware_fingerprint_components();
             let hwid = hardware_hwid(&components)?;
 
             fs::create_dir_all(&app_dir).map_err(|e| anyhow::anyhow!("Failed to create app data directory: {e}"))?;

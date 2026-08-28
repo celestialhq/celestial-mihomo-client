@@ -10,7 +10,7 @@ use crate::{
         validate::{CoreConfigValidator, ValidationOutcome},
     },
 };
-use clash_verge_logging::{Type, logging, logging_error};
+use celestial_logging::{Type, logging, logging_error};
 use compact_str::CompactString;
 use serde_yaml_ng::Mapping;
 use smartstring::alias::String;

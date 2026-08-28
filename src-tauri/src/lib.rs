@@ -27,7 +27,7 @@ use crate::{
     utils::{resolve, server},
 };
 use anyhow::Result;
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use once_cell::sync::OnceCell;
 use tauri::{AppHandle, Manager as _};
 #[cfg(target_os = "macos")]
@@ -53,7 +53,7 @@ mod app_init {
     pub fn setup_plugins(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
         #[allow(unused_mut)]
         let mut builder = builder
-            .plugin(tauri_plugin_clash_verge_sysinfo::init())
+            .plugin(tauri_plugin_celestial_sysinfo::init())
             .plugin(tauri_plugin_clipboard_manager::init())
             .plugin(tauri_plugin_process::init())
             .plugin(tauri_plugin_fs::init())
@@ -205,10 +205,10 @@ mod app_init {
 
     pub fn generate_handlers() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static {
         tauri::generate_handler![
-            tauri_plugin_clash_verge_sysinfo::commands::get_system_info,
-            tauri_plugin_clash_verge_sysinfo::commands::get_app_uptime,
-            tauri_plugin_clash_verge_sysinfo::commands::app_is_admin,
-            tauri_plugin_clash_verge_sysinfo::commands::export_diagnostic_info,
+            tauri_plugin_celestial_sysinfo::commands::get_system_info,
+            tauri_plugin_celestial_sysinfo::commands::get_app_uptime,
+            tauri_plugin_celestial_sysinfo::commands::app_is_admin,
+            tauri_plugin_celestial_sysinfo::commands::export_diagnostic_info,
             cmd::probe_listener,
             cmd::save_proxy_ports,
             cmd::get_sys_proxy,
@@ -396,7 +396,7 @@ pub fn run() {
             core::{self, handle, hotkey},
             process::AsyncHandler,
         };
-        use clash_verge_logging::{Type, logging};
+        use celestial_logging::{Type, logging};
         use tauri::AppHandle;
         #[cfg(target_os = "macos")]
         use tauri::Manager as _;

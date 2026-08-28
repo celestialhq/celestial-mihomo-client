@@ -1167,15 +1167,15 @@ dependencies = [
  "bitflags 2.13.1",
  "boa_engine",
  "bytes",
+ "celestial-draft",
+ "celestial-i18n",
+ "celestial-limiter",
+ "celestial-logging",
+ "celestial-signal",
  "celestial-xray-relay",
  "celestial_logger",
  "celestial_service_ipc",
  "chrono",
- "clash-verge-draft",
- "clash-verge-i18n",
- "clash-verge-limiter",
- "clash-verge-logging",
- "clash-verge-signal",
  "compact_str 0.9.1",
  "console-subscriber",
  "criterion",
@@ -1215,8 +1215,8 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-autostart",
  "tauri-plugin-barcode-scanner",
+ "tauri-plugin-celestial-sysinfo",
  "tauri-plugin-celestial-vpn",
- "tauri-plugin-clash-verge-sysinfo",
  "tauri-plugin-clipboard-manager",
  "tauri-plugin-deep-link",
  "tauri-plugin-devtools",
@@ -1239,6 +1239,47 @@ dependencies = [
  "windows-sys 0.61.2",
  "winreg 0.56.0",
  "zip 8.6.0",
+]
+
+[[package]]
+name = "celestial-draft"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "criterion",
+ "parking_lot",
+ "tokio",
+]
+
+[[package]]
+name = "celestial-i18n"
+version = "0.1.0"
+dependencies = [
+ "rust-i18n",
+ "sys-locale",
+]
+
+[[package]]
+name = "celestial-limiter"
+version = "0.1.0"
+
+[[package]]
+name = "celestial-logging"
+version = "0.1.0"
+dependencies = [
+ "compact_str 0.9.1",
+ "flexi_logger",
+ "log",
+ "tokio",
+]
+
+[[package]]
+name = "celestial-signal"
+version = "0.1.0"
+dependencies = [
+ "celestial-logging",
+ "log",
+ "tokio",
 ]
 
 [[package]]
@@ -1425,47 +1466,6 @@ name = "clap_lex"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
-
-[[package]]
-name = "clash-verge-draft"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "criterion",
- "parking_lot",
- "tokio",
-]
-
-[[package]]
-name = "clash-verge-i18n"
-version = "0.1.0"
-dependencies = [
- "rust-i18n",
- "sys-locale",
-]
-
-[[package]]
-name = "clash-verge-limiter"
-version = "0.1.0"
-
-[[package]]
-name = "clash-verge-logging"
-version = "0.1.0"
-dependencies = [
- "compact_str 0.9.1",
- "flexi_logger",
- "log",
- "tokio",
-]
-
-[[package]]
-name = "clash-verge-signal"
-version = "0.1.0"
-dependencies = [
- "clash-verge-logging",
- "log",
- "tokio",
-]
 
 [[package]]
 name = "clipboard-win"
@@ -7807,18 +7807,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tauri-plugin-celestial-vpn"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "tauri-plugin-clash-verge-sysinfo"
+name = "tauri-plugin-celestial-sysinfo"
 version = "0.1.0"
 dependencies = [
  "deelevate",
@@ -7828,6 +7817,17 @@ dependencies = [
  "tauri",
  "tauri-plugin-clipboard-manager",
  "winreg 0.56.0",
+]
+
+[[package]]
+name = "tauri-plugin-celestial-vpn"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

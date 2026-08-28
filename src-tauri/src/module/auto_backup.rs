@@ -5,8 +5,8 @@ use crate::{
     utils::dirs::local_backup_dir,
 };
 use anyhow::Result;
+use celestial_logging::{Type, logging};
 use chrono::Local;
-use clash_verge_logging::{Type, logging};
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 use std::{

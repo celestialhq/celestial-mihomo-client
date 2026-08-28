@@ -14,7 +14,7 @@ use crate::config::{Config, ConfigType};
 use crate::core::handle;
 use crate::singleton;
 use crate::utils::dirs;
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 
 pub struct CoreConfigValidator {
     is_processing: AtomicBool,

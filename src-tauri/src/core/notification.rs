@@ -1,5 +1,5 @@
 use crate::utils::window_manager::WindowManager;
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use serde_json::json;
 use smartstring::alias::String;
 

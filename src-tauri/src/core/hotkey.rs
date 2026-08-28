@@ -4,7 +4,7 @@ use crate::utils::window_manager::WindowManager;
 use crate::{config::Config, core::handle, feat, module::lightweight::entry_lightweight_mode};
 use anyhow::{Result, bail};
 use arc_swap::ArcSwap;
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use smartstring::alias::String;
 use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt as _, ShortcutState};

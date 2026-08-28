@@ -7,7 +7,7 @@ use crate::{
     utils::window_manager::WindowManager,
 };
 use anyhow::{Result, bail};
-use clash_verge_logging::{Type, logging, logging_error};
+use celestial_logging::{Type, logging, logging_error};
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use reqwest::ClientBuilder;

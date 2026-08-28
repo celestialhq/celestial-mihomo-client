@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 
 #[cfg(unix)]
 mod unix;

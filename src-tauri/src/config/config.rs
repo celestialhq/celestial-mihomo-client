@@ -14,13 +14,13 @@ use crate::{
 };
 use anyhow::{Context as _, Result, anyhow};
 use backon::{ExponentialBuilder, Retryable as _};
+use celestial_draft::Draft;
+use celestial_logging::{Type, logging, logging_error};
 use celestial_xray_relay::RelayPlan;
-use clash_verge_draft::Draft;
-use clash_verge_logging::{Type, logging, logging_error};
 use serde_yaml_ng::{Mapping, Value};
 use smartstring::alias::String;
 use std::{collections::HashSet, path::PathBuf};
-use tauri_plugin_clash_verge_sysinfo::is_current_app_handle_admin;
+use tauri_plugin_celestial_sysinfo::is_current_app_handle_admin;
 use tokio::sync::OnceCell;
 use tokio::time::sleep;
 
@@ -116,7 +116,7 @@ impl Config {
         Self::ensure_default_profile_items().await?;
 
         let verge = Self::verge().await.latest_arc();
-        clash_verge_i18n::sync_locale(verge.language.as_deref());
+        celestial_i18n::sync_locale(verge.language.as_deref());
 
         // init Tun mode
         let handle = Handle::app_handle();

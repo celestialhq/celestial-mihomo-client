@@ -5,11 +5,11 @@ use crate::core::handle::Handle;
 use crate::core::manager::CLASH_LOGGER;
 use crate::core::service::{SERVICE_MANAGER, ServiceStatus};
 use anyhow::{Result, anyhow};
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use scopeguard::defer;
 use smartstring::alias::String;
 #[cfg(target_os = "windows")]
-use tauri_plugin_clash_verge_sysinfo::is_current_app_handle_admin;
+use tauri_plugin_celestial_sysinfo::is_current_app_handle_admin;
 
 /// TUN 需要服务提权；但应用本身已经是管理员时服务不是必需的，
 /// 干等只会拖慢启动。`test` 下也编译，便于单测这张真值表。

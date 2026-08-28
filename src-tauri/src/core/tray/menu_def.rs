@@ -1,4 +1,4 @@
-use clash_verge_i18n::t;
+use celestial_i18n::t;
 use std::borrow::Cow;
 
 macro_rules! define_menu {

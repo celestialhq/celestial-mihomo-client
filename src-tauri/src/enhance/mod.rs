@@ -24,8 +24,8 @@ use crate::{
     constants,
 };
 use anyhow::{Context as _, Result};
+use celestial_logging::{Type, logging};
 use celestial_xray_relay::RelayPlan;
-use clash_verge_logging::{Type, logging};
 use serde_yaml_ng::{Mapping, Value};
 use smartstring::alias::String;
 use std::collections::{HashMap, HashSet};

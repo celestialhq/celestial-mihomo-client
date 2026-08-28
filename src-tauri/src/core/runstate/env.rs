@@ -79,7 +79,7 @@ impl RunStateEnv for RealEnv {
         // degrade to "not elevated" rather than abort the process.
         crate::APP_HANDLE
             .get()
-            .is_some_and(tauri_plugin_clash_verge_sysinfo::is_current_app_handle_admin)
+            .is_some_and(tauri_plugin_celestial_sysinfo::is_current_app_handle_admin)
     }
 
     fn set_pac_available(&self, available: bool) {
@@ -101,7 +101,7 @@ impl RunStateEnv for RealEnv {
         let Some(app_handle) = crate::APP_HANDLE.get() else {
             return;
         };
-        tauri_plugin_clash_verge_sysinfo::set_app_core_mode(app_handle, state.mode.to_string());
+        tauri_plugin_celestial_sysinfo::set_app_core_mode(app_handle, state.mode.to_string());
         crate::core::handle::Handle::notify_run_state(&state.to_view());
     }
 

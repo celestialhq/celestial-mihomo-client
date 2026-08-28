@@ -3,7 +3,7 @@ use crate::{
     utils::dirs::{self, PathBufExec as _},
     utils::network::{NetworkManager, ProxyType},
 };
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use smartstring::alias::String;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash as _, Hasher as _};

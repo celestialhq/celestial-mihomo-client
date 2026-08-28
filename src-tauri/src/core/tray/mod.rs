@@ -9,10 +9,10 @@ use crate::{
     Type, cmd, config::Config, feat, logging, module::lightweight::is_in_lightweight_mode,
     utils::dirs::find_target_icons,
 };
-use clash_verge_limiter::{Limiter, SystemClock, SystemLimiter};
-use clash_verge_logging::logging_error;
+use celestial_limiter::{Limiter, SystemClock, SystemLimiter};
+use celestial_logging::logging_error;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
-use tauri_plugin_clash_verge_sysinfo::is_current_app_handle_admin;
+use tauri_plugin_celestial_sysinfo::is_current_app_handle_admin;
 use tauri_plugin_mihomo::models::Proxies;
 use tokio::fs;
 
@@ -318,9 +318,9 @@ impl Tray {
         }
 
         // Get localized strings before using them
-        let sys_proxy_text = clash_verge_i18n::t!("tray.tooltip.systemProxy");
-        let tun_text = clash_verge_i18n::t!("tray.tooltip.tun");
-        let profile_text = clash_verge_i18n::t!("tray.tooltip.profile");
+        let sys_proxy_text = celestial_i18n::t!("tray.tooltip.systemProxy");
+        let tun_text = celestial_i18n::t!("tray.tooltip.tun");
+        let profile_text = celestial_i18n::t!("tray.tooltip.profile");
 
         let v = env!("CARGO_PKG_VERSION");
         let reassembled_version = v.split_once('+').map_or_else(
@@ -714,9 +714,9 @@ async fn create_tray_menu(
         None
     } else {
         let current_mode_text = match current_proxy_mode {
-            "global" => clash_verge_i18n::t!("tray.global"),
-            "direct" => clash_verge_i18n::t!("tray.direct"),
-            _ => clash_verge_i18n::t!("tray.rule"),
+            "global" => celestial_i18n::t!("tray.global"),
+            "direct" => celestial_i18n::t!("tray.direct"),
+            _ => celestial_i18n::t!("tray.rule"),
         };
         let outbound_modes_label = format!("{} ({})", texts.outbound_modes, current_mode_text);
         Some(Submenu::with_id_and_items(

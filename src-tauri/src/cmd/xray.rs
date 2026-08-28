@@ -11,8 +11,8 @@ use crate::{
     core::{CoreManager, handle},
     utils::dirs,
 };
+use celestial_logging::{Type, logging};
 use celestial_xray_relay::{Disposition, redact_json, redact_yaml};
-use clash_verge_logging::{Type, logging};
 use serde::Serialize;
 use smartstring::alias::String;
 

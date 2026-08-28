@@ -5,7 +5,7 @@ use crate::{
     utils::help::{mask_err, mask_url},
 };
 use anyhow::{Result, bail};
-use clash_verge_logging::{Type, logging, logging_error};
+use celestial_logging::{Type, logging, logging_error};
 use smartstring::alias::String;
 use tauri::Emitter as _;
 

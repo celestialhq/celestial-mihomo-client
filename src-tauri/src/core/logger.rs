@@ -7,8 +7,8 @@ use std::{
 };
 
 use anyhow::{Result, bail};
+use celestial_logging::{Type, logging};
 use celestial_service_ipc::WriterConfig;
-use clash_verge_logging::{Type, logging};
 use compact_str::CompactString;
 use flexi_logger::{
     Cleanup, Criterion, DeferredNow, FileSpec, LogSpecBuilder, LogSpecification, LoggerHandle,
@@ -95,7 +95,7 @@ impl Logger {
             filter_modules.push("tauri");
             #[cfg(feature = "tracing")]
             filter_modules.extend(["tauri_plugin_mihomo", "kode_bridge"]);
-            let logger = logger.filter(Box::new(clash_verge_logging::NoModuleFilter(filter_modules)));
+            let logger = logger.filter(Box::new(celestial_logging::NoModuleFilter(filter_modules)));
 
             let handle = logger.start()?;
             *self.handle.lock() = Some(handle);

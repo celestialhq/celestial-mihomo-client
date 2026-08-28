@@ -4,7 +4,7 @@ use tauri::webview::PageLoadEvent;
 use tauri::{Theme, WebviewWindow};
 
 use crate::{config::Config, core::handle, utils::resolve::window_script::build_window_initial_script};
-use clash_verge_logging::{Type, logging_error};
+use celestial_logging::{Type, logging_error};
 
 const DARK_BACKGROUND_COLOR: Color = Color(7, 11, 18, 255); // #070B12
 const LIGHT_BACKGROUND_COLOR: Color = Color(243, 247, 251, 255); // #F3F7FB

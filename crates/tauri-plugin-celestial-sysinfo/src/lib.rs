@@ -346,7 +346,7 @@ pub fn is_current_app_handle_admin<R: Runtime>(app: &tauri::AppHandle<R>) -> boo
 
 #[inline]
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    Builder::<R>::new("clash_verge_sysinfo")
+    Builder::<R>::new("celestial_sysinfo")
         // TODO 现在 crate 还不是真正的 tauri 插件，必须由主 lib 自行注册
         // TODO 从 clash-verge 中迁移获取系统信息的 commnand 并实现优雅 structure.field 访问
         // .invoke_handler(tauri::generate_handler![

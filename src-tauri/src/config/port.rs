@@ -14,7 +14,7 @@ use crate::{
     utils::port::find_next_available_port,
 };
 use anyhow::{Context as _, Result, anyhow, bail};
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use serde_yaml_ng::Value;

@@ -1,6 +1,6 @@
 use super::CmdResult;
 use crate::{cmd::StringifyErr as _, config::IVerge, feat};
-use clash_verge_draft::SharedDraft;
+use celestial_draft::SharedDraft;
 
 /// 获取Verge配置
 #[tauri::command]

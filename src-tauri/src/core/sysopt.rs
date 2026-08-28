@@ -10,7 +10,7 @@ mod desktop {
         singleton,
     };
     use anyhow::Result;
-    use clash_verge_logging::{Type, logging};
+    use celestial_logging::{Type, logging};
     use parking_lot::RwLock;
     use scopeguard::defer;
     use smartstring::alias::String;

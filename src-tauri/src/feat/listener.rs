@@ -16,7 +16,7 @@ use crate::{
     process::AsyncHandler,
 };
 use anyhow::{Context as _, Result, anyhow, bail};
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 
 pub async fn probe_listener(request: ListenerProbe) -> Result<ListenerProbeOutcome> {
     AsyncHandler::spawn_blocking(move || probe_listener_sync(&request))

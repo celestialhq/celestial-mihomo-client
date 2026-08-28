@@ -1,11 +1,11 @@
 [package]
-name = "clash-verge-signal"
+name = "celestial-signal"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.91"
 
 [dependencies]
-clash-verge-logging = { workspace = true }
+celestial-logging = { workspace = true }
 log = { workspace = true }
 tokio = { workspace = true }
 

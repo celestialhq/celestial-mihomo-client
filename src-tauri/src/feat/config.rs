@@ -5,8 +5,8 @@ use crate::{
 };
 use anyhow::Result;
 use bitflags::bitflags;
-use clash_verge_draft::SharedDraft;
-use clash_verge_logging::{Type, logging, logging_error};
+use celestial_draft::SharedDraft;
+use celestial_logging::{Type, logging, logging_error};
 use serde_yaml_ng::Mapping;
 
 /// Patch Clash configuration
@@ -232,7 +232,7 @@ async fn process_terminated_flags(
     if update_flags.contains(UpdateFlags::LANGUAGE)
         && let Some(language) = &patch.language
     {
-        clash_verge_i18n::set_locale(language.as_str());
+        celestial_i18n::set_locale(language.as_str());
     }
     if update_flags.contains(UpdateFlags::SYS_PROXY) {
         sysopt::Sysopt::global().update_sysproxy().await?;

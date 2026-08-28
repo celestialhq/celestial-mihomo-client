@@ -1,7 +1,7 @@
 use super::CmdResult;
 use crate::core::tray::Tray;
 use crate::process::AsyncHandler;
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static TRAY_SYNC_RUNNING: AtomicBool = AtomicBool::new(false);

@@ -16,8 +16,8 @@ use crate::{
     process::AsyncHandler,
     utils::{dirs, help},
 };
-use clash_verge_draft::SharedDraft;
-use clash_verge_logging::{Type, logging, logging_error};
+use celestial_draft::SharedDraft;
+use celestial_logging::{Type, logging, logging_error};
 use scopeguard::defer;
 use smartstring::alias::String;
 use std::sync::atomic::{AtomicBool, Ordering};

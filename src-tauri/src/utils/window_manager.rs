@@ -1,6 +1,6 @@
 use crate::{core::handle, utils::resolve::window::build_new_window};
-use clash_verge_limiter::Limiter;
-use clash_verge_logging::{Type, logging};
+use celestial_limiter::Limiter;
+use celestial_logging::{Type, logging};
 use once_cell::sync::Lazy;
 use std::pin::Pin;
 use std::time::Duration;
@@ -43,7 +43,7 @@ const WINDOW_OPERATION_DEBOUNCE_MS: u64 = 625;
 static WINDOW_OPERATION_LIMITER: Lazy<Limiter> = Lazy::new(|| {
     Limiter::new(
         Duration::from_millis(WINDOW_OPERATION_DEBOUNCE_MS),
-        clash_verge_limiter::SystemClock,
+        celestial_limiter::SystemClock,
     )
 });
 

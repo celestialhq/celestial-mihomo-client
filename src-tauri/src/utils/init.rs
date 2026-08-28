@@ -11,8 +11,8 @@ use crate::{
     },
 };
 use anyhow::Result;
+use celestial_logging::Type;
 use chrono::{Local, TimeZone as _};
-use clash_verge_logging::Type;
 use std::{
     path::{Path, PathBuf},
     str::FromStr as _,

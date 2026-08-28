@@ -3,7 +3,7 @@ use crate::core::{CoreManager, handle, sysopt};
 use crate::module::lightweight;
 use crate::utils;
 use crate::utils::window_manager::WindowManager;
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use tokio::time::{Duration, timeout};
 
 pub async fn open_or_close_dashboard() {

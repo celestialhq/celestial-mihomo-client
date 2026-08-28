@@ -10,7 +10,7 @@ use crate::{
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::{config::IClashTemp, core::handle, core::logger::Logger};
 use anyhow::Result;
-use clash_verge_logging::Type;
+use celestial_logging::Type;
 use compact_str::CompactString;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use log::Level;
@@ -143,7 +143,7 @@ impl CoreManager {
         let config_dir = dirs::app_home_dir()?;
 
         #[cfg(unix)]
-        let previous_mask = unsafe { tauri_plugin_clash_verge_sysinfo::libc::umask(0o007) };
+        let previous_mask = unsafe { tauri_plugin_celestial_sysinfo::libc::umask(0o007) };
         let (mut rx, child) = app_handle
             .shell()
             .sidecar(clash_core.as_str())?
@@ -191,7 +191,7 @@ impl CoreManager {
 
         #[cfg(unix)]
         unsafe {
-            tauri_plugin_clash_verge_sysinfo::libc::umask(previous_mask)
+            tauri_plugin_celestial_sysinfo::libc::umask(previous_mask)
         };
 
         let pid = child.pid();

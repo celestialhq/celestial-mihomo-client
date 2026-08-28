@@ -1,12 +1,12 @@
 [workspace]
 members = [
   "src-tauri",
-  "crates/clash-verge-draft",
-  "crates/clash-verge-logging",
-  "crates/clash-verge-signal",
-  "crates/tauri-plugin-clash-verge-sysinfo",
-  "crates/clash-verge-i18n",
-  "crates/clash-verge-limiter",
+  "crates/celestial-draft",
+  "crates/celestial-logging",
+  "crates/celestial-signal",
+  "crates/tauri-plugin-celestial-sysinfo",
+  "crates/celestial-i18n",
+  "crates/celestial-limiter",
   "crates/tauri-plugin-celestial-vpn",
   "crates/celestial-xray-relay",
 ]
@@ -48,13 +48,13 @@ codegen-units = 1
 split-debuginfo = "unpacked"
 
 [workspace.dependencies]
-clash-verge-draft = { path = "crates/clash-verge-draft" }
-clash-verge-logging = { path = "crates/clash-verge-logging" }
-clash-verge-signal = { path = "crates/clash-verge-signal" }
-clash-verge-i18n = { path = "crates/clash-verge-i18n" }
-clash-verge-limiter = { path = "crates/clash-verge-limiter" }
+celestial-draft = { path = "crates/celestial-draft" }
+celestial-logging = { path = "crates/celestial-logging" }
+celestial-signal = { path = "crates/celestial-signal" }
+celestial-i18n = { path = "crates/celestial-i18n" }
+celestial-limiter = { path = "crates/celestial-limiter" }
 celestial-xray-relay = { path = "crates/celestial-xray-relay" }
-tauri-plugin-clash-verge-sysinfo = { path = "crates/tauri-plugin-clash-verge-sysinfo" }
+tauri-plugin-celestial-sysinfo = { path = "crates/tauri-plugin-celestial-sysinfo" }
 
 tauri = { version = "2.11.1" }
 tauri-plugin-clipboard-manager = "2.3.2"

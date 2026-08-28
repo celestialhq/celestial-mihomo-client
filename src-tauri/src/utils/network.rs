@@ -331,11 +331,11 @@ impl NetworkManager {
 }
 
 fn subscription_headers() -> Result<HeaderMap> {
-    let metadata = tauri_plugin_clash_verge_sysinfo::device_metadata();
+    let metadata = tauri_plugin_celestial_sysinfo::device_metadata();
     Ok(build_subscription_headers(dirs::subscription_hwid()?, &metadata))
 }
 
-fn build_subscription_headers(hwid: &str, metadata: &tauri_plugin_clash_verge_sysinfo::DeviceMetadata) -> HeaderMap {
+fn build_subscription_headers(hwid: &str, metadata: &tauri_plugin_celestial_sysinfo::DeviceMetadata) -> HeaderMap {
     let mut headers = HeaderMap::new();
 
     headers.insert("x-hwid", safe_header_value(hwid));
@@ -372,7 +372,7 @@ fn safe_header_value(value: &str) -> HeaderValue {
 #[cfg(test)]
 mod tests {
     use super::build_subscription_headers;
-    use tauri_plugin_clash_verge_sysinfo::DeviceMetadata;
+    use tauri_plugin_celestial_sysinfo::DeviceMetadata;
 
     #[test]
     fn builds_expected_subscription_headers() {

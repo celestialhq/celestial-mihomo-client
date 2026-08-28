@@ -52,7 +52,7 @@ command = "git"
 args = [
   "add",
   "src/locales",
-  "crates/clash-verge-i18n/locales",
+  "crates/celestial-i18n/locales",
   "src/types/generated",
 ]
 

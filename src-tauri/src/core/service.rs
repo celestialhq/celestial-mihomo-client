@@ -21,8 +21,8 @@ use crate::{
 use crate::utils::dirs;
 use anyhow::{Context as _, Result, anyhow, bail};
 use backon::{ConstantBuilder, Retryable as _};
+use celestial_logging::{Type, logging};
 use celestial_service_ipc::{OwnerSessionProof, ServiceErrorCode, StageRuntimeOutcome, StartClashRequest};
-use clash_verge_logging::{Type, logging};
 use compact_str::CompactString;
 use once_cell::sync::Lazy;
 use std::{
@@ -481,7 +481,7 @@ fn install_service() -> Result<()> {
 #[cfg(target_os = "linux")]
 fn linux_running_as_root() -> bool {
     use crate::core::handle;
-    use tauri_plugin_clash_verge_sysinfo::is_current_app_handle_admin;
+    use tauri_plugin_celestial_sysinfo::is_current_app_handle_admin;
     let app_handle = handle::Handle::app_handle();
     is_current_app_handle_admin(app_handle)
 }
@@ -499,9 +499,9 @@ fn uninstall_service() -> Result<()> {
 
     let uninstall_shell: String = uninstall_path.to_string_lossy().into_owned();
 
-    // clash_verge_i18n::sync_locale(Config::verge().await.latest_arc().language.as_deref());
+    // celestial_i18n::sync_locale(Config::verge().await.latest_arc().language.as_deref());
 
-    let prompt = clash_verge_i18n::t!("service.adminUninstallPrompt");
+    let prompt = celestial_i18n::t!("service.adminUninstallPrompt");
     let shell = format!("sudo {}", shell_single_quote(&uninstall_shell));
     let shell = escape_osascript_double_quoted_string(&shell);
     let command = format!(r#"do shell script "{shell}" with administrator privileges with prompt "{prompt}""#);
@@ -533,10 +533,10 @@ fn install_service() -> Result<()> {
 
     let install_shell: String = install_path.to_string_lossy().into_owned();
 
-    // clash_verge_i18n::sync_locale(Config::verge().await.latest_arc().language.as_deref());
+    // celestial_i18n::sync_locale(Config::verge().await.latest_arc().language.as_deref());
 
-    let gid = tauri_plugin_clash_verge_sysinfo::current_gid();
-    let prompt = clash_verge_i18n::t!("service.adminInstallPrompt");
+    let gid = tauri_plugin_celestial_sysinfo::current_gid();
+    let prompt = celestial_i18n::t!("service.adminInstallPrompt");
     let shell = format!(
         "sudo CLASH_VERGE_SERVICE_GID={gid} {}",
         shell_single_quote(&install_shell)

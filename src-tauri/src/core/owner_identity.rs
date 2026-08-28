@@ -22,8 +22,8 @@ pub(crate) fn current_owner_identity() -> Result<OwnerIdentity> {
     // of the same bindings to keep in step.
     #[cfg(unix)]
     return Ok(OwnerIdentity::Unix {
-        uid: unsafe { tauri_plugin_clash_verge_sysinfo::libc::geteuid() },
-        gid: unsafe { tauri_plugin_clash_verge_sysinfo::libc::getegid() },
+        uid: unsafe { tauri_plugin_celestial_sysinfo::libc::geteuid() },
+        gid: unsafe { tauri_plugin_celestial_sysinfo::libc::getegid() },
     });
 
     #[cfg(windows)]

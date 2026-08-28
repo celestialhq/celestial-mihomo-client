@@ -35,13 +35,13 @@ identifier = "io.github.celestialhq.celestial-mihomo-client"
 tauri-build = { version = "2.5.6", features = [] }
 
 [dependencies]
-clash-verge-draft = { workspace = true }
-clash-verge-logging = { workspace = true }
-clash-verge-signal = { workspace = true }
-clash-verge-i18n = { workspace = true }
-clash-verge-limiter = { workspace = true }
+celestial-draft = { workspace = true }
+celestial-logging = { workspace = true }
+celestial-signal = { workspace = true }
+celestial-i18n = { workspace = true }
+celestial-limiter = { workspace = true }
 celestial-xray-relay = { workspace = true }
-tauri-plugin-clash-verge-sysinfo = { workspace = true }
+tauri-plugin-celestial-sysinfo = { workspace = true }
 tauri-plugin-clipboard-manager = { workspace = true }
 tauri = { workspace = true, features = [
   "protocol-asset",

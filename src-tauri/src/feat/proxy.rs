@@ -2,7 +2,7 @@ use crate::{
     config::{Config, IVerge},
     core::{CoreManager, handle},
 };
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use std::env;
 use tauri_plugin_clipboard_manager::ClipboardExt as _;
 

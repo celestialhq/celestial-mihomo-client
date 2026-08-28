@@ -1,6 +1,6 @@
 use crate::utils::dirs::{self, PathBufExec as _};
 use anyhow::{Result, anyhow};
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use std::fs;
 use std::os::windows::process::CommandExt as _;
 use std::path::{Path, PathBuf};

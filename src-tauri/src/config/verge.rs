@@ -4,7 +4,7 @@ use crate::{
     utils::{dirs, help},
 };
 use anyhow::Result;
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 use smartstring::alias::String;
@@ -399,7 +399,7 @@ impl IVerge {
             app_log_max_size: Some(128),
             app_log_max_count: Some(8),
             clash_core: Some("celestial-mihomo".into()),
-            language: Some(clash_verge_i18n::system_language().into()),
+            language: Some(celestial_i18n::system_language().into()),
             theme_mode: Some("system".into()),
             #[cfg(not(target_os = "windows"))]
             env_type: Some("bash".into()),

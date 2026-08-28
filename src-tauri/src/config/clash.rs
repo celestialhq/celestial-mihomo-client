@@ -3,7 +3,7 @@ use crate::constants::{network, tun as tun_const};
 use crate::utils::dirs::{ipc_path, path_to_str};
 use crate::utils::{dirs, help};
 use anyhow::Result;
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use std::{

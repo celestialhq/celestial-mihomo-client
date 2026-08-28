@@ -18,8 +18,8 @@ use crate::{
     process::AsyncHandler,
     utils::{init, server, window_manager::WindowManager},
 };
-use clash_verge_logging::{Type, logging, logging_error};
-use clash_verge_signal;
+use celestial_logging::{Type, logging, logging_error};
+use celestial_signal;
 
 pub mod dns;
 pub mod scheme;
@@ -158,7 +158,7 @@ async fn init_silent_updater() {
 
 pub fn init_signal() {
     logging!(info, Type::Setup, "Initializing signal handlers...");
-    clash_verge_signal::register(feat::quit);
+    celestial_signal::register(feat::quit);
 }
 
 pub async fn init_work_config() {

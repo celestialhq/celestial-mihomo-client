@@ -13,7 +13,7 @@ use crate::{
     utils::{dirs, help},
 };
 use anyhow::{Result, anyhow};
-use clash_verge_logging::{Type, logging};
+use celestial_logging::{Type, logging};
 use smartstring::alias::String;
 use std::{collections::HashSet, path::PathBuf, time::Instant};
 use tauri_plugin_mihomo::Error as MihomoError;

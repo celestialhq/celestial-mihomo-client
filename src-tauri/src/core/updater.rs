@@ -1,7 +1,7 @@
 use crate::{config::Config, singleton, utils::dirs};
 use anyhow::Result;
+use celestial_logging::{Type, logging};
 use chrono::Utc;
-use clash_verge_logging::{Type, logging};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{

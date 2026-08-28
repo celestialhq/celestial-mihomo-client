@@ -10,7 +10,7 @@ use crate::{
     core::{CoreManager, handle},
     utils::help,
 };
-use clash_verge_logging::{Type, logging, logging_error};
+use celestial_logging::{Type, logging, logging_error};
 
 pub(super) async fn resolve_scheme(param: &str) -> Result<()> {
     let param_str = if param.starts_with("[") && param.len() > 4 {
