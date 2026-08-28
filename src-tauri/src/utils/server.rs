@@ -48,8 +48,14 @@ pub async fn check_singleton() -> Result<()> {
         if argvs.len() > 1 {
             #[cfg(not(target_os = "macos"))]
             {
+                // Windows and Linux do not deliver a deep link to a running app: the system
+                // starts a second copy with the URL as an argument, and handing it over is
+                // this function's job. Matching the scheme list rather than one name spelled
+                // out is what the previous version got wrong — the app was renamed, both
+                // schemes were registered, and this check kept answering only to the old one,
+                // so every `celestial://` link launched the app onto nothing.
                 let param = argvs[1].as_str();
-                if param.starts_with("clash:") {
+                if is_deep_link(param) {
                     client
                         .get(format!("http://127.0.0.1:{port}/commands/scheme?param={param}"))
                         .send()
@@ -66,6 +72,19 @@ pub async fn check_singleton() -> Result<()> {
         bail!("app exists");
     }
     Ok(())
+}
+
+/// Whether an argument is a deep link this app should hand to the instance already running.
+///
+/// Its own function because it is the whole of the handover: the scheme was renamed, both
+/// names were registered, and this test kept answering only to the old one — so every link in
+/// the new scheme started a second copy that recognised nothing and exited, which from the
+/// outside looked like the client ignoring the link entirely.
+#[cfg(not(target_os = "macos"))]
+fn is_deep_link(param: &str) -> bool {
+    crate::utils::init::DEEP_LINK_SCHEMES
+        .iter()
+        .any(|scheme| param.len() > scheme.len() && param.as_bytes()[scheme.len()] == b':' && param.starts_with(scheme))
 }
 
 /// The embed server only be used to implement singleton process
@@ -147,5 +166,43 @@ pub fn shutdown_embedded_server() {
         && let Some(sender) = sender.lock().take()
     {
         sender.send(()).ok();
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic, reason = "a failed assertion is a failed test")]
+mod tests {
+    /// The regression this release exists for: the scheme the app actually registers has to
+    /// be the scheme the handover recognises, and nothing kept those two in step before.
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn the_registered_scheme_is_the_one_handed_over() {
+        for scheme in crate::utils::init::DEEP_LINK_SCHEMES {
+            assert!(
+                super::is_deep_link(&format!("{scheme}://install-config?url=https://example.com/x")),
+                "`{scheme}` is registered but would not be handed to the running instance"
+            );
+        }
+    }
+
+    /// Withdrawn, so it must not be answered either — a link that opens the app onto nothing
+    /// is worse than one the system says it cannot open.
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn a_withdrawn_scheme_is_not_answered() {
+        for scheme in crate::utils::init::RETIRED_SCHEMES {
+            assert!(!super::is_deep_link(&format!("{scheme}://install-config?url=x")));
+        }
+    }
+
+    /// A file path is what the argument usually is, and forwarding one as a link would have
+    /// the running instance try to fetch it.
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn a_plain_argument_is_not_mistaken_for_one() {
+        assert!(!super::is_deep_link("C:\\Users\\x\\profile.yaml"));
+        assert!(!super::is_deep_link("--verbose"));
+        assert!(!super::is_deep_link("celestial"));
+        assert!(!super::is_deep_link("celestialx://x"));
     }
 }

@@ -487,14 +487,24 @@ pub fn init_scheme() -> Result<()> {
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
-    for scheme in ["Clash", "Celestial"] {
+    for scheme in DEEP_LINK_SCHEMES {
         let (key, _) = hkcu.create_subkey(format!("Software\\Classes\\{scheme}"))?;
         key.set_value("", &"Celestial")?;
         key.set_value("URL Protocol", &"Celestial URL Scheme Protocol")?;
         let (default_icon, _) = hkcu.create_subkey(format!("Software\\Classes\\{scheme}\\DefaultIcon"))?;
         default_icon.set_value("", &app_exe)?;
         let (command, _) = hkcu.create_subkey(format!("Software\\Classes\\{scheme}\\Shell\\Open\\Command"))?;
-        command.set_value("", &format!("{app_exe} \"%1\""))?;
+        // Quoted. The installed path contains a space, and unquoted the shell is left to
+        // guess where the executable ends and its arguments begin.
+        command.set_value("", &format!("\"{app_exe}\" \"%1\""))?;
+    }
+
+    // Withdrawn rather than merely no longer written. The key is ours, an earlier version
+    // made it, and leaving it behind would point `clash://` at an app that no longer answers
+    // it — a link that launches the client and silently does nothing, which is the exact
+    // failure this change exists to remove.
+    for scheme in RETIRED_SCHEMES {
+        let _ = hkcu.delete_subkey_all(format!("Software\\Classes\\{scheme}"));
     }
 
     Ok(())
@@ -533,8 +543,17 @@ pub const fn init_scheme() -> Result<()> {
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
-const DEEP_LINK_SCHEMES: &[&str] = &["clash", "celestial"];
+/// The schemes this app claims.
+///
+/// One, deliberately. `clash` was here too, and it is the name every client of that lineage
+/// registers — so the association went to whichever was installed last, and a subscription
+/// link opened whichever that happened to be. Panels do not depend on it either: they publish
+/// a scheme per client (`clashmeta`, `stash`, `flclashx`, `v2rayng`), and it is `install-config`
+/// that is shared between them, not the scheme.
+pub const DEEP_LINK_SCHEMES: &[&str] = &["celestial"];
+
+/// Schemes an earlier version registered and this one withdraws.
+pub const RETIRED_SCHEMES: &[&str] = &["clash"];
 
 pub async fn startup_script() -> Result<()> {
     let app_handle = handle::Handle::app_handle();
