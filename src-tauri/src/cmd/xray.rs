@@ -202,7 +202,10 @@ pub struct XrayCoreStatus {
 pub async fn get_xray_core_status() -> CmdResult<XrayCoreStatus> {
     use crate::core::xray_cores::{Selected, selected};
     Ok(XrayCoreStatus {
-        installed: crate::core::xray_cores::installed().into_iter().map(Into::into).collect(),
+        installed: crate::core::xray_cores::installed()
+            .into_iter()
+            .map(Into::into)
+            .collect(),
         selected: match selected().await {
             Selected::Bundled => None,
             Selected::Installed { version, .. } => Some(version.into()),

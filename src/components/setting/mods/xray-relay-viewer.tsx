@@ -1,10 +1,13 @@
 import {
   Box,
+  Button,
   Chip,
   Divider,
   List,
   ListItem,
   ListItemText,
+  MenuItem,
+  Select,
   Stack,
   TextField,
   Typography,
@@ -16,9 +19,13 @@ import { useTranslation } from 'react-i18next'
 
 import { BaseDialog, DialogRef } from '@/components/base'
 import {
+  checkXrayCoreUpdate,
   exportRuntimeConfig,
   exportXrayConfig,
+  getXrayCoreStatus,
   getXrayRelayStatus,
+  installXrayCore,
+  patchVergeConfig,
 } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 
@@ -34,8 +41,58 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<IXrayRelayStatus | null>(null)
   const [exported, setExported] = useState('')
+  const [core, setCore] = useState<IXrayCoreStatus | null>(null)
+  const [channel, setChannel] = useState<'stable' | 'prerelease'>('stable')
+  // What a check found upstream, held until the user decides. Nothing installs on its own.
+  const [offered, setOffered] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const refreshCore = async () => {
+    try {
+      setCore(await getXrayCoreStatus())
+    } catch (err) {
+      showNotice.error(err)
+    }
+  }
+
+  // Selecting a core only records the choice; it takes effect the next time xray starts.
+  const onSelect = useLockFn(async (value: string) => {
+    try {
+      await patchVergeConfig({
+        xray_core_version: value === 'bundled' ? undefined : value,
+      })
+      await refreshCore()
+    } catch (err) {
+      showNotice.error(err)
+    }
+  })
+
+  const onCheck = useLockFn(async () => {
+    setBusy(true)
+    try {
+      setOffered(await checkXrayCoreUpdate(channel))
+    } catch (err) {
+      showNotice.error(err)
+    } finally {
+      setBusy(false)
+    }
+  })
+
+  const onInstall = useLockFn(async () => {
+    setBusy(true)
+    try {
+      await installXrayCore(offered)
+      setOffered('')
+      await refreshCore()
+    } catch (err) {
+      showNotice.error(err)
+    } finally {
+      setBusy(false)
+    }
+  })
 
   const refresh = async () => {
+    void refreshCore()
     try {
       setStatus(await getXrayRelayStatus())
     } catch (err) {
@@ -116,6 +173,81 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
         </Box>
         <Typography variant="caption" color="text.secondary">
           {t('settings.modals.xrayRelay.description')}
+        </Typography>
+      </Stack>
+
+      <Divider />
+
+      {/* Which core carries the traffic. Separate from the node list because it answers a
+          different question: that one is about this subscription, this one about this
+          machine. Nothing here downloads or replaces anything without being told to. */}
+      <Stack spacing={1}>
+        <Typography variant="subtitle2">
+          {t('settings.modals.xrayRelay.core.title')}
+        </Typography>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+        >
+          <Select
+            size="small"
+            value={core?.selected ?? 'bundled'}
+            onChange={(event) => onSelect(event.target.value)}
+            sx={{ minWidth: 150 }}
+          >
+            <MenuItem value="bundled">
+              {t('settings.modals.xrayRelay.core.bundled')}
+            </MenuItem>
+            {core?.installed.map((version) => (
+              <MenuItem key={version} value={version}>
+                {version}
+              </MenuItem>
+            ))}
+          </Select>
+          {core?.downloadable && (
+            <>
+              <Select
+                size="small"
+                value={channel}
+                onChange={(event) =>
+                  setChannel(event.target.value as 'stable' | 'prerelease')
+                }
+                sx={{ minWidth: 130 }}
+              >
+                <MenuItem value="stable">
+                  {t('settings.modals.xrayRelay.core.stable')}
+                </MenuItem>
+                <MenuItem value="prerelease">
+                  {t('settings.modals.xrayRelay.core.prerelease')}
+                </MenuItem>
+              </Select>
+              <Button size="small" disabled={busy} onClick={onCheck}>
+                {t('settings.modals.xrayRelay.core.check')}
+              </Button>
+            </>
+          )}
+        </Stack>
+        {offered !== '' && (
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Typography variant="caption" color="text.secondary">
+              {core?.installed.includes(offered)
+                ? t('settings.modals.xrayRelay.core.alreadyHave', {
+                    version: offered,
+                  })
+                : t('settings.modals.xrayRelay.core.offered', {
+                    version: offered,
+                  })}
+            </Typography>
+            {!core?.installed.includes(offered) && (
+              <Button size="small" disabled={busy} onClick={onInstall}>
+                {t('settings.modals.xrayRelay.core.install')}
+              </Button>
+            )}
+          </Stack>
+        )}
+        <Typography variant="caption" color="text.secondary">
+          {t('settings.modals.xrayRelay.core.hint')}
         </Typography>
       </Stack>
 

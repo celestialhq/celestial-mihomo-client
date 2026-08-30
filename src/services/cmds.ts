@@ -322,6 +322,23 @@ export async function getVergeConfig() {
   return invoke<IVergeConfig>('get_verge_config')
 }
 
+export async function getXrayCoreStatus() {
+  return invoke<IXrayCoreStatus>('get_xray_core_status')
+}
+
+// Reads only: asks upstream what a channel offers and installs nothing.
+export async function checkXrayCoreUpdate(channel: 'stable' | 'prerelease') {
+  return invoke<string>('check_xray_core_update', { channel })
+}
+
+export async function installXrayCore(version: string) {
+  return invoke<void>('install_xray_core', { version })
+}
+
+export async function removeXrayCore(version: string) {
+  return invoke<void>('remove_xray_core', { version })
+}
+
 export async function patchVergeConfig(payload: IVergeConfig) {
   return invoke<void>('patch_verge_config', { payload })
 }

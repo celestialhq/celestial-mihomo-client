@@ -180,8 +180,8 @@ pub async fn install(version: &str) -> Result<()> {
     let archive = fetch(&archive_url).await?;
     let digest = fetch(&digest_url).await?;
 
-    let expected = sha256_from_digest(std::str::from_utf8(&digest)?)
-        .context("the published digest carried no SHA2-256 line")?;
+    let expected =
+        sha256_from_digest(std::str::from_utf8(&digest)?).context("the published digest carried no SHA2-256 line")?;
     let actual = hex(&Sha256::digest(&archive));
     if actual != expected {
         bail!("the downloaded xray {version} does not match its published digest");
@@ -309,7 +309,10 @@ const fn asset_name() -> Option<&'static str> {
     #[cfg(all(target_os = "linux", target_arch = "riscv64"))]
     return Some("Xray-linux-riscv64");
     #[cfg(not(any(
-        all(target_os = "windows", any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64")),
+        all(
+            target_os = "windows",
+            any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64")
+        ),
         all(target_os = "macos", any(target_arch = "x86_64", target_arch = "aarch64")),
         all(
             target_os = "linux",

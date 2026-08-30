@@ -1062,6 +1062,17 @@ export interface TranslationResources {
           title: string
         }
         xrayRelay: {
+          core: {
+            alreadyHave: string
+            bundled: string
+            check: string
+            hint: string
+            install: string
+            offered: string
+            prerelease: string
+            stable: string
+            title: string
+          }
           description: string
           export: {
             masked: string

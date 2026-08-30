@@ -223,9 +223,6 @@ const META_MAP = {
 // which is unverified. Until then: one binary, chosen at build time.
 const XRAY_REPO = 'https://api.github.com/repos/XTLS/Xray-core'
 const XRAY_URL_PREFIX = 'https://github.com/XTLS/Xray-core/releases/download'
-const XRAY_PRERELEASE =
-  process.argv.includes('--xray-prerelease') ||
-  process.env.XRAY_CHANNEL === 'prerelease'
 let XRAY_VERSION
 
 const XRAY_MAP = {
@@ -245,12 +242,15 @@ const XRAY_MAP = {
 /// Resolves the tag to download.
 ///
 /// Xray publishes no `version.txt` the way mihomo does, so the tag comes from the API.
-/// The stable channel uses `releases/latest`, which GitHub already defines as the newest
-/// non-prerelease; the pre-release channel walks the list and takes the first entry marked
-/// as one, falling back to the newest release of any kind rather than failing when there is
-/// no open pre-release.
+/// Always `releases/latest`, which GitHub defines as the newest non-prerelease.
+///
+/// There used to be a pre-release channel here, decided by a flag at packaging time — which
+/// meant one build served everyone who wanted a pre-release and nobody could change their
+/// mind without a new package. That choice belongs to a machine rather than to a release,
+/// and it now lives in the settings: the packaged core is the stable one, and anything else
+/// is downloaded on request and verified against the digest published beside it.
 async function getLatestXrayVersion() {
-  const cacheKey = XRAY_PRERELEASE ? 'XRAY_PRERELEASE_VERSION' : 'XRAY_VERSION'
+  const cacheKey = 'XRAY_VERSION'
   if (!FORCE) {
     const cached = await getCachedVersion(cacheKey)
     if (cached) {
@@ -274,9 +274,7 @@ async function getLatestXrayVersion() {
     headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`
   }
 
-  const url = XRAY_PRERELEASE
-    ? `${XRAY_REPO}/releases?per_page=20`
-    : `${XRAY_REPO}/releases/latest`
+  const url = `${XRAY_REPO}/releases/latest`
 
   try {
     const response = await fetch(url, { ...options, method: 'GET', headers })
@@ -284,15 +282,11 @@ async function getLatestXrayVersion() {
       throw new Error(`Failed to fetch ${url}: ${response.status}`)
     }
     const body = await response.json()
-    const tag = XRAY_PRERELEASE
-      ? (body.find((it) => it.prerelease) ?? body[0])?.tag_name
-      : body.tag_name
+    const tag = body.tag_name
     if (!tag) throw new Error('no xray release tag in the response')
 
     XRAY_VERSION = tag
-    log_info(
-      `Latest xray ${XRAY_PRERELEASE ? 'pre-release' : 'release'} version: ${XRAY_VERSION}`,
-    )
+    log_info(`Latest xray release version: ${XRAY_VERSION}`)
     await setCachedVersion(cacheKey, XRAY_VERSION)
   } catch (err) {
     log_error('Error fetching latest xray version:', err.message)

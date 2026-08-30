@@ -338,6 +338,15 @@ interface IXrayRelayNode {
   reason?: string
 }
 
+interface IXrayCoreStatus {
+  /** Versions already downloaded and ready to select. */
+  installed: string[]
+  /** The selected version, or absent when the packaged core is in use. */
+  selected?: string
+  /** False where upstream publishes no build for this platform. */
+  downloadable: boolean
+}
+
 interface IXrayRelayStatus {
   /** False on mobile, where there is no second process to run; the control is hidden. */
   supported: boolean
@@ -992,6 +1001,8 @@ interface IVergeConfig {
   enable_global_hotkey?: boolean
   enable_dns_settings?: boolean
   enable_xray_relay?: boolean
+  /** The downloaded xray core to run, by version; absent means the packaged one. */
+  xray_core_version?: string
   proxy_auto_config?: boolean
   pac_file_content?: string
   proxy_host?: string

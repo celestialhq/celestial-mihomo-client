@@ -643,6 +643,17 @@
         "xray": "Export xray.json",
         "runtime": "Export config.yaml",
         "masked": "Credentials are replaced with <redacted>."
+      },
+      "core": {
+        "title": "Core",
+        "bundled": "Bundled",
+        "stable": "Stable",
+        "prerelease": "Pre-release",
+        "check": "Check",
+        "install": "Install {{version}}",
+        "offered": "{{version}} is available",
+        "alreadyHave": "{{version}} is already installed",
+        "hint": "The bundled core is used unless another is chosen. Nothing is downloaded or replaced without asking."
       }
     }
   },
