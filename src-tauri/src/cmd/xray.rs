@@ -186,3 +186,51 @@ async fn current_has_template() -> bool {
 pub fn notify_relay_state() {
     handle::Handle::refresh_verge();
 }
+
+/// What the user may choose between for the xray core, and what is chosen now.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct XrayCoreStatus {
+    /// Version strings already downloaded and ready to select.
+    pub installed: Vec<String>,
+    /// The selected version, or `None` when the packaged core is in use.
+    pub selected: Option<String>,
+    /// False where no build is published for this platform, so nothing can be offered.
+    pub downloadable: bool,
+}
+
+#[tauri::command]
+pub async fn get_xray_core_status() -> CmdResult<XrayCoreStatus> {
+    use crate::core::xray_cores::{Selected, selected};
+    Ok(XrayCoreStatus {
+        installed: crate::core::xray_cores::installed().into_iter().map(Into::into).collect(),
+        selected: match selected().await {
+            Selected::Bundled => None,
+            Selected::Installed { version, .. } => Some(version.into()),
+        },
+        downloadable: crate::core::xray_cores::is_downloadable(),
+    })
+}
+
+/// Asks upstream which version a channel currently offers. Reads only — nothing is fetched
+/// or replaced, which is the whole point of it being its own command.
+#[tauri::command]
+pub async fn check_xray_core_update(channel: String) -> CmdResult<String> {
+    crate::core::xray_cores::available(crate::core::xray_cores::Channel::parse(&channel))
+        .await
+        .map(Into::into)
+        .map_err(|error| error.to_string().into())
+}
+
+/// Downloads a version and makes it selectable. Does not select it: installing and running
+/// are separate answers to separate questions.
+#[tauri::command]
+pub async fn install_xray_core(version: String) -> CmdResult<()> {
+    crate::core::xray_cores::install(&version)
+        .await
+        .map_err(|error| error.to_string().into())
+}
+
+#[tauri::command]
+pub async fn remove_xray_core(version: String) -> CmdResult<()> {
+    crate::core::xray_cores::remove(&version).map_err(|error| error.to_string().into())
+}

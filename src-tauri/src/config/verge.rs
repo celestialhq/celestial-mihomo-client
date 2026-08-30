@@ -108,6 +108,15 @@ pub struct IVerge {
     /// feature that forces the mode on is not bypassed
     pub enable_xray_relay: Option<bool>,
 
+    /// The downloaded xray core to run, by version, or `None` for the one in the package.
+    ///
+    /// A version rather than a channel, because the channel is a question about what exists
+    /// upstream and this is a question about what runs here. Nothing writes it except an
+    /// explicit choice: a client that swapped the binary carrying its traffic on its own
+    /// would be doing the one thing an updater must never do quietly.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub xray_core_version: Option<String>,
+
     /// always use default bypass
     pub use_default_bypass: Option<bool>,
 

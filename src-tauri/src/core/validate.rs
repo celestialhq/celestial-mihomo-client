@@ -459,9 +459,8 @@ impl CoreConfigValidator {
         }
 
         let app_handle = handle::Handle::app_handle();
-        let output = app_handle
-            .shell()
-            .sidecar("celestial-xray")?
+        let output = crate::core::xray_cores::command(app_handle)
+            .await?
             .args(["run", "-test", "-config", dirs::path_to_str(path)?])
             .output()
             .await?;

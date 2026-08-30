@@ -30,12 +30,7 @@ use {
     crate::core::{logger::Logger, validate::CoreConfigValidator},
     compact_str::CompactString,
     log::Level,
-    tauri_plugin_shell::ShellExt as _,
 };
-
-/// The sidecar's name. Deliberately not `xray`: the anti-loop rule matches the process name,
-/// and a bare `xray` would also catch another client's core and divert its traffic.
-const XRAY_SIDECAR: &str = "celestial-xray";
 
 /// How long xray gets to open its inbounds before the start is called a failure.
 ///
@@ -117,9 +112,8 @@ impl CoreManager {
         }
 
         let app_handle = handle::Handle::app_handle();
-        let (mut rx, child) = app_handle
-            .shell()
-            .sidecar(XRAY_SIDECAR)?
+        let (mut rx, child) = crate::core::xray_cores::command(app_handle)
+            .await?
             .args(["run", "-config", dirs::path_to_str(config_path)?])
             .spawn()?;
 

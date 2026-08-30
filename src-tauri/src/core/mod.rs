@@ -7,6 +7,7 @@ mod notification;
 pub mod sysopt;
 pub mod timer;
 pub mod validate;
+pub mod xray_cores;
 pub mod win_uwp;
 
 // Self-update via `tauri-plugin-updater` has no mobile equivalent (conflicts
