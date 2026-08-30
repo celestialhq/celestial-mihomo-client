@@ -108,12 +108,14 @@ pub struct IVerge {
     /// feature that forces the mode on is not bypassed
     pub enable_xray_relay: Option<bool>,
 
-    /// The downloaded xray core to run, by version, or `None` for the one in the package.
+    /// Which xray core to run: a downloaded version, or `bundled` for the packaged one.
     ///
     /// A version rather than a channel, because the channel is a question about what exists
-    /// upstream and this is a question about what runs here. Nothing writes it except an
-    /// explicit choice: a client that swapped the binary carrying its traffic on its own
-    /// would be doing the one thing an updater must never do quietly.
+    /// upstream and this is a question about what runs here.
+    ///
+    /// `bundled` is spelled out rather than left as absence, because a patch carries only the
+    /// fields it sets — `None` means "leave this alone", so absence could never have been the
+    /// way back to the packaged core.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub xray_core_version: Option<String>,
 
@@ -577,6 +579,10 @@ impl IVerge {
         patch!(enable_dns_settings);
         patch!(home_cards);
         patch!(enable_external_controller);
+        // Both belong to the relay. `enable_xray_relay` was missing too and nobody could tell:
+        // the mode is pinned on from v4.0.0, so its switch is locked and never sends a patch.
+        patch!(enable_xray_relay);
+        patch!(xray_core_version);
     }
 
     pub const fn get_singleton_port() -> u16 {

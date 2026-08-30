@@ -53,6 +53,9 @@ pub enum Selected {
 /// The name Tauri resolves the packaged core under.
 pub const BUNDLED_NAME: &str = "celestial-xray";
 
+/// What the setting holds when the packaged core is the one to run.
+pub const BUNDLED_VALUE: &str = "bundled";
+
 const REPO: &str = "https://api.github.com/repos/XTLS/Xray-core";
 const DOWNLOADS: &str = "https://github.com/XTLS/Xray-core/releases/download";
 /// The name inside every release archive, which is xray's own rather than ours.
@@ -111,6 +114,9 @@ pub async fn selected() -> Selected {
     // The configuration stores its strings compactly; everything downstream of here works in
     // ordinary ones.
     let version = version.to_string();
+    if version.is_empty() || version == BUNDLED_VALUE {
+        return Selected::Bundled;
+    }
     match installed_path(&version) {
         Ok(path) if path.is_file() => Selected::Installed { version, path },
         _ => {

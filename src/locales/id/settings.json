@@ -653,7 +653,7 @@
         "install": "Install {{version}}",
         "offered": "{{version}} is available",
         "alreadyHave": "{{version}} is already installed",
-        "hint": "The bundled core is used unless another is chosen. Nothing is downloaded or replaced without asking."
+        "hint": "The bundled core is used unless another is chosen. A choice takes effect the next time xray starts. Nothing is downloaded or replaced without asking."
       }
     }
   },

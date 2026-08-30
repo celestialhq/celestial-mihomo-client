@@ -7,9 +7,7 @@ import {
   ListItem,
   ListItemText,
   MenuItem,
-  Select,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material'
 import { useLockFn } from 'ahooks'
@@ -17,7 +15,12 @@ import type { Ref } from 'react'
 import { useImperativeHandle, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { BaseDialog, DialogRef } from '@/components/base'
+import {
+  BaseDialog,
+  BaseStyledSelect,
+  DialogRef,
+  MonacoEditor,
+} from '@/components/base'
 import {
   checkXrayCoreUpdate,
   exportRuntimeConfig,
@@ -41,6 +44,9 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<IXrayRelayStatus | null>(null)
   const [exported, setExported] = useState('')
+  // Which document is on screen, so the editor highlights it as what it is rather than
+  // guessing from the text.
+  const [exportedKind, setExportedKind] = useState<'xray' | 'runtime'>('xray')
   const [core, setCore] = useState<IXrayCoreStatus | null>(null)
   const [channel, setChannel] = useState<'stable' | 'prerelease'>('stable')
   // What a check found upstream, held until the user decides. Nothing installs on its own.
@@ -58,9 +64,7 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
   // Selecting a core only records the choice; it takes effect the next time xray starts.
   const onSelect = useLockFn(async (value: string) => {
     try {
-      await patchVergeConfig({
-        xray_core_version: value === 'bundled' ? undefined : value,
-      })
+      await patchVergeConfig({ xray_core_version: value })
       await refreshCore()
     } catch (err) {
       showNotice.error(err)
@@ -115,6 +119,7 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
         which === 'xray'
           ? await exportXrayConfig(false)
           : await exportRuntimeConfig(false)
+      setExportedKind(which)
       setExported(text)
     } catch (err) {
       showNotice.error(err)
@@ -190,11 +195,10 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
           spacing={1}
           sx={{ alignItems: 'center', flexWrap: 'wrap' }}
         >
-          <Select
-            size="small"
+          <BaseStyledSelect
             value={core?.selected ?? 'bundled'}
             onChange={(event) => onSelect(event.target.value)}
-            sx={{ minWidth: 150 }}
+            sx={{ width: 168 }}
           >
             <MenuItem value="bundled">
               {t('settings.modals.xrayRelay.core.bundled')}
@@ -204,16 +208,15 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
                 {version}
               </MenuItem>
             ))}
-          </Select>
+          </BaseStyledSelect>
           {core?.downloadable && (
             <>
-              <Select
-                size="small"
+              <BaseStyledSelect
                 value={channel}
                 onChange={(event) =>
                   setChannel(event.target.value as 'stable' | 'prerelease')
                 }
-                sx={{ minWidth: 130 }}
+                sx={{ width: 148 }}
               >
                 <MenuItem value="stable">
                   {t('settings.modals.xrayRelay.core.stable')}
@@ -221,7 +224,7 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
                 <MenuItem value="prerelease">
                   {t('settings.modals.xrayRelay.core.prerelease')}
                 </MenuItem>
-              </Select>
+              </BaseStyledSelect>
               <Button size="small" disabled={busy} onClick={onCheck}>
                 {t('settings.modals.xrayRelay.core.check')}
               </Button>
@@ -241,7 +244,9 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
             </Typography>
             {!core?.installed.includes(offered) && (
               <Button size="small" disabled={busy} onClick={onInstall}>
-                {t('settings.modals.xrayRelay.core.install')}
+                {t('settings.modals.xrayRelay.core.install', {
+                  version: offered,
+                })}
               </Button>
             )}
           </Stack>
@@ -305,14 +310,28 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
           <Typography variant="caption" color="text.secondary">
             {t('settings.modals.xrayRelay.export.masked')}
           </Typography>
-          <TextField
-            multiline
-            fullWidth
-            size="small"
-            value={exported}
-            slotProps={{ input: { readOnly: true, sx: { fontSize: 11 } } }}
-            rows={10}
-          />
+          <Box
+            sx={{
+              height: 320,
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              overflow: 'hidden',
+            }}
+          >
+            <MonacoEditor
+              height="100%"
+              language={exportedKind === 'xray' ? 'json' : 'yaml'}
+              value={exported}
+              options={{
+                readOnly: true,
+                minimap: { enabled: false },
+                fontSize: 12,
+                scrollBeyondLastLine: false,
+                renderLineHighlight: 'none',
+              }}
+            />
+          </Box>
         </>
       )}
     </BaseDialog>
