@@ -202,7 +202,33 @@ pub async fn install(version: &str) -> Result<()> {
     tokio::fs::rename(&staging, &destination).await?;
 
     logging!(info, Type::Core, "installed xray {version}");
+    prune(version).await;
     Ok(())
+}
+
+/// Drops downloaded cores nothing needs any more.
+///
+/// Two are kept: the one just installed, and the one currently selected. Removing the core a
+/// running xray was started from would fail on Windows, where the file is locked, and would
+/// succeed on Unix while leaving nothing to go back to if the new one turns out to be worse.
+///
+/// Best effort throughout. A file that will not delete is logged and left, because disk space
+/// is worth less than an install that reports failure after the part that mattered worked.
+async fn prune(installed_now: &str) {
+    let selected = match selected().await {
+        Selected::Installed { version, .. } => Some(version),
+        Selected::Bundled => None,
+    };
+
+    for version in installed() {
+        if version == installed_now || Some(&version) == selected.as_ref() {
+            continue;
+        }
+        match remove(&version) {
+            Ok(()) => {}
+            Err(error) => logging!(warn, Type::Core, "could not remove xray {version}: {error:#}"),
+        }
+    }
 }
 
 /// Removes a downloaded core. The bundled one has no version and cannot be removed.
@@ -359,6 +385,22 @@ mod tests {
         assert_eq!(Channel::parse("stable"), Channel::Stable);
         assert_eq!(Channel::parse("Prerelease"), Channel::Stable);
         assert_eq!(Channel::parse(""), Channel::Stable);
+    }
+
+    /// The two a cleanup must never take: what was just installed, and what is selected —
+    /// the second because a running xray was started from it and because it is what going
+    /// back means.
+    #[test]
+    fn the_new_core_and_the_selected_one_both_survive_a_cleanup() {
+        let present = ["v1", "v2", "v3"];
+        let installed_now = "v3";
+        let selected = Some("v1".to_owned());
+
+        let removed: Vec<&str> = present
+            .into_iter()
+            .filter(|it| *it != installed_now && Some((*it).to_owned()) != selected)
+            .collect();
+        assert_eq!(removed, ["v2"], "only what nothing points at is dropped");
     }
 
     /// The platform this test runs on has to be one the map knows, or the feature is dead on
