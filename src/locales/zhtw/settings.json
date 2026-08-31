@@ -649,11 +649,12 @@
         "bundled": "Bundled",
         "stable": "Stable",
         "prerelease": "Pre-release",
-        "check": "Check",
+        "check": "Check for updates",
         "install": "Install {{version}}",
-        "offered": "{{version}} is available",
-        "alreadyHave": "{{version}} is already installed",
-        "hint": "The bundled core is used unless another is chosen. A choice takes effect the next time xray starts. Nothing is downloaded or replaced without asking."
+        "running": "Running {{version}}",
+        "latest": "Already on the newest of this channel",
+        "working": "Applying…",
+        "switched": "Core switched"
       }
     }
   },

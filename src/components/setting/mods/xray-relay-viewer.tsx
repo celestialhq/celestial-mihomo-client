@@ -29,6 +29,7 @@ import {
   getXrayRelayStatus,
   installXrayCore,
   patchVergeConfig,
+  restartCore,
 } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 
@@ -49,8 +50,13 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
   const [exportedKind, setExportedKind] = useState<'xray' | 'runtime'>('xray')
   const [core, setCore] = useState<IXrayCoreStatus | null>(null)
   const [channel, setChannel] = useState<'stable' | 'prerelease'>('stable')
-  // What a check found upstream, held until the user decides. Nothing installs on its own.
-  const [offered, setOffered] = useState('')
+  // A version upstream has that this machine does not, held until the user acts on it.
+  // Empty means there is nothing to offer — either nothing was checked, or the check found
+  // nothing newer.
+  const [pending, setPending] = useState('')
+  // A check that came back with nothing to do. Worth saying out loud: silence after pressing
+  // a button reads as a failure.
+  const [latest, setLatest] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const refreshCore = async () => {
@@ -61,20 +67,17 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
     }
   }
 
-  // Selecting a core only records the choice; it takes effect the next time xray starts.
+  // Selecting applies. Recording the choice and leaving the old core running would mean the
+  // control says one thing while the traffic does another, and the only way to reconcile
+  // them would be a restart the user has to know to perform.
   const onSelect = useLockFn(async (value: string) => {
-    try {
-      await patchVergeConfig({ xray_core_version: value })
-      await refreshCore()
-    } catch (err) {
-      showNotice.error(err)
-    }
-  })
-
-  const onCheck = useLockFn(async () => {
+    if (value === (core?.selected ?? 'bundled')) return
     setBusy(true)
     try {
-      setOffered(await checkXrayCoreUpdate(channel))
+      await patchVergeConfig({ xray_core_version: value })
+      await restartCore()
+      await refreshCore()
+      showNotice.success(t('settings.modals.xrayRelay.core.switched'))
     } catch (err) {
       showNotice.error(err)
     } finally {
@@ -82,12 +85,36 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
     }
   })
 
+  const onCheck = useLockFn(async () => {
+    setBusy(true)
+    setLatest(false)
+    try {
+      const found = await checkXrayCoreUpdate(channel)
+      // Already downloaded is the same answer as nothing newer: there is nothing to do
+      // either way, and offering to install what is already installed is noise.
+      const known =
+        found === core?.selected || (core?.installed.includes(found) ?? false)
+      setPending(known ? '' : found)
+      setLatest(known)
+    } catch (err) {
+      showNotice.error(err)
+    } finally {
+      setBusy(false)
+    }
+  })
+
+  // Installs and switches to it. Downloading a core and leaving it unused is not what
+  // anybody pressed the button for.
   const onInstall = useLockFn(async () => {
     setBusy(true)
     try {
-      await installXrayCore(offered)
-      setOffered('')
+      const version = pending
+      await installXrayCore(version)
+      await patchVergeConfig({ xray_core_version: version })
+      await restartCore()
+      setPending('')
       await refreshCore()
+      showNotice.success(t('settings.modals.xrayRelay.core.switched'))
     } catch (err) {
       showNotice.error(err)
     } finally {
@@ -183,9 +210,8 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
 
       <Divider />
 
-      {/* Which core carries the traffic. Separate from the node list because it answers a
-          different question: that one is about this subscription, this one about this
-          machine. Nothing here downloads or replaces anything without being told to. */}
+      {/* Which core carries the traffic. A different question from the node list below: that
+          one is about this subscription, this one is about this machine. */}
       <Stack spacing={1}>
         <Typography variant="subtitle2">
           {t('settings.modals.xrayRelay.core.title')}
@@ -198,6 +224,7 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
           <BaseStyledSelect
             value={core?.selected ?? 'bundled'}
             onChange={(event) => onSelect(event.target.value)}
+            disabled={busy}
             sx={{ width: 168 }}
           >
             <MenuItem value="bundled">
@@ -216,6 +243,7 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
                 onChange={(event) =>
                   setChannel(event.target.value as 'stable' | 'prerelease')
                 }
+                disabled={busy}
                 sx={{ width: 148 }}
               >
                 <MenuItem value="stable">
@@ -225,34 +253,35 @@ export function XrayRelayViewer({ ref }: { ref?: Ref<DialogRef> }) {
                   {t('settings.modals.xrayRelay.core.prerelease')}
                 </MenuItem>
               </BaseStyledSelect>
-              <Button size="small" disabled={busy} onClick={onCheck}>
-                {t('settings.modals.xrayRelay.core.check')}
+              {/* One button with two faces. Checking tells you what exists; once it has told
+                  you, the same button is what acts on the answer — a second control that
+                  only ever means "yes, the thing you just asked about" is one control too
+                  many. */}
+              <Button
+                size="small"
+                variant={pending === '' ? 'text' : 'contained'}
+                disabled={busy}
+                onClick={pending === '' ? onCheck : onInstall}
+              >
+                {pending === ''
+                  ? t('settings.modals.xrayRelay.core.check')
+                  : t('settings.modals.xrayRelay.core.install', {
+                      version: pending,
+                    })}
               </Button>
             </>
           )}
         </Stack>
-        {offered !== '' && (
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <Typography variant="caption" color="text.secondary">
-              {core?.installed.includes(offered)
-                ? t('settings.modals.xrayRelay.core.alreadyHave', {
-                    version: offered,
-                  })
-                : t('settings.modals.xrayRelay.core.offered', {
-                    version: offered,
-                  })}
-            </Typography>
-            {!core?.installed.includes(offered) && (
-              <Button size="small" disabled={busy} onClick={onInstall}>
-                {t('settings.modals.xrayRelay.core.install', {
-                  version: offered,
-                })}
-              </Button>
-            )}
-          </Stack>
-        )}
         <Typography variant="caption" color="text.secondary">
-          {t('settings.modals.xrayRelay.core.hint')}
+          {busy
+            ? t('settings.modals.xrayRelay.core.working')
+            : latest
+              ? t('settings.modals.xrayRelay.core.latest')
+              : t('settings.modals.xrayRelay.core.running', {
+                  version:
+                    core?.selected ??
+                    t('settings.modals.xrayRelay.core.bundled'),
+                })}
         </Typography>
       </Stack>
 
