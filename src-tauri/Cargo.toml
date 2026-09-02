@@ -67,7 +67,7 @@ open = "5.3.3"
 dunce = "1.0.5"
 nanoid = "0.5"
 chrono = "0.4.44"
-boa_engine = "0.21.0"
+boa_engine = "0.22.0"
 once_cell = { version = "1.21.4", features = ["parking_lot"] }
 delay_timer = "0.11.6"
 percent-encoding = "2.3.2"
@@ -91,7 +91,7 @@ tauri-plugin-deep-link = "2.4.7"
 tauri-plugin-window-state = "2.4.1"
 zip = "8.3.1"
 reqwest_dav = "0.3.3"
-aes-gcm = { version = "0.10.3", features = ["std"] }
+aes-gcm = { version = "0.11.0", features = ["std"] }
 base64 = "0.23.0"
 sha2 = "0.11.0"
 getrandom = "0.4.2"
@@ -168,7 +168,7 @@ tauri-plugin-barcode-scanner = "2.4.1"
 # fell back to the unprocessed config. The enum representation keeps the tag beside the
 # value instead of inside the pointer, at the cost of a wider `JsValue` — desktop, where
 # the pointers are untagged, keeps the packed one.
-boa_engine = { version = "0.21.0", features = ["jsvalue-enum"] }
+boa_engine = { version = "0.22.0", features = ["jsvalue-enum"] }
 
 [dev-dependencies]
 criterion = { workspace = true }
