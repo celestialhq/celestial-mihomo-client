@@ -97,7 +97,7 @@ jobs:
         if: steps.target.outputs.changed == 'true'
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26.5'
+          go-version: '1.27.1'
 
       - name: Install Android SDK
         if: steps.target.outputs.changed == 'true'
