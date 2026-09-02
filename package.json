@@ -69,7 +69,7 @@
     "meta-json-schema": "^1.19.30",
     "monaco-editor": "^0.55.1",
     "monaco-yaml": "^5.5.1",
-    "nanoid": "^5.1.16",
+    "nanoid": "^6.0.0",
     "qrcode.react": "^4.2.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
