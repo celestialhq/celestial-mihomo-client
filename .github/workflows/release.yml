@@ -425,7 +425,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '17.0.20+101'
 
       - name: Install Android SDK
         uses: android-actions/setup-android@v4
@@ -441,7 +441,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26.5'
+          go-version: '1.27.1'
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
